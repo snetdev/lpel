@@ -30,8 +30,8 @@
     } \
     /*TODO check permissions */\
     param.sched_priority = 1; /* lowest real-time */ \
-    /* following can also be SCHED_FIFO */\
-    res = pthread_setschedparam(thread, SCHED_RR, &param); \
+    /* following can also be SCHED_FIFO/SCHED_RR */\
+    res = pthread_setschedparam(thread, SCHED_FIFO, &param); \
     if (res != 0) { \
       handle_error_en(res, "pthread_setschedparam"); \
     } \
@@ -47,13 +47,13 @@ static stream_t *s;
 
 void *producer(void *arg)
 {
-  unsigned int i;
+  unsigned long i;
 
   assign_core(0);
 
   for (i=1; i<=max_items; i++) {
+    printf("w%ld. ", i);
     StreamWrite(s, (void *) i);
-    printf("W%d. ", i);
   }
   printf("Producer finished. \n");
   fflush(stdout);
@@ -63,13 +63,13 @@ void *producer(void *arg)
 
 void *consumer(void *arg)
 {
-  unsigned int i,j;
+  unsigned long i,j;
 
   assign_core(1);
 
   for (i=1; i<=max_items; i++) {
-    j = (unsigned int) StreamRead(s);
-    printf("(%d) ", j);
+    j = (unsigned long) StreamRead(s);
+    printf("(%ld) ", j);
   }
   printf("Consumer finished. \n");
   fflush(stdout);

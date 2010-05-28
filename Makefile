@@ -1,5 +1,5 @@
 
-CCFLAGS=-Wall -D_GNU_SOURCE -DNOASSIGN_CORE
+CCFLAGS=-Wall -D_GNU_SOURCE -DASSIGN_CORE
 LDFLAGS=-lpthread
 
 test: test.o stream.o
