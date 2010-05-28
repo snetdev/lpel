@@ -41,7 +41,7 @@
 #endif
 
 
-
+static const unsigned int max_items = 200;
 
 static stream_t *s;
 
@@ -51,8 +51,9 @@ void *producer(void *arg)
 
   assign_core(0);
 
-  for (i=1; i<=100; i++) {
+  for (i=1; i<=max_items; i++) {
     StreamWrite(s, (void *) i);
+    printf("W%d. ", i);
   }
   printf("Producer finished. \n");
   fflush(stdout);
@@ -66,7 +67,7 @@ void *consumer(void *arg)
 
   assign_core(1);
 
-  for (i=1; i<=100; i++) {
+  for (i=1; i<=max_items; i++) {
     j = (unsigned int) StreamRead(s);
     printf("(%d) ", j);
   }
