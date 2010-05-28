@@ -1,0 +1,10 @@
+syntax: glob
+
+# vim temporaries
+.*.swp
+
+# gedit temporaries
+*~
+
+#
+*.o
