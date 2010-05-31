@@ -39,7 +39,7 @@ struct stream {
   volatile unsigned long pwrite;
   long padding2[longxCacheLine-1];
   void *buf[BUFFER_SIZE];
-  // TODO assignment
+  // TODO assignment/padding
   volatile bool *flag_written;
   volatile bool *flag_read;
 
