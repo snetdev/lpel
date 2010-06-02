@@ -1,0 +1,9 @@
+
+TODO
+====
+
+* lookup timing accounting info in gnu pth
+* add counters for blocked or waiting time (time between two dispatches)
+  could also be deduced from task termination-spawn time and running time
+
+* clarify sort_begin/sort_end injection
