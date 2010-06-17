@@ -83,6 +83,7 @@ void StreamDestroy(stream_t *s)
  */
 void *StreamPeek(stream_t *s)
 { 
+  /* TODO check if opened for reading */
   /* if the buffer is empty, buf[pread]==NULL */
   return s->buf[s->pread];  
 }    
@@ -97,6 +98,7 @@ void *StreamPeek(stream_t *s)
 void *StreamRead(stream_t *s)
 {
   void *item;
+  /* TODO check if opened for reading */
 
   /* wait while buffer is empty */
   while ( s->buf[s->pread] == NULL ) {
@@ -115,6 +117,19 @@ void *StreamRead(stream_t *s)
 }
 
 
+/**
+ * Check if there is space in the buffer
+ *
+ * A writer can use this function before a write
+ * to ensure the write succeeds (without blocking)
+ */
+bool StreamIsSpace(stream_t *s)
+{
+  /* TODO check if opened for writing */
+  /* if there is space in the buffer, the location at pwrite holds NULL */
+  return ( s->buf[s->pwrite] == NULL );
+}
+
 
 /**
  * Blocking write to a stream
@@ -127,6 +142,7 @@ void *StreamRead(stream_t *s)
 void StreamWrite(stream_t *s, void *item)
 {
   assert( item != NULL );
+  /* TODO check if opened for writing */
 
   /* wait while buffer is full */
   while ( s->buf[s->pwrite] != NULL ) {
