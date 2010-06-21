@@ -17,7 +17,8 @@
 #include <malloc.h>
 #include <string.h>
 
-#include "stream.h"
+#include "lpel_private.h"
+
 #include "bool.h"
 #include "sysdep.h"
 
@@ -78,12 +79,40 @@ void StreamDestroy(stream_t *s)
 
 
 /**
+ * Open a stream for reading/writing
+ * - s != NULL
+ * - mode: either 'w' or 'r'
+ */
+bool StreamOpen(stream_t *s, char mode)
+{
+  task_t current_task = LpelGetCurrentTask();
+  switch(mode) {
+  case 'w':
+    /* a writer waits while stream is full on a read event */
+    assert( s->flag_read == NULL );
+    s->flag_read = &(current_task.ev_read);
+    break;
+  case 'r':
+    /* a writer waits while stream is full on a read event */
+    assert( s->flag_written == NULL );
+    s->flag_written = &(current_task.ev_write);
+    break;
+  default:
+    return false;
+  }
+  return true;
+}
+
+
+/**
  * Non-blocking read from a stream
  * - returns NULL if stream is empty
  */
 void *StreamPeek(stream_t *s)
 { 
-  /* TODO check if opened for reading */
+  /* check if opened for reading */
+  assert( s->flag_written == &(LpelGetCurrentTask().ev_written) );
+
   /* if the buffer is empty, buf[pread]==NULL */
   return s->buf[s->pread];  
 }    
@@ -98,7 +127,9 @@ void *StreamPeek(stream_t *s)
 void *StreamRead(stream_t *s)
 {
   void *item;
-  /* TODO check if opened for reading */
+
+  /* check if opened for reading */
+  assert( s->flag_written == &(LpelGetCurrentTask().ev_written) );
 
   /* wait while buffer is empty */
   while ( s->buf[s->pread] == NULL ) {
@@ -110,7 +141,6 @@ void *StreamRead(stream_t *s)
   s->pread += (s->pread+1 >= BUFFER_SIZE) ? (1-BUFFER_SIZE) : 1;
   
   /* set the read flag */
-  //TODO stream has to be opened for reading -> NULL check superfluous
   if (s->flag_read != NULL) { *s->flag_read = true; }
 
   return item;
@@ -125,7 +155,9 @@ void *StreamRead(stream_t *s)
  */
 bool StreamIsSpace(stream_t *s)
 {
-  /* TODO check if opened for writing */
+  /* check if opened for writing */
+  assert( s->flag_read == &(LpelGetCurrentTask().ev_read) );
+
   /* if there is space in the buffer, the location at pwrite holds NULL */
   return ( s->buf[s->pwrite] == NULL );
 }
@@ -142,7 +174,9 @@ bool StreamIsSpace(stream_t *s)
 void StreamWrite(stream_t *s, void *item)
 {
   assert( item != NULL );
-  /* TODO check if opened for writing */
+
+  /* check if opened for writing */
+  assert( s->flag_read == &(LpelGetCurrentTask().ev_read) );
 
   /* wait while buffer is full */
   while ( s->buf[s->pwrite] != NULL ) {
@@ -161,7 +195,6 @@ void StreamWrite(stream_t *s, void *item)
   s->pwrite += (s->pwrite+1 >= BUFFER_SIZE) ? (1-BUFFER_SIZE) : 1;
   
   /* set the written flag */
-  //TODO stream has to be opened for writing -> NULL check superfluous
   if (s->flag_written != NULL) { *s->flag_written = true; }
 
   return;

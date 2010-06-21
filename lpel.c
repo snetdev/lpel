@@ -14,6 +14,10 @@
 #include <pcl.h>     /* tasks are executed in user-space with help of
                         GNU Portable Coroutine Library  */
 
+#include "lpel_private.h" /* private header also includes lpel.h*/
+
+
+/* used (imported) modules of LPEL */
 #include "cpuassign.h"
 
 
@@ -27,6 +31,7 @@ typedef struct {
   void *readyQ;
   /* waiting queue */
   /* current task */
+  task_t *current_task;
   /* monitoring output info */
 } workerdata_t;
 
@@ -38,6 +43,22 @@ static pthread_key_t worker_id_key;
 
 
 
+/*
+ * Get current worker id
+ */
+int LpelGetWorkerId(void)
+{
+  return *((int *)pthread_getspecific(worker_id_key));
+}
+
+/*
+ * Get current executed task
+ */
+task_t LpelGetCurrentTask(void)
+{
+  int wid =  *((int *)pthread_getspecific(worker_id_key));
+  return *(workerdata[wid].current_task);
+}
 
 
 
@@ -46,7 +67,8 @@ static pthread_key_t worker_id_key;
  */
 static void *LpelWorker(void *idptr)
 {
-  /* data contains id, set as thread specific worker_id */
+  int id = *((int *)idptr);
+  /* set idptr as thread specific */
   pthread_setspecific(worker_id_key, idptr);
 
   /* set affinity to id=CPU */
@@ -68,6 +90,7 @@ static void *LpelWorker(void *idptr)
   /* MAIN LOOP END */
   
   /* exit thread */
+  pthread_exit(NULL);
 }
 
 
