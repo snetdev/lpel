@@ -54,10 +54,10 @@ int LpelGetWorkerId(void)
 /*
  * Get current executed task
  */
-task_t LpelGetCurrentTask(void)
+task_t *LpelGetCurrentTask(void)
 {
   int wid =  *((int *)pthread_getspecific(worker_id_key));
-  return *(workerdata[wid].current_task);
+  return workerdata[wid].current_task;
 }
 
 

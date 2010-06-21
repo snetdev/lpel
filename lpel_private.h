@@ -10,7 +10,7 @@
  */
 
 extern int LpelGetWorkerId(void);
-extern task_t LpelGetCurrentTask(void);
+extern task_t *LpelGetCurrentTask(void);
 
 
 /* private task management */
