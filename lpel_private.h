@@ -2,6 +2,8 @@
 #ifndef _LPEL_PRIVATE_H_
 #define _LPEL_PRIVATE_H_
 
+#include <pcl.h>
+
 #include "lpel.h"
 
 
@@ -81,6 +83,7 @@ struct task {
   /* CODE */
   /* a coroutine_t variable, upon creation of that task the coroutine needs to be created */
   /* _or_ generic macros for context switching */
+  coroutine_t code;
 };
 
 

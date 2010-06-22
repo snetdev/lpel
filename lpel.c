@@ -42,13 +42,14 @@ static int num_workers = -1;
 static pthread_key_t worker_id_key;
 
 
+#define TSD_WORKER_ID (*((int *)pthread_getspecific(worker_id_key)))
 
 /*
  * Get current worker id
  */
 int LpelGetWorkerId(void)
 {
-  return *((int *)pthread_getspecific(worker_id_key));
+  return TSD_WORKER_ID;
 }
 
 /*
@@ -56,8 +57,7 @@ int LpelGetWorkerId(void)
  */
 task_t *LpelGetCurrentTask(void)
 {
-  int wid =  *((int *)pthread_getspecific(worker_id_key));
-  return workerdata[wid].current_task;
+  return workerdata[TSD_WORKER_ID].current_task;
 }
 
 
@@ -77,17 +77,25 @@ static void *LpelWorker(void *idptr)
 
 
   /* MAIN LOOP */
-  /* fetch new tasks from InitQ, insert into ReadyQ (sched) */
-  /* select a task from the ReadyQ (sched) */
-  /* set current_task */
-  /* start timing (mon) */
-  /* context switch */
-  /* end timing (mon) */
-  /* output accounting info (mon) */
-  /* check state of task, place into appropriate queue */
-  /* iterate through waiting queue, check r/w events */
-  /* (iterate through nap queue, check alert-time) */
-  /* MAIN LOOP END */
+  while (1) {
+    task_t *t;
+    /*TODO fetch new tasks from InitQ, insert into ReadyQ (sched) */
+    
+    /* select a task from the ReadyQ (sched) */
+    t = NULL; //TODO
+    /* set current_task */
+    workerdata[id].current_task = t;
+
+    /*TODO start timing (mon) */
+    /* context switch */
+    co_call(t->code);
+
+    /*TODO end timing (mon) */
+    /*TODO output accounting info (mon) */
+    /*TODO check state of task, place into appropriate queue */
+    /*TODO iterate through waiting queue, check r/w events */
+    /*XXX (iterate through nap queue, check alert-time) */
+  } /* MAIN LOOP END */
   
   /* exit thread */
   pthread_exit(NULL);
