@@ -19,6 +19,7 @@
 
 /* used (imported) modules of LPEL */
 #include "cpuassign.h"
+#include "timing.h"
 
 
 
@@ -41,6 +42,8 @@ static int num_workers = -1;
 
 static pthread_key_t worker_id_key;
 
+
+#define EXPAVG_ALPHA  0.5f
 
 #define TSD_WORKER_ID (*((int *)pthread_getspecific(worker_id_key)))
 
@@ -79,6 +82,7 @@ static void *LpelWorker(void *idptr)
   /* MAIN LOOP */
   while (1) {
     task_t *t;
+    timing_t ts;
     /*TODO fetch new tasks from InitQ, insert into ReadyQ (sched) */
     
     /* select a task from the ReadyQ (sched) */
@@ -86,13 +90,41 @@ static void *LpelWorker(void *idptr)
     /* set current_task */
     workerdata[id].current_task = t;
 
-    /*TODO start timing (mon) */
+
+    /* start timing (mon) */
+    TimingStart(&ts);
+
     /* context switch */
+    t->cnt_dispatch++;
+    t->state = TASK_RUNNING;
     co_call(t->code);
 
-    /*TODO end timing (mon) */
+    /* end timing (mon) */
+    TimingEnd(&ts);
+    TimingSet(&t->time_lastrun, &ts);
+    TimingAdd(&t->time_totalrun, &ts);
+    TimingExpAvg(&t->time_expavg, &ts, EXPAVG_ALPHA);
+
+
+    /* check state of task, place into appropriate queue */
+    switch(t->state) {
+    case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
+    case TASK_RUNNING: /* task exited by reaching end of code! */
+      TimingEnd(&t->time_alive);
+      /*TODO if joinable, place into join queue, else destroy */
+      break;
+    case TASK_WAITING: /* task returned from a blocking call*/
+      /*TODO place into waiting queue*/
+      break;
+    case TASK_READY: /* task yielded execution  */
+      /*TODO place into ready set */
+      break;
+    default:
+      assert(0); /* should not be reached */
+    }
+
     /*TODO output accounting info (mon) */
-    /*TODO check state of task, place into appropriate queue */
+
     /*TODO iterate through waiting queue, check r/w events */
     /*XXX (iterate through nap queue, check alert-time) */
   } /* MAIN LOOP END */

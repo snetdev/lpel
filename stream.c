@@ -16,14 +16,12 @@
 
 #include <malloc.h>
 #include <string.h>
+#include <assert.h>
 
 #include "lpel_private.h"
 
-#include "bool.h"
 #include "sysdep.h"
 
-//TODO
-#define assert(x) do { ; } while (0)
 
 #ifndef  BUFFER_SIZE
 #warning BUFFER_SIZE not defined, using default value
@@ -36,14 +34,14 @@
 /* Padding is required to avoid false-sharing between core's private cache */
 struct stream {
   volatile unsigned long pread;
-  long padding1[longxCacheLine-1];
+  volatile unsigned long cntread;
+  long padding1[longxCacheLine-2];
   volatile unsigned long pwrite;
-  long padding2[longxCacheLine-1];
+  volatile unsigned long cntwrite;
+  long padding2[longxCacheLine-2];
   void *buf[BUFFER_SIZE];
-  // TODO assignment/padding
-  volatile bool *flag_written;
-  volatile bool *flag_read;
-
+  task_t *producer;
+  task_t *consumer;
 };
 
 
@@ -56,13 +54,15 @@ stream_t *StreamCreate(void)
   stream_t *s = (stream_t *) malloc( sizeof(stream_t) );
   if (s != NULL) {
     s->pread = 0;
+    s->cntread = 0;
     s->pwrite = 0;
+    s->cntwrite = 0;
     /* clear all the buffer space */
     memset(&(s->buf), 0, BUFFER_SIZE*sizeof(void *));
 
-    /* flag addresses not assigned */
-    s->flag_written = NULL;
-    s->flag_read = NULL;
+    /* producer/consumer not assigned */
+    s->producer = NULL;
+    s->consumer = NULL;
   }
   return s;
 }
@@ -88,14 +88,12 @@ bool StreamOpen(stream_t *s, char mode)
   task_t *current_task = LpelGetCurrentTask();
   switch(mode) {
   case 'w':
-    /* a writer waits while stream is full on a read event */
-    assert( s->flag_read == NULL );
-    s->flag_read = &(current_task->ev_read);
+    assert( s->producer == NULL );
+    s->producer = current_task;
     break;
   case 'r':
-    /* a writer waits while stream is full on a read event */
-    assert( s->flag_written == NULL );
-    s->flag_written = &(current_task->ev_write);
+    assert( s->consumer == NULL );
+    s->consumer = current_task;
     break;
   default:
     return false;
@@ -111,7 +109,7 @@ bool StreamOpen(stream_t *s, char mode)
 void *StreamPeek(stream_t *s)
 { 
   /* check if opened for reading */
-  assert( s->flag_written == &(LpelGetCurrentTask()->ev_written) );
+  assert( s->consumer == LpelGetCurrentTask() );
 
   /* if the buffer is empty, buf[pread]==NULL */
   return s->buf[s->pread];  
@@ -127,21 +125,28 @@ void *StreamPeek(stream_t *s)
 void *StreamRead(stream_t *s)
 {
   void *item;
+  task_t *t = LpelGetCurrentTask();
 
   /* check if opened for reading */
-  assert( s->flag_written == &(LpelGetCurrentTask()->ev_written) );
+  assert( s->consumer == t );
 
   /* wait while buffer is empty */
   while ( s->buf[s->pread] == NULL ) {
-    /* WAIT on_write */;
+    /* WAIT on write event*/
+    t->event_ptr = &t->ev_write;
+    t->state = TASK_WAITING;
+    /* context switch */
+    co_resume();
   }
 
+  /* READ FROM BUFFER */
   item = s->buf[s->pread];
   s->buf[s->pread]=NULL;
   s->pread += (s->pread+1 >= BUFFER_SIZE) ? (1-BUFFER_SIZE) : 1;
+  s->cntread++;
   
-  /* set the read flag */
-  if (s->flag_read != NULL) { *s->flag_read = true; }
+  /* signal the producer a read event */
+  if (s->producer != NULL) { s->producer->ev_read = true; }
 
   return item;
 }
@@ -156,7 +161,7 @@ void *StreamRead(stream_t *s)
 bool StreamIsSpace(stream_t *s)
 {
   /* check if opened for writing */
-  assert( s->flag_read == &(LpelGetCurrentTask()->ev_read) );
+  assert( s->producer == LpelGetCurrentTask() );
 
   /* if there is space in the buffer, the location at pwrite holds NULL */
   return ( s->buf[s->pwrite] == NULL );
@@ -173,16 +178,23 @@ bool StreamIsSpace(stream_t *s)
  */
 void StreamWrite(stream_t *s, void *item)
 {
-  assert( item != NULL );
+  task_t *t = LpelGetCurrentTask();
 
   /* check if opened for writing */
-  assert( s->flag_read == &(LpelGetCurrentTask()->ev_read) );
+  assert( s->flag_read == &t->ev_read );
+
+  assert( item != NULL );
 
   /* wait while buffer is full */
   while ( s->buf[s->pwrite] != NULL ) {
-    /* WAIT on_read */;
+    /* WAIT on read event*/;
+    t->event_ptr = &t->ev_read;
+    t->state = TASK_WAITING;
+    /* context switch */
+    co_resume();
   }
 
+  /* WRITE TO BUFFER */
   /* Write Memory Barrier: ensure all previous memory write 
    * are visible to the other processors before any later
    * writes are executed.  This is an "expensive" memory fence
@@ -193,9 +205,10 @@ void StreamWrite(stream_t *s, void *item)
   WMB(); 
   s->buf[s->pwrite] = item;
   s->pwrite += (s->pwrite+1 >= BUFFER_SIZE) ? (1-BUFFER_SIZE) : 1;
+  s->cntwrite++;
   
-  /* set the written flag */
-  if (s->flag_written != NULL) { *s->flag_written = true; }
+  /* signal the consumer a write event */
+  if (s->consumer != NULL) { s->consumer->ev_write = true; }
 
   return;
 }

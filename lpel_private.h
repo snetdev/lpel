@@ -4,6 +4,7 @@
 
 #include <pcl.h>
 
+#include "timing.h"
 #include "lpel.h"
 
 
@@ -26,64 +27,36 @@ typedef enum {
 } taskstate_t;
 
 
+/* TASK CONTROL BLOCK */
 struct task {
-
-  /* TASK CONTROL BLOCK */
-
-  /* type:  IO or normal */
-  //TODO
-
-  /* state */
+  /*TODO  type: IO or normal */
   taskstate_t state;
+  task_t *prev, *next;  /* queue handling: prev, next */
 
-  /* queue handling: prev, next */
-  task_t *prev;
-  task_t *next;
+  /* signalling events*/
+  /*TODO ? padding ? */
+  volatile bool *event_ptr;
+  volatile bool ev_write, ev_read;
 
-  /* signalling write/read events*/
-  /*TODO padding */
-  volatile bool ev_write;
-  volatile bool ev_read;
-
-  /* current/last/assigned worker thread */
-  // TODO
-
-  /* scheduling information  */
-  void *sched_info;
-
-  /* the handle (or NULL for collector?) */
-  //TODO
-
+  int owner;         /* owning worker thread TODO as place_t */
+  void *sched_info;  /* scheduling information  */
 
   /* Accounting information */
-
   /* processing time: */
-  //TODO define generic macros and datatypes
-  /* time of creation */
-  /* last running time */
-  /* total running time */
-  /* exponential average running time */
-  /* average running time */
-  /* variance of running time */
-  
+  timing_t time_created;  /*XXX time of creation */
+  timing_t time_exited;   /*XXX time of exiting */
+  timing_t time_alive;    /* time alive */
+  timing_t time_lastrun;  /* last running time */
+  timing_t time_totalrun; /* total running time */
+  timing_t time_expavg;   /* exponential average running time */
+  unsigned long cnt_dispatch; /* dispatch counter */
 
-  /* simple counters: */
-  /* dispatch counter */
-  unsigned long cnt_dispatch;
-  /* read counters */
-  unsigned long cnt_read_total;
-  unsigned long cnt_read_last;
-  unsigned long cnt_read_avg;
-  /* write counters */
-  unsigned long cnt_write_total;
-  unsigned long cnt_write_last;
-  unsigned long cnt_write_avg;
-
+  /*TODO list of streams opened for writing and reading (as array)*/
 
   /* CODE */
-  /* a coroutine_t variable, upon creation of that task the coroutine needs to be created */
-  /* _or_ generic macros for context switching */
   coroutine_t code;
+  /*TODO ? arg ?*/
+  /*TODO the handle (or NULL for collector?) */
 };
 
 
