@@ -1,5 +1,4 @@
 
-#include <time.h>
 #include "timing.h"
 
 

@@ -85,16 +85,24 @@ void StreamDestroy(stream_t *s)
  */
 bool StreamOpen(stream_t *s, char mode)
 {
-  task_t *current_task = LpelGetCurrentTask();
+  task_t *ct = LpelGetCurrentTask();
   switch(mode) {
   case 'w':
     assert( s->producer == NULL );
-    s->producer = current_task;
+    s->producer = ct;
+
+    /* add to tasks list of opened streams for writing */
+    StreamarrAdd(ct->streams_writing, s);
     break;
+
   case 'r':
     assert( s->consumer == NULL );
-    s->consumer = current_task;
+    s->consumer = ct;
+
+    /* add to tasks list of opened streams for reading */
+    StreamarrAdd(ct->streams_reading, s);
     break;
+
   default:
     return false;
   }
@@ -181,7 +189,7 @@ void StreamWrite(stream_t *s, void *item)
   task_t *t = LpelGetCurrentTask();
 
   /* check if opened for writing */
-  assert( s->flag_read == &t->ev_read );
+  assert( s->producer == t );
 
   assert( item != NULL );
 

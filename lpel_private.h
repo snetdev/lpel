@@ -8,6 +8,17 @@
 #include "lpel.h"
 
 
+
+/*
+ * Helpers
+ */
+
+typedef struct streamarr streamarr_t;
+extern void StreamarrAlloc(streamarr_t *arr, const unsigned int initsize);
+extern void StreamarrFree(streamarr_t *arr);
+extern void StreamarrAdd(streamarr_t *arr, stream_t *s);
+extern void StreamarrIter(streamarr_t *arr, void (*func)(stream_t *) );
+
 /*
  * private LPEL management
  */
@@ -16,8 +27,9 @@ extern int LpelGetWorkerId(void);
 extern task_t *LpelGetCurrentTask(void);
 
 
-/* private task management */
-
+/*
+ * private task management
+ */
 
 typedef enum {
   TASK_RUNNING,
@@ -25,7 +37,6 @@ typedef enum {
   TASK_WAITING,
   TASK_ZOMBIE
 } taskstate_t;
-
 
 /* TASK CONTROL BLOCK */
 struct task {
@@ -51,13 +62,20 @@ struct task {
   timing_t time_expavg;   /* exponential average running time */
   unsigned long cnt_dispatch; /* dispatch counter */
 
-  /*TODO list of streams opened for writing and reading (as array)*/
+  /* array of streams opened for writing/reading */
+  streamarr_t streams_writing, streams_reading;
 
   /* CODE */
   coroutine_t code;
   /*TODO ? arg ?*/
   /*TODO the handle (or NULL for collector?) */
 };
+
+
+
+
+
+
 
 
 #endif /* _LPEL_PRIVATE_H_ */

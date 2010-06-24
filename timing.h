@@ -1,6 +1,7 @@
 #ifndef _TIMING_H_
 #define _TIMING_H_
 
+#include <time.h>
 
 typedef struct timespec timing_t;
 
