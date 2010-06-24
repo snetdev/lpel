@@ -9,6 +9,7 @@ extern void TimingStart(timing_t *t);
 extern void TimingEnd(timing_t *t);
 extern void TimingAdd(timing_t *t, const timing_t *val);
 extern void TimingSet(timing_t *t, const timing_t *val);
+extern void TimingZero(timing_t *t);
 extern void TimingExpAvg(timing_t *t, const timing_t *last, const float alpha);
 
 

@@ -18,14 +18,14 @@
 #include <string.h>
 #include <assert.h>
 
-#include "lpel_private.h"
+#include "lpel_p.h"
 
 #include "sysdep.h"
 
 
 #ifndef  BUFFER_SIZE
-#warning BUFFER_SIZE not defined, using default value
-#define  BUFFER_SIZE 10
+#warning BUFFER_SIZE not defined, using default value of 32
+#define  BUFFER_SIZE 32
 #endif
 
 /* 64bytes is the common size of a cache line */
@@ -92,7 +92,7 @@ bool StreamOpen(stream_t *s, char mode)
     s->producer = ct;
 
     /* add to tasks list of opened streams for writing */
-    StreamarrAdd(ct->streams_writing, s);
+    StreamarrAdd(&ct->streams_writing, s);
     break;
 
   case 'r':
@@ -100,7 +100,7 @@ bool StreamOpen(stream_t *s, char mode)
     s->consumer = ct;
 
     /* add to tasks list of opened streams for reading */
-    StreamarrAdd(ct->streams_reading, s);
+    StreamarrAdd(&ct->streams_reading, s);
     break;
 
   default:

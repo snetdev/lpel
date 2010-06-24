@@ -1,13 +1,8 @@
 
 #include <malloc.h>
-#include "lpel_private.h"
+#include "lpel_p.h"
 
 
-struct streamarr {
-  stream_t **array;
-  unsigned int cnt; /* points to the next free index */
-  unsigned int size;
-};
 
 /**
  * Allocate space of a stream array

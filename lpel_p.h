@@ -1,6 +1,6 @@
 
-#ifndef _LPEL_PRIVATE_H_
-#define _LPEL_PRIVATE_H_
+#ifndef _LPEL_P_H_
+#define _LPEL_P_H_
 
 #include <pcl.h>
 
@@ -8,12 +8,19 @@
 #include "lpel.h"
 
 
+#define BUFFER_SIZE 32
+#define STREAMARR_INITSIZE 16
+
 
 /*
  * Helpers
  */
+typedef struct {
+  stream_t **array;
+  unsigned int cnt; /* points to the next free index */
+  unsigned int size;
+} streamarr_t;
 
-typedef struct streamarr streamarr_t;
 extern void StreamarrAlloc(streamarr_t *arr, const unsigned int initsize);
 extern void StreamarrFree(streamarr_t *arr);
 extern void StreamarrAdd(streamarr_t *arr, stream_t *s);
@@ -32,6 +39,7 @@ extern task_t *LpelGetCurrentTask(void);
  */
 
 typedef enum {
+  TASK_INIT,
   TASK_RUNNING,
   TASK_READY,
   TASK_WAITING,
@@ -67,8 +75,7 @@ struct task {
 
   /* CODE */
   coroutine_t code;
-  /*TODO ? arg ?*/
-  /*TODO the handle (or NULL for collector?) */
+  void *arg;  /* argument */
 };
 
 

@@ -66,6 +66,15 @@ void TimingSet(timing_t *t, const timing_t *val)
 }
 
 /**
+ * Clear a time to 0
+ */
+void TimingZero(timing_t *t)
+{
+  t->tv_sec  = 0;
+  t->tv_nsec = 0;
+}
+
+/**
  * Calculate the exponential average
  *
  * Updates t by last with weight factor alpha

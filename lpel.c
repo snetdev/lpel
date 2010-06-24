@@ -14,7 +14,7 @@
 #include <pcl.h>     /* tasks are executed in user-space with help of
                         GNU Portable Coroutine Library  */
 
-#include "lpel_private.h" /* private header also includes lpel.h*/
+#include "lpel_p.h" /* private header also includes lpel.h*/
 
 
 /* used (imported) modules of LPEL */
@@ -160,6 +160,9 @@ void LpelInit(const int nworkers)
   /* Create the data structures */
   workerdata = (workerdata_t *) malloc( num_workers*sizeof(workerdata_t) );
 
+  /* Init libPCL */
+  co_thread_init();
+
 }
 
 /**
@@ -206,6 +209,8 @@ void LpelRun(void)
 void LpelCleanup(void)
 {
   free(workerdata);
+
+  co_thread_cleanup();
 }
 
 
