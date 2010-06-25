@@ -22,18 +22,14 @@
 #include "timing.h"
 
 
-
-
 typedef struct {
-  /* ID */
-  unsigned int id;
-  /* init queue */
-  /* ready queue(s) */
-  void *readyQ;
-  /* waiting queue */
-  /* current task */
-  task_t *current_task;
-  /* monitoring output info */
+  unsigned int id;           /* worker ID */
+  taskqueue_t queue_init;    /* init queue */
+  pthread_mutex_t mtx_queue_init;
+  void       *queue_ready;   /* ready queue */
+  taskqueue_t queue_waiting; /* waiting queue */
+  task_t *current_task;      /* current task */
+  /*TODO monitoring output info */
 } workerdata_t;
 
 static workerdata_t *workerdata = NULL;
@@ -64,6 +60,16 @@ task_t *LpelGetCurrentTask(void)
 }
 
 
+static bool WaitingTest(task_t *wt)
+{
+  return *wt->event_ptr == true;
+}
+
+static void WaitingRemove(task_t *wt)
+{
+  wt->state = TASK_READY;
+  SchedPutReady( workerdata[id].queue_ready, wt );
+}
 
 /**
  * Worker thread code
@@ -83,10 +89,23 @@ static void *LpelWorker(void *idptr)
   while (1) {
     task_t *t;
     timing_t ts;
-    /*TODO fetch new tasks from InitQ, insert into ReadyQ (sched) */
+
+    /* fetch new tasks from init queue, insert into ready queue (sched) */
+    pthread_mutex_lock( &workerdata[id].mtx_queue_init );
+    t = TaskqueueRemove( &workerdata[id].queue_init );
+    while (t != NULL) {
+      assert( t->state == TASK_INIT );
+      t->state = TASK_READY;
+      SchedPutReady( workerdata[id].queue_ready, t );
+      /* for next iteration: */
+      t = TaskqueueRemove( &workerdata[id].queue_init );
+    }
+    pthread_mutex_unlock( &workerdata[id].mtx_queue_init );
     
-    /* select a task from the ReadyQ (sched) */
-    t = NULL; //TODO
+
+    /* select a task from the ready queue (sched) */
+    t = SchedFetchNextReady();
+    assert( t->state == TASK_READY );
     /* set current_task */
     workerdata[id].current_task = t;
 
@@ -94,10 +113,11 @@ static void *LpelWorker(void *idptr)
     /* start timing (mon) */
     TimingStart(&ts);
 
-    /* context switch */
+    /* EXECUTE TASK (context switch) */
     t->cnt_dispatch++;
     t->state = TASK_RUNNING;
     co_call(t->code);
+    /* task returns with a different state, except it reached the end of code */
 
     /* end timing (mon) */
     TimingEnd(&ts);
@@ -112,12 +132,15 @@ static void *LpelWorker(void *idptr)
     case TASK_RUNNING: /* task exited by reaching end of code! */
       TimingEnd(&t->time_alive);
       /*TODO if joinable, place into join queue, else destroy */
+      TaskDestroy(t);
       break;
     case TASK_WAITING: /* task returned from a blocking call*/
-      /*TODO place into waiting queue*/
+      /* put into waiting queue */
+      TaskqueueAdd( &workerdata[id].queue_waiting, t );
       break;
     case TASK_READY: /* task yielded execution  */
-      /*TODO place into ready set */
+      /* put into ready queue */
+      SchedPutReady( workerdata[id].queue_ready, t );
       break;
     default:
       assert(0); /* should not be reached */
@@ -125,7 +148,11 @@ static void *LpelWorker(void *idptr)
 
     /*TODO output accounting info (mon) */
 
-    /*TODO iterate through waiting queue, check r/w events */
+    /* iterate through waiting queue, check r/w events */
+    taskqueueIterateRemove( &workerdata[id].queue_waiting,
+                            WaitingTest, WaitingRemove
+                            );
+
     /*XXX (iterate through nap queue, check alert-time) */
   } /* MAIN LOOP END */
   
@@ -142,10 +169,11 @@ static void *LpelWorker(void *idptr)
  * Initialise the LPEL
  * - if num_workers==-1, determine the number of worker threads automatically
  * - create the data structures for each worker thread
- * - create necessary TSD
  */
 void LpelInit(const int nworkers)
 {
+  int i;
+
   if (nworkers==-1) {
     /* one available core has to be reserved for IO tasks
        and other system threads */
@@ -159,6 +187,13 @@ void LpelInit(const int nworkers)
 
   /* Create the data structures */
   workerdata = (workerdata_t *) malloc( num_workers*sizeof(workerdata_t) );
+  for (i=0; i<num_workers; i++) {
+    TaskqueueInit(&workerdata[i].queue_init);
+    pthread_mutex_init( &workerdata[i].mtx_queue_init, NULL );
+
+    TaskqueueInit(&workerdata[i].queue_waiting);
+
+  }
 
   /* Init libPCL */
   co_thread_init();
@@ -204,12 +239,15 @@ void LpelRun(void)
 /**
  * Cleans the LPEL up
  * - free the data structures of worker threads
- * - free the TSD
  */
 void LpelCleanup(void)
 {
+  for (i=0; i<num_workers; i++) {
+    pthread_mutex_destroy( &workerdata[i].mtx_queue_init );
+  }
   free(workerdata);
 
+  /* Cleanup libPCL */
   co_thread_cleanup();
 }
 

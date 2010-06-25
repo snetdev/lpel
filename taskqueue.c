@@ -1,35 +1,21 @@
 
-
 #include <malloc.h>
+#include "lpel_p.h"
 
-#include "bool.h"
 
 /**
- * A doubly linked list for task queues
+ * A simple doubly linked list for task queues
  * - append at tail, remove from head (FIFO)
- * - insert at arbitrary point depending on priority
- *   (insertion sort, O(n) in this case)
- * - (sort list, if it is possible that priorities change
- *   dynamically, tbd. if required -> method??)
- */
-
-typedef struct taskqueue taskqueue_t;
-
-
-/**
+ *
  * Invariants:
  *   (head != NULL)   =>  (head->prev == NULL) AND
  *   (tail != NULL)   =>  (tail->next == NULL) AND
  *   (head == NULL)  <=>  (tail == NULL)
  */
-
 struct taskqueue {
   task_t *head;
   task_t *tail;
   unsigned int count;
-
-  // MUTEX
-  // CONDVAR
 };
 
 
@@ -37,28 +23,19 @@ struct taskqueue {
 /**
  * Create a new taskqueue
  */
-taskqueue_t *TaskqueueCreate(void)
+void TaskqueueInit(taskqueue_t *tq)
 {
-  taskqueue_t *tq = (taskqueue_t *) malloc( sizeof(taskqueue_t) );
   tq->head = NULL;
   tq->tail = NULL;
   tq->count = 0;
-
-  // INIT MUTEX
-  // INIT CONDVAR
 }
 
-
 /**
- * Destroy the taskqueue
+ * Get the number of tasks in the queue
  */
-void TaskqueueDestroy(taskqueue_t *tq)
+unsigned int TaskqueueCount(taskqueue_t *tq)
 {
-  // DESTROY MUTEX
-  // DESTROY CONDVAR
-
-  free(tq);
-  tq = NULL;
+  return tq->count;
 }
 
 
@@ -72,24 +49,18 @@ void TaskqueueDestroy(taskqueue_t *tq)
  */
 void TaskqueueAppend(taskqueue_t *tq, task_t *t)
 {
-  // LOCK
-
   if ( tq->head == NULL ) {
     tq->head = t;
     /* t->prev = NULL; is precond */
   } else {
     tq->tail->next = t;
-    t->prev = tail;
+    t->prev = tq->tail;
   }
   tq->tail = t;
   /* t->next = NULL; is precond */
 
   /* increment task count */
   tq->count++;
-
-  // SIGNAL COND
-
-  // UNLOCK
 }
 
 
@@ -97,7 +68,6 @@ void TaskqueueAppend(taskqueue_t *tq, task_t *t)
  * Removes the head from a taskqueue and returns it
  *
  * Preconditions:
- * - MUTEX is aquired
  * - tq->head != NULL (i.e., taskqueue not empty)
  */
 static task_t *TaskqueueRemoveHead(taskqueue_t *tq)
@@ -119,40 +89,43 @@ static task_t *TaskqueueRemoveHead(taskqueue_t *tq)
   return t;
 }
 
-
 /**
  * Remove a task from a taskqueue (from head)
- * - BLOCKING!
+ * - if no task is in queue, simply returns NULL
  */
 task_t *TaskqueueRemove(taskqueue_t *tq)
 {
-  task_t *t;
+  task_t *t = NULL;
 
-  // LOCK
-  while (tq->head != NULL) {
-    //WAIT COND
+  if ( tq->head != NULL ) {
+    t = TaskqueueRemoveHead(tq);
   }
-  t = TaskqueueRemoveHead(tq);
-  // UNLOCK
 
   return t;
 }
 
-
-/**
- * Remove a task from a taskqueue (from head)
- * - NON-BLOCKING!
- * - if no task is in queue, simply returns NULL
- */
-task_t *TaskqueueTryRemove(taskqueue_t *tq)
+void TaskqueueIterateRemove(taskqueue_t *tq, 
+  bool (*cond)(task_t*), void (*action)(task_t*) )
 {
-  task_t *t = NULL;
+  task_t *cur = tq->head;
+  while (cur != NULL) {
+    /* check condition */
+    if ( cond(cur) ) {
+      task_t *p = cur;
 
-  // LOCK
-  if ( tq->head != NULL ) {
-    t = TaskqueueRemoveHead(tq);
+      /* relink the queue */
+      if (cur->prev != NULL) { cur->prev->next = cur->next; }
+      if (cur->next != NULL) { cur->next->prev = cur->prev; }
+      cur = cur->next;
+    
+      p->prev = NULL;
+      p->next = NULL;
+      /* do action */
+      action(p);
+    } else {
+      cur = cur->next;
+    }
   }
-  // UNLOCK
 
-  return t;
+
 }
