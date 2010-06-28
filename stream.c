@@ -92,7 +92,7 @@ bool StreamOpen(stream_t *s, char mode)
     s->producer = ct;
 
     /* add to tasks list of opened streams for writing */
-    StreamarrAdd(&ct->streams_writing, s);
+    SetAdd(&ct->streams_writing, s);
     break;
 
   case 'r':
@@ -100,7 +100,7 @@ bool StreamOpen(stream_t *s, char mode)
     s->consumer = ct;
 
     /* add to tasks list of opened streams for reading */
-    StreamarrAdd(&ct->streams_reading, s);
+    SetAdd(&ct->streams_reading, s);
     break;
 
   default:

@@ -1,5 +1,6 @@
 
 #include <malloc.h>
+#include "taskqueue.h"
 #include "lpel_p.h"
 
 
@@ -12,11 +13,6 @@
  *   (tail != NULL)   =>  (tail->next == NULL) AND
  *   (head == NULL)  <=>  (tail == NULL)
  */
-struct taskqueue {
-  task_t *head;
-  task_t *tail;
-  unsigned int count;
-};
 
 
 
@@ -28,14 +24,6 @@ void TaskqueueInit(taskqueue_t *tq)
   tq->head = NULL;
   tq->tail = NULL;
   tq->count = 0;
-}
-
-/**
- * Get the number of tasks in the queue
- */
-unsigned int TaskqueueCount(taskqueue_t *tq)
-{
-  return tq->count;
 }
 
 

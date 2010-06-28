@@ -16,10 +16,12 @@
 
 #include "lpel_p.h" /* private header also includes lpel.h*/
 
+#include "taskqueue.h"
 
 /* used (imported) modules of LPEL */
 #include "cpuassign.h"
 #include "timing.h"
+#include "scheduler.h"
 
 
 typedef struct {
@@ -68,7 +70,7 @@ static bool WaitingTest(task_t *wt)
 static void WaitingRemove(task_t *wt)
 {
   wt->state = TASK_READY;
-  SchedPutReady( workerdata[id].queue_ready, wt );
+  SchedPutReady( workerdata[TSD_WORKER_ID].queue_ready, wt );
 }
 
 /**
@@ -104,7 +106,7 @@ static void *LpelWorker(void *idptr)
     
 
     /* select a task from the ready queue (sched) */
-    t = SchedFetchNextReady();
+    t = SchedFetchNextReady( workerdata[id].queue_ready );
     assert( t->state == TASK_READY );
     /* set current_task */
     workerdata[id].current_task = t;
@@ -136,7 +138,7 @@ static void *LpelWorker(void *idptr)
       break;
     case TASK_WAITING: /* task returned from a blocking call*/
       /* put into waiting queue */
-      TaskqueueAdd( &workerdata[id].queue_waiting, t );
+      TaskqueueAppend( &workerdata[id].queue_waiting, t );
       break;
     case TASK_READY: /* task yielded execution  */
       /* put into ready queue */
@@ -149,7 +151,7 @@ static void *LpelWorker(void *idptr)
     /*TODO output accounting info (mon) */
 
     /* iterate through waiting queue, check r/w events */
-    taskqueueIterateRemove( &workerdata[id].queue_waiting,
+    TaskqueueIterateRemove( &workerdata[id].queue_waiting,
                             WaitingTest, WaitingRemove
                             );
 
@@ -242,6 +244,7 @@ void LpelRun(void)
  */
 void LpelCleanup(void)
 {
+  int i;
   for (i=0; i<num_workers; i++) {
     pthread_mutex_destroy( &workerdata[i].mtx_queue_init );
   }

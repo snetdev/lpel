@@ -7,24 +7,12 @@
 #include "timing.h"
 #include "lpel.h"
 
+#include "taskqueue.h"
+#include "set.h"
+
 
 #define BUFFER_SIZE 32
-#define STREAMARR_INITSIZE 16
 
-
-/*
- * Helpers
- */
-typedef struct {
-  stream_t **array;
-  unsigned int cnt; /* points to the next free index */
-  unsigned int size;
-} streamarr_t;
-
-extern void StreamarrAlloc(streamarr_t *arr, const unsigned int initsize);
-extern void StreamarrFree(streamarr_t *arr);
-extern void StreamarrAdd(streamarr_t *arr, stream_t *s);
-extern void StreamarrIter(streamarr_t *arr, void (*func)(stream_t *) );
 
 /*
  * private LPEL management
@@ -71,24 +59,12 @@ struct task {
   unsigned long cnt_dispatch; /* dispatch counter */
 
   /* array of streams opened for writing/reading */
-  streamarr_t streams_writing, streams_reading;
+  set_t streams_writing, streams_reading;
 
   /* CODE */
   coroutine_t code;
   void *arg;  /* argument */
 };
-
-
-/*
- * Taskqueue handling
- */
-typedef struct taskqueue taskqueue_t;
-extern void TaskqueueInit(taskqueue_t *tq);
-extern unsigned int TaskqueueCount(taskqueue_t *tq);
-extern void TaskqueueAppend(taskqueue_t *tq, task_t *t);
-extern task_t *TaskqueueRemove(taskqueue_t *tq);
-extern void TaskqueueIterateRemove(taskqueue_t *tq, 
-         bool (*cond)(task_t*), void (*action)(task_t*) );
 
 
 
