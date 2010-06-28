@@ -1,30 +1,16 @@
+#ifndef _TASK_H_
+#define _TASK_H_
 
-#ifndef _LPEL_P_H_
-#define _LPEL_P_H_
+#include <pcl.h> /* coroutine_t */
 
-#include <pcl.h>
-
-#include "timing.h"
-#include "lpel.h"
-
-#include "taskqueue.h"
 #include "set.h"
 
 
-#define BUFFER_SIZE 32
+typedef enum {
+  TASK_TYPE_NORMAL,
+  TASK_TYPE_IO
+} tasktype_t;
 
-
-/*
- * private LPEL management
- */
-
-extern int LpelGetWorkerId(void);
-extern task_t *LpelGetCurrentTask(void);
-
-
-/*
- * private task management
- */
 
 typedef enum {
   TASK_INIT,
@@ -34,8 +20,13 @@ typedef enum {
   TASK_ZOMBIE
 } taskstate_t;
 
-/* TASK CONTROL BLOCK */
-struct task {
+
+
+
+/*
+ * TASK CONTROL BLOCK
+ */
+typedef struct {
   /*TODO  type: IO or normal */
   taskstate_t state;
   task_t *prev, *next;  /* queue handling: prev, next */
@@ -64,9 +55,7 @@ struct task {
   /* CODE */
   coroutine_t code;
   void *arg;  /* argument */
-};
+} task_t;
 
 
-
-
-#endif /* _LPEL_PRIVATE_H_ */
+#endif /* _TASK_H_ */

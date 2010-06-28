@@ -2,42 +2,21 @@
 #ifndef _LPEL_H_
 #define _LPEL_H_
 
-#include "bool.h"
+#include "task.h"
 
-/*
- * General LPEL management
- */
 
-extern void LpelInit(const int nworkers);
+typedef struct {
+  int num_workers;
+} lpelconfig_t;
+
+
+extern void LpelInit(lpelconfig_t *cfg);
 extern void LpelRun(void);
 extern void LpelCleanup(void);
 
-/*
- * Stream management
- */
 
-typedef struct stream stream_t;
-
-extern stream_t *StreamCreate(void);
-extern void StreamDestroy(stream_t *s);
-extern bool StreamOpen(stream_t *s, char mode);
-extern void *StreamPeek(stream_t *s);
-extern void *StreamRead(stream_t *s);
-extern bool StreamIsSpace(stream_t *s);
-extern void StreamWrite(stream_t *s, void *item);
-
-
-/*
- * Task management
- */
-
-typedef struct task task_t;
-
-typedef enum {
-  TASK_TYPE_NORMAL,
-  TASK_TYPE_IO
-} tasktype_t;
-
+extern int LpelGetWorkerId(void);
+extern task_t *LpelGetCurrentTask(void);
 
 
 #endif /* _LPEL_H_ */

@@ -1,7 +1,5 @@
-
-
 /*
- * This file is adopted from fastflow
+ * This file is based on the implementation of FastFlow
  */
 
 
@@ -20,30 +18,9 @@
 
 #include "lpel_p.h"
 
+#include "stream.h"
+
 #include "sysdep.h"
-
-
-#ifndef  BUFFER_SIZE
-#warning BUFFER_SIZE not defined, using default value of 32
-#define  BUFFER_SIZE 32
-#endif
-
-/* 64bytes is the common size of a cache line */
-#define longxCacheLine  (64/sizeof(long))
-
-/* Padding is required to avoid false-sharing between core's private cache */
-struct stream {
-  volatile unsigned long pread;
-  volatile unsigned long cntread;
-  long padding1[longxCacheLine-2];
-  volatile unsigned long pwrite;
-  volatile unsigned long cntwrite;
-  long padding2[longxCacheLine-2];
-  void *buf[BUFFER_SIZE];
-  task_t *producer;
-  task_t *consumer;
-};
-
 
 
 /**

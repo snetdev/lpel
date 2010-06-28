@@ -14,9 +14,13 @@
 #include <pcl.h>     /* tasks are executed in user-space with help of
                         GNU Portable Coroutine Library  */
 
-#include "lpel_p.h" /* private header also includes lpel.h*/
+#include "lpel.h" /* private header also includes lpel.h*/
 
+#include "task.h"
 #include "taskqueue.h"
+#include "set.h"
+#include "stream.h"
+
 
 /* used (imported) modules of LPEL */
 #include "cpuassign.h"
@@ -34,6 +38,7 @@ typedef struct {
   /*TODO monitoring output info */
 } workerdata_t;
 
+/* array of workerdata_t, one for each worker */
 static workerdata_t *workerdata = NULL;
 
 static int num_workers = -1;
@@ -85,7 +90,7 @@ static void *LpelWorker(void *idptr)
   /* set affinity to id=CPU */
 
   /* set scheduling policy */
-
+  workerdata[id].queue_ready = SchedInit();
 
   /* MAIN LOOP */
   while (1) {
@@ -172,16 +177,16 @@ static void *LpelWorker(void *idptr)
  * - if num_workers==-1, determine the number of worker threads automatically
  * - create the data structures for each worker thread
  */
-void LpelInit(const int nworkers)
+void LpelInit(lpelconfig_t *cfg)
 {
   int i;
 
-  if (nworkers==-1) {
+  if (cfg->num_workers == -1) {
     /* one available core has to be reserved for IO tasks
        and other system threads */
     num_workers = CpuAssignQueryNumCpus() - 1;
   } else {
-    num_workers = nworkers;
+    num_workers = cfg->num_workers;
   }
   /* TODO: exclusive SCHED_FIFO possible? */
   if (num_workers < 1) num_workers = 1;
