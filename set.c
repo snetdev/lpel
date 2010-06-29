@@ -9,7 +9,7 @@
  */
 
 
-#include <malloc.h>
+#include <stdlib.h>
 #include "set.h"
 
 
@@ -23,6 +23,10 @@ void SetAlloc(set_t *s)
   s->cnt = 0;
   s->size = SET_INITSIZE;
   s->array = (void **)malloc( SET_INITSIZE*sizeof(void *) );
+  if (s->array == NULL) {
+    perror("SetAlloc() failed: could not alloc memory");
+    exit(EXIT_FAILURE);
+  }
 }
 
 
@@ -42,8 +46,11 @@ void SetAdd(set_t *s, void *item)
     /* item count reached size of set: increase size */
     if (s->cnt == s->size) {
       s->size += SET_DELTASIZE;
-      s->array = (void **)realloc( s->array, s->size );
-      /*TODO check ( s->array != NULL ) */
+      s->array = (void **)realloc( s->array, s->size*sizeof(void *) );
+      if (s->array == NULL) {
+        perror("SetAdd() failed: could not realloc memory");
+        exit(EXIT_FAILURE);
+      }
     }
     s->array[s->cnt] = item;
     s->cnt++;
@@ -54,24 +61,33 @@ void SetAdd(set_t *s, void *item)
  */
 bool SetRemove(set_t *s, void *item)
 {
-  int i;
-  for (i=0; i<=s->cnt; i++) {
-    if (s->array[i] == item) break;
-  }
+  int i, fnd;
 
+  fnd = -1;
+  for (i=0; i<s->cnt; i++) {
+    if (s->array[i] == item) {
+      fnd = i;
+      break;
+    }
+  }
+  
   /* if item not found in set, do nothing and return false*/
-  if (i==s->cnt) return false;
+  if (fnd == -1) return false;
   
   /* remove item by decrementing cnt and placing
      item at cnt at the position of item to remove */
   s->cnt--;
-  s->array[i] = s->array[s->cnt];
+  s->array[fnd] = s->array[s->cnt];
+  
 
   /* possibly realloc smaller space generously */
   if (s->size - s->cnt >= 2*SET_DELTASIZE) {
       s->size -= SET_DELTASIZE;
-      s->array = (void **)realloc( s->array, s->size );
-      /*TODO check ( s->array != NULL ) */
+      s->array = (void **)realloc( s->array, s->size*sizeof(void *) );
+      if (s->array == NULL) {
+        perror("SetRemove() failed: could not realloc memory");
+        exit(EXIT_FAILURE);
+      }
   }
 
   return true;
