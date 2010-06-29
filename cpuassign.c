@@ -9,7 +9,12 @@
 #include <linux/unistd.h>
 #include <sys/syscall.h> 
 
+/*!! link with -lcap */
+#ifdef CPUASSIGN_USE_CAPABILITIES
+#  include <sys/capability.h>
+#endif
 
+#include "cpuassign.h"
 
 /* macro using syscall for gettid, as glibc doesn't provide a wrapper */
 #define gettid() syscall( __NR_gettid )
@@ -61,4 +66,26 @@ int CpuAssignToCore(int coreid)
   }
 
   return 0;
+}
+
+
+bool CpuAssignCanExclusively(void)
+{
+#ifdef CPUASSIGN_USE_CAPABILITIES
+  cap_t caps;
+  cap_flag_value_t cap;
+
+  caps = cap_get_proc();
+  if (caps == NULL) {
+    /*TODO error msg*/
+    return false;
+  }
+
+  cap_get_flag(caps, CAP_SYS_NICE, CAP_EFFECTIVE, &cap);
+
+  return (cap == CAP_SET);
+#else
+  return false;
+#endif
+
 }

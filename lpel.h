@@ -7,7 +7,12 @@
 
 typedef struct {
   int num_workers;
+  unsigned long attr;
 } lpelconfig_t;
+
+typedef enum {
+  LPEL_ATTR_ASSIGNCORE = (1<<0)
+} lpelconfig_attr_t;
 
 
 extern void LpelInit(lpelconfig_t *cfg);

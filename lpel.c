@@ -42,6 +42,7 @@ typedef struct {
 static workerdata_t *workerdata = NULL;
 
 static int num_workers = -1;
+static bool b_assigncore = false;
 
 static pthread_key_t worker_id_key;
 
@@ -49,6 +50,7 @@ static pthread_key_t worker_id_key;
 #define EXPAVG_ALPHA  0.5f
 
 #define TSD_WORKER_ID (*((int *)pthread_getspecific(worker_id_key)))
+
 
 /*
  * Get current worker id
@@ -78,6 +80,13 @@ static void WaitingRemove(task_t *wt)
   SchedPutReady( workerdata[TSD_WORKER_ID].queue_ready, wt );
 }
 
+
+inline static LpelAttrIsSet(unsigned long vec, lpelconfig_attr_t b)
+{
+  return ((vec)&(b)==(b));
+}
+
+
 /**
  * Worker thread code
  */
@@ -88,6 +97,7 @@ static void *LpelWorker(void *idptr)
   pthread_setspecific(worker_id_key, idptr);
 
   /* set affinity to id=CPU */
+  if (b_assigncore) CpuAssignToCore(id);
 
   /* set scheduling policy */
   workerdata[id].queue_ready = SchedInit();
@@ -188,8 +198,17 @@ void LpelInit(lpelconfig_t *cfg)
   } else {
     num_workers = cfg->num_workers;
   }
-  /* TODO: exclusive SCHED_FIFO possible? */
   if (num_workers < 1) num_workers = 1;
+  
+  /* Exclusive assignment possible? */
+  if ( LpelAttrIsSet(cfg->attr, LPEL_ATTR_ASSIGNCORE) ) {
+    if ( !CpuAssignCanExclusively() ) {
+      ;/*TODO emit warning, fallback */
+      b_assigncore = false;
+    } else {
+      b_assigncore = true;
+    }
+  }
 
 
   /* Create the data structures */

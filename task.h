@@ -58,4 +58,14 @@ typedef struct {
 } task_t;
 
 
+
+
+extern task_t *TaskCreate( void (*func)(void *arg), void *arg, unsigned int attr);
+extern void TaskDestroy(task_t *t);
+extern void TaskExit(void);
+extern void TaskYield(void);
+
+
+
+
 #endif /* _TASK_H_ */
