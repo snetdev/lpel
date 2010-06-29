@@ -7,7 +7,7 @@
 
 extern bool CpuAssignCanExclusively(void);
 extern int  CpuAssignQueryNumCpus(void);
-extern int  CpuAssignToCore(int coreid);
+extern bool CpuAssignToCore(int coreid);
 
 
 #endif /* _CPUASSIGN_H_ */

@@ -35,9 +35,9 @@ int CpuAssignQueryNumCpus(void)
 
 /*
  * Assigns the current OS thread to a CPU
- * On success, returns 0; otherwise errno
+ * Returns success.
  */
-int CpuAssignToCore(int coreid)
+bool CpuAssignToCore(int coreid)
 {
   int res;
   cpu_set_t cpuset; 
@@ -51,21 +51,19 @@ int CpuAssignToCore(int coreid)
   
   res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
   if (res == -1) {
-    /*TODO handle_error_en(errno, "sched_setaffinity"); */
-    return errno;
+    /*TODO check errno? */
+    return false;
   }
 
-  /*TODO check permissions */
-  param.sched_priority = 1; /* lowest real-time */
+  param.sched_priority = 1; /* lowest real-time, TODO other? */
 
-  /* following can also be SCHED_FIFO */
-  res = sched_setscheduler(tid, SCHED_RR, &param);
+  res = sched_setscheduler(tid, SCHED_FIFO, &param);
   if (res == -1) {
-    /*TODO handle_error_en(errno, "sched_setscheduler"); */
-    return errno;
+    /*TODO check errno? */
+    return false;
   }
 
-  return 0;
+  return true;
 }
 
 
