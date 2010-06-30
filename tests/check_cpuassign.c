@@ -4,6 +4,7 @@
 #include <check.h>
 #include "../cpuassign.h"
 
+int isroot = 0;
 
 
 void setup(void)
@@ -28,7 +29,9 @@ START_TEST (test_cpuassign_exclusively)
 {
   bool b;
   b = CpuAssignCanExclusively();
-  fail_if( b, "Not root!");
+  fail_if( (isroot==0) && b, "Not root!");
+  fail_if( (isroot!=0) && !b,
+           "Is root: should be able to assign exclusively!");
 }
 END_TEST
 
@@ -46,9 +49,13 @@ Suite *cpuassign_suite(void)
 }
 
 
-int main(void)
+int main(int argc)
 {
   int number_failed;
+
+  printf("argc=%d\n", argc);
+  if (argc>1) isroot=1;
+
   Suite *s = cpuassign_suite();
   SRunner *sr = srunner_create(s);
   srunner_run_all(sr, CK_NORMAL);
