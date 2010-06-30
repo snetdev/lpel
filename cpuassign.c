@@ -2,19 +2,22 @@
 #define _GNU_SOURCE
 
 #include <sched.h>
-#include <errno.h>
 #include <unistd.h>  /* sysconf() */
 #include <sys/types.h> /* pid_t */
 
 #include <linux/unistd.h>
 #include <sys/syscall.h> 
 
+
+#include "cpuassign.h" /* defines CPUASSIGN_CAPABILITIES */
+
+
+
 /*!! link with -lcap */
 #ifdef CPUASSIGN_USE_CAPABILITIES
 #  include <sys/capability.h>
 #endif
 
-#include "cpuassign.h"
 
 /* macro using syscall for gettid, as glibc doesn't provide a wrapper */
 #define gettid() syscall( __NR_gettid )

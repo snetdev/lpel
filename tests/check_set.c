@@ -36,15 +36,31 @@ START_TEST (test_setadd)
   int i;
   set_t s;
   SetAlloc(&s);
-  fail_unless( s.size > 0, NULL);
-  // add
-  for(i=0; i<100; i++) {
+  fail_unless( s.size == SET_INITSIZE, NULL);
+  // add up to fill completely
+  for(i=0; i<SET_INITSIZE; i++) {
     SetAdd(&s, (void *) &(myints[i]) );
   }
-  fail_unless( s.cnt == 100, NULL);
+  fail_unless( s.cnt  == SET_INITSIZE &&
+               s.size == SET_INITSIZE,
+               NULL);
+  // add one more
+  SetAdd(&s, (void *) &(myints[SET_INITSIZE]) );
+  fail_unless( s.cnt  == SET_INITSIZE+1 &&
+               s.size == SET_INITSIZE+SET_DELTASIZE,
+               NULL);
+  // again up to fill completely
+  for(i=SET_INITSIZE+1; i<SET_INITSIZE+SET_DELTASIZE; i++) {
+    SetAdd(&s, (void *) &(myints[i]) );
+  }
+  fail_unless( s.cnt  == SET_INITSIZE+SET_DELTASIZE &&
+               s.size == SET_INITSIZE+SET_DELTASIZE,
+               NULL);
+
   // print
   SetApply(&s, printInt);
   printf("\n");
+
   SetFree(&s);
 }
 END_TEST
@@ -55,40 +71,51 @@ START_TEST (test_setremove)
   int i;
   bool b;
   set_t s;
+  void *e1, *e2;
 
   SetAlloc(&s);
-  for(i=0; i<100; i++)  SetAdd(&s, (void *) &(myints[i]) );
-
-  // remove 10 to 19
-  for(i=10; i<=19; i++) {
-    b = SetRemove(&s, (void *) &(myints[i]) );
-    fail_unless(b == true, NULL);
+  for(i=0; i<SET_INITSIZE+3*SET_DELTASIZE+1; i++) {
+    SetAdd(&s, (void *) &(myints[i]) );
   }
-  fail_unless( s.cnt == 90, NULL);
-  SetApply(&s, printInt);
-  printf("\n");
-
-  // remove 89 to 80
-  for(i=89; i>=80; i--) {
-    b = SetRemove(&s, (void *) &(myints[i]) );
-    fail_unless(b == true, NULL);
-  }
-  fail_unless( s.cnt == 80, NULL);
-  SetApply(&s, printInt);
-  printf("\n");
-
-  // remove 70 to 79
-  for(i=70; i<=79; i++) {
-    b = SetRemove(&s, (void *) &(myints[i]) );
-    fail_unless(b == true, NULL);
-  }
-  fail_unless( s.cnt == 70, NULL);
-  SetApply(&s, printInt);
-  printf("\n");
-
+  fail_unless( s.cnt  == SET_INITSIZE+3*SET_DELTASIZE+1 &&
+               s.size == SET_INITSIZE+4*SET_DELTASIZE,
+               NULL);
   
-  b = SetRemove(&s, (void *) &(myints[75]) );
-  fail_unless(b == false, NULL);
+  // last element
+  e1 = s.array[s.cnt-1];
+  // element to remove
+  i = SET_INITSIZE+1;
+  e2 = s.array[i];
+
+  b = SetRemove(&s, e2);
+  fail_unless( b && (s.array[i] == e1), NULL );
+  // removing again same element
+  b = SetRemove(&s, e2);
+  fail_if( b, "removing twice the same succedded" );
+
+  // remove SET_DELTASIZE elements
+  for(i=0; i<SET_DELTASIZE; i++) {
+    b = SetRemove(&s, (void *) &(myints[i]) );
+    fail_unless(b == true, NULL);
+  }
+  fail_unless( s.cnt ==  SET_INITSIZE+2*SET_DELTASIZE &&
+               s.size == SET_INITSIZE+4*SET_DELTASIZE,
+               NULL);
+
+  // removing one more should trigger reallocating to a smaller size
+  // remove the last
+  e1 = s.array[s.cnt-1];
+  b = SetRemove(&s, e1);
+  fail_unless( b &&
+               s.cnt ==  SET_INITSIZE+2*SET_DELTASIZE-1 &&
+               s.size == SET_INITSIZE+3*SET_DELTASIZE,
+               NULL);
+  b = SetRemove(&s, e1);
+  fail_if( b, "removing twice the same succedded" );
+
+  // print
+  SetApply(&s, printInt);
+  printf("\n");
 
   SetFree(&s);
 }

@@ -6,6 +6,16 @@
  *
  * This file implements a very basic and simple set type,
  * that preferrably is used to store pointers.
+ *
+ * Its intended use is to keep a list of references, in
+ * an array that can grow on demand automatically.
+ * Hence, it is optimized for adding new elements.
+ * It does not check for duplicates upon adding, and
+ * upon removing, the first found reference is removed.
+ *
+ * Add: O(1)
+ * Remove: O(n)
+ *
  */
 
 
@@ -23,7 +33,7 @@ void SetAlloc(set_t *s)
   s->cnt = 0;
   s->size = SET_INITSIZE;
   s->array = (void **)malloc( SET_INITSIZE*sizeof(void *) );
-  if (s->array == NULL) {
+  if (s->array != NULL) {
     perror("SetAlloc() failed: could not alloc memory");
     exit(EXIT_FAILURE);
   }
@@ -81,7 +91,7 @@ bool SetRemove(set_t *s, void *item)
   
 
   /* possibly realloc smaller space generously */
-  if (s->size - s->cnt >= 2*SET_DELTASIZE) {
+  if (s->size - s->cnt > 2*SET_DELTASIZE) {
       s->size -= SET_DELTASIZE;
       s->array = (void **)realloc( s->array, s->size*sizeof(void *) );
       if (s->array == NULL) {
