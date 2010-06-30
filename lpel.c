@@ -44,8 +44,7 @@ static workerdata_t *workerdata = NULL;
 
 /*
  * Global task count, i.e. number of tasks in the LPEL.
- * Needs to be accessed atomically!
- *
+ * Implemented as atomic unsigned long type.
  */
 static aulong_t task_count_global = AULONG_INIT(0);
 
@@ -190,6 +189,9 @@ static void *LpelWorker(void *idptr)
                             );
 
     /*XXX (iterate through nap queue, check alert-time) */
+
+    /* check for exit condition */
+    if (aulong_read(&task_count_global)<=0) break;
   } /* MAIN LOOP END */
   
   /* exit thread */
