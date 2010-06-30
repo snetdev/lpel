@@ -19,6 +19,7 @@ START_TEST (test_cpuassign_query)
 {
   int n;
   n = CpuAssignQueryNumCpus();
+  printf("CPUs: %d\n", n);
   fail_unless( n>0, "At least one CPU is always availible!");
 }
 END_TEST

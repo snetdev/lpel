@@ -26,6 +26,7 @@
 #include "cpuassign.h"
 #include "timing.h"
 #include "scheduler.h"
+#include "atomicop.h"
 
 
 typedef struct {
@@ -40,6 +41,13 @@ typedef struct {
 
 /* array of workerdata_t, one for each worker */
 static workerdata_t *workerdata = NULL;
+
+/*
+ * Global task count, i.e. number of tasks in the LPEL.
+ * Needs to be accessed atomically!
+ *
+ */
+static aulong_t task_count_global = AULONG_INIT(0);
 
 static int num_workers = -1;
 static bool b_assigncore = false;
@@ -66,6 +74,17 @@ int LpelGetWorkerId(void)
 task_t *LpelGetCurrentTask(void)
 {
   return workerdata[TSD_WORKER_ID].current_task;
+}
+
+
+void LpelTaskcntInc(void)
+{
+  aulong_inc(&task_count_global);
+}
+
+void LpelTaskcntDec(void)
+{
+  aulong_dec(&task_count_global);
 }
 
 

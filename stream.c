@@ -16,10 +16,10 @@
 #include <string.h>
 #include <assert.h>
 
-#include "lpel_p.h"
-
 #include "stream.h"
 
+#include "lpel.h"
+#include "task.h"
 #include "sysdep.h"
 
 
@@ -35,7 +35,7 @@ stream_t *StreamCreate(void)
     s->pwrite = 0;
     s->cntwrite = 0;
     /* clear all the buffer space */
-    memset(&(s->buf), 0, BUFFER_SIZE*sizeof(void *));
+    memset(&(s->buf), 0, STREAM_BUFFER_SIZE*sizeof(void *));
 
     /* producer/consumer not assigned */
     s->producer = NULL;
@@ -127,7 +127,8 @@ void *StreamRead(stream_t *s)
   /* READ FROM BUFFER */
   item = s->buf[s->pread];
   s->buf[s->pread]=NULL;
-  s->pread += (s->pread+1 >= BUFFER_SIZE) ? (1-BUFFER_SIZE) : 1;
+  s->pread += (s->pread+1 >= STREAM_BUFFER_SIZE) ?
+              (1-STREAM_BUFFER_SIZE) : 1;
   s->cntread++;
   
   /* signal the producer a read event */
@@ -189,7 +190,8 @@ void StreamWrite(stream_t *s, void *item)
    */
   WMB(); 
   s->buf[s->pwrite] = item;
-  s->pwrite += (s->pwrite+1 >= BUFFER_SIZE) ? (1-BUFFER_SIZE) : 1;
+  s->pwrite += (s->pwrite+1 >= STREAM_BUFFER_SIZE) ?
+               (1-STREAM_BUFFER_SIZE) : 1;
   s->cntwrite++;
   
   /* signal the consumer a write event */

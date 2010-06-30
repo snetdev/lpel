@@ -2,9 +2,10 @@
 #include <malloc.h>
 #include <assert.h>
 
-#include "timing.h"
+#include "task.h"
 
-#include "lpel_p.h"
+#include "timing.h"
+#include "lpel.h"
 
 
 /**
@@ -35,11 +36,14 @@ task_t *TaskCreate( void (*func)(void *arg), void *arg, unsigned int attr)
   t->time_lastrun = t->time_expavg = t->time_totalrun;
 
   t->cnt_dispatch = 0;
-  StreamarrAlloc(&t->streams_writing, STREAMARR_INITSIZE);
-  StreamarrAlloc(&t->streams_reading, STREAMARR_INITSIZE);
+  SetAlloc(&t->streams_writing);
+  SetAlloc(&t->streams_reading);
 
   t->code = co_create(func, arg, NULL, 8192); /* 8k stacksize */
   t->arg = arg;
+ 
+  /* Notify LPEL to increase global task count */
+  LpelTaskcntInc();
 
   return t;
 }
@@ -51,13 +55,16 @@ task_t *TaskCreate( void (*func)(void *arg), void *arg, unsigned int attr)
 void TaskDestroy(task_t *t)
 {
   /* free inner members */
-  StreamarrFree(&t->streams_writing);
-  StreamarrFree(&t->streams_reading);
+  SetFree(&t->streams_writing);
+  SetFree(&t->streams_reading);
   co_delete(t->code);
 
   /* free the TCB itself*/
   free(t);
   t = NULL;
+  
+  /* Notify LPEL to decrease global task count */
+  LpelTaskcntDec();
 }
 
 

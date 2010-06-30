@@ -1,9 +1,8 @@
 #ifndef _STREAM_H_
 #define _STREAM_H_
 
-#ifndef  BUFFER_SIZE
-#warning BUFFER_SIZE not defined, using default value of 32
-#define  BUFFER_SIZE 32
+#ifndef  STREAM_BUFFER_SIZE
+#define  STREAM_BUFFER_SIZE 32
 #endif
 
 #include "task.h"
@@ -20,7 +19,7 @@ typedef struct {
   volatile unsigned long pwrite;
   volatile unsigned long cntwrite;
   long padding2[longxCacheLine-2];
-  void *buf[BUFFER_SIZE];
+  void *buf[STREAM_BUFFER_SIZE];
   task_t *producer;
   task_t *consumer;
 } stream_t;

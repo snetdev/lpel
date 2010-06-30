@@ -4,6 +4,7 @@
 #include <pcl.h> /* coroutine_t */
 
 #include "set.h"
+#include "timing.h"
 
 
 typedef enum {
@@ -21,12 +22,13 @@ typedef enum {
 } taskstate_t;
 
 
+typedef struct task task_t;
 
 
 /*
  * TASK CONTROL BLOCK
  */
-typedef struct {
+struct task {
   /*TODO  type: IO or normal */
   taskstate_t state;
   task_t *prev, *next;  /* queue handling: prev, next */
@@ -55,7 +57,7 @@ typedef struct {
   /* CODE */
   coroutine_t code;
   void *arg;  /* argument */
-} task_t;
+};
 
 
 
