@@ -1,4 +1,8 @@
 
+/*
+ * Link with librt:
+ *   -lrt
+ */
 #include "timing.h"
 
 

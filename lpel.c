@@ -9,6 +9,7 @@
  */
 
 #include <malloc.h>
+#include <assert.h>
 
 #include <pthread.h> /* worker threads are pthreads (linux has 1-1 mapping) */
 #include <pcl.h>     /* tasks are executed in user-space with help of
@@ -26,7 +27,7 @@
 #include "cpuassign.h"
 #include "timing.h"
 #include "scheduler.h"
-#include "atomicop.h"
+#include "atomic.h"
 
 
 typedef struct {
@@ -46,7 +47,7 @@ static workerdata_t *workerdata = NULL;
  * Global task count, i.e. number of tasks in the LPEL.
  * Implemented as atomic unsigned long type.
  */
-static aulong_t task_count_global = AULONG_INIT(0);
+static atomic_t task_count_global = ATOMIC_INIT(0);
 
 static int num_workers = -1;
 static bool b_assigncore = false;
@@ -183,7 +184,7 @@ static void *LpelWorker(void *idptr)
     /*XXX (iterate through nap queue, check alert-time) */
 
     
-  } while ( aulong_read(&task_count_global) > 0 );
+  } while ( atomic_read(&task_count_global) > 0 );
   /* stop only if there are no more tasks in the system */
   /* MAIN LOOP END */
   
@@ -305,7 +306,7 @@ void LpelTaskAdd(task_t *t)
   workerdata_t *wd;
 
   /* increase num of tasks in the lpel system*/
-  aulong_inc(&task_count_global);
+  atomic_inc(&task_count_global);
 
   /*TODO placement module */
   to_worker = t->uid % num_workers;
@@ -319,6 +320,6 @@ void LpelTaskAdd(task_t *t)
 
 void LpelTaskRemove(task_t *t)
 {
-  aulong_dec(&task_count_global);
+  atomic_dec(&task_count_global);
 }
 

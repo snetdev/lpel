@@ -4,7 +4,7 @@
 
 #include "task.h"
 
-#include "atomicop.h"
+#include "atomic.h"
 #include "timing.h"
 #include "lpel.h"
 

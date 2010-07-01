@@ -5,3 +5,4 @@ Dependencies
 libcheck - for unit testing
 libpcl - GNU Portable Coroutine Library
 libcap-dev - capabilities, for checking CAP_SYS_NICE in cpuassign module
+
