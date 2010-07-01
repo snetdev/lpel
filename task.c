@@ -4,14 +4,12 @@
 
 #include "task.h"
 
+#include "atomicop.h"
 #include "timing.h"
 #include "lpel.h"
 
 
-/**
- * Functions for task management
- */
-
+static sequencer_t taskseq = SEQUENCER_INIT;
 
 
 /**
@@ -20,6 +18,8 @@
 task_t *TaskCreate( void (*func)(void *arg), void *arg, unsigned int attr)
 {
   task_t *t = (task_t *)malloc( sizeof(task_t) );
+  t->uid = ticket(&taskseq);
+
   t->state = TASK_INIT;
   
   t->prev = t->next = NULL;
@@ -42,8 +42,8 @@ task_t *TaskCreate( void (*func)(void *arg), void *arg, unsigned int attr)
   t->code = co_create(func, arg, NULL, 8192); /* 8k stacksize */
   t->arg = arg;
  
-  /* Notify LPEL to increase global task count */
-  LpelTaskcntInc();
+  /* Notify LPEL */
+  LpelTaskAdd(t);
 
   return t;
 }
@@ -54,6 +54,9 @@ task_t *TaskCreate( void (*func)(void *arg), void *arg, unsigned int attr)
  */
 void TaskDestroy(task_t *t)
 {
+  /* Notify LPEL first */
+  LpelTaskRemove(t);
+
   /* free inner members */
   SetFree(&t->streams_writing);
   SetFree(&t->streams_reading);
@@ -62,9 +65,6 @@ void TaskDestroy(task_t *t)
   /* free the TCB itself*/
   free(t);
   t = NULL;
-  
-  /* Notify LPEL to decrease global task count */
-  LpelTaskcntDec();
 }
 
 

@@ -23,7 +23,7 @@ extern void LpelCleanup(void);
 extern int LpelGetWorkerId(void);
 extern task_t *LpelGetCurrentTask(void);
 
-extern void LpelTaskcntInc(void);
-extern void LpelTaskcntDec(void);
+extern void LpelTaskAdd(task_t *t);
+extern void LpelTaskRemove(task_t *t);
 
 #endif /* _LPEL_H_ */

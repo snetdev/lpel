@@ -14,7 +14,7 @@
 #include <pcl.h>     /* tasks are executed in user-space with help of
                         GNU Portable Coroutine Library  */
 
-#include "lpel.h" /* private header also includes lpel.h*/
+#include "lpel.h"
 
 #include "task.h"
 #include "taskqueue.h"
@@ -76,16 +76,6 @@ task_t *LpelGetCurrentTask(void)
 }
 
 
-void LpelTaskcntInc(void)
-{
-  aulong_inc(&task_count_global);
-}
-
-void LpelTaskcntDec(void)
-{
-  aulong_dec(&task_count_global);
-}
-
 
 static bool WaitingTest(task_t *wt)
 {
@@ -111,6 +101,8 @@ inline static LpelAttrIsSet(unsigned long vec, lpelconfig_attr_t b)
 static void *LpelWorker(void *idptr)
 {
   int id = *((int *)idptr);
+  workerdata_t *wd = &workerdata[id];
+
   /* set idptr as thread specific */
   pthread_setspecific(worker_id_key, idptr);
 
@@ -118,31 +110,31 @@ static void *LpelWorker(void *idptr)
   if (b_assigncore) CpuAssignToCore(id);
 
   /* set scheduling policy */
-  workerdata[id].queue_ready = SchedInit();
+  wd->queue_ready = SchedInit();
 
   /* MAIN LOOP */
-  while (1) {
+  do {
     task_t *t;
     timing_t ts;
 
     /* fetch new tasks from init queue, insert into ready queue (sched) */
-    pthread_mutex_lock( &workerdata[id].mtx_queue_init );
-    t = TaskqueueRemove( &workerdata[id].queue_init );
+    pthread_mutex_lock( &wd->mtx_queue_init );
+    t = TaskqueueRemove( &wd->queue_init );
     while (t != NULL) {
       assert( t->state == TASK_INIT );
       t->state = TASK_READY;
-      SchedPutReady( workerdata[id].queue_ready, t );
+      SchedPutReady( wd->queue_ready, t );
       /* for next iteration: */
-      t = TaskqueueRemove( &workerdata[id].queue_init );
+      t = TaskqueueRemove( &wd->queue_init );
     }
-    pthread_mutex_unlock( &workerdata[id].mtx_queue_init );
+    pthread_mutex_unlock( &wd->mtx_queue_init );
     
 
     /* select a task from the ready queue (sched) */
-    t = SchedFetchNextReady( workerdata[id].queue_ready );
+    t = SchedFetchNextReady( wd->queue_ready );
     assert( t->state == TASK_READY );
     /* set current_task */
-    workerdata[id].current_task = t;
+    wd->current_task = t;
 
 
     /* start timing (mon) */
@@ -171,11 +163,11 @@ static void *LpelWorker(void *idptr)
       break;
     case TASK_WAITING: /* task returned from a blocking call*/
       /* put into waiting queue */
-      TaskqueueAppend( &workerdata[id].queue_waiting, t );
+      TaskqueueAppend( &wd->queue_waiting, t );
       break;
     case TASK_READY: /* task yielded execution  */
       /* put into ready queue */
-      SchedPutReady( workerdata[id].queue_ready, t );
+      SchedPutReady( wd->queue_ready, t );
       break;
     default:
       assert(0); /* should not be reached */
@@ -184,15 +176,16 @@ static void *LpelWorker(void *idptr)
     /*TODO output accounting info (mon) */
 
     /* iterate through waiting queue, check r/w events */
-    TaskqueueIterateRemove( &workerdata[id].queue_waiting,
+    TaskqueueIterateRemove( &wd->queue_waiting,
                             WaitingTest, WaitingRemove
                             );
 
     /*XXX (iterate through nap queue, check alert-time) */
 
-    /* check for exit condition */
-    if (aulong_read(&task_count_global)<=0) break;
-  } /* MAIN LOOP END */
+    
+  } while ( aulong_read(&task_count_global) > 0 );
+  /* stop only if there are no more tasks in the system */
+  /* MAIN LOOP END */
   
   /* exit thread */
   pthread_exit(NULL);
@@ -210,12 +203,13 @@ static void *LpelWorker(void *idptr)
  */
 void LpelInit(lpelconfig_t *cfg)
 {
-  int i;
+  int i, cpus;
 
+  cpus = CpuAssignQueryNumCpus();
   if (cfg->num_workers == -1) {
     /* one available core has to be reserved for IO tasks
        and other system threads */
-    num_workers = CpuAssignQueryNumCpus() - 1;
+    num_workers = cpus - 1;
   } else {
     num_workers = cfg->num_workers;
   }
@@ -224,10 +218,15 @@ void LpelInit(lpelconfig_t *cfg)
   /* Exclusive assignment possible? */
   if ( LpelAttrIsSet(cfg->attr, LPEL_ATTR_ASSIGNCORE) ) {
     if ( !CpuAssignCanExclusively() ) {
-      ;/*TODO emit warning, fallback */
+      ;/*TODO emit warning*/
       b_assigncore = false;
     } else {
-      b_assigncore = true;
+      if (num_workers > (cpus-1)) {
+        ;/*TODO emit warning*/
+        b_assigncore = false;
+      } else {
+        b_assigncore = true;
+      }
     }
   }
 
@@ -299,4 +298,27 @@ void LpelCleanup(void)
   co_thread_cleanup();
 }
 
+
+void LpelTaskAdd(task_t *t)
+{
+  int to_worker;
+  workerdata_t *wd;
+
+  /* increase num of tasks in the lpel system*/
+  aulong_inc(&task_count_global);
+
+  /*TODO placement module */
+  to_worker = t->uid % num_workers;
+
+  /* place in init queue */
+  wd = &workerdata[to_worker];
+  pthread_mutex_lock( &wd->mtx_queue_init );
+  TaskqueueAppend( &wd->queue_init, t );
+  pthread_mutex_unlock( &wd->mtx_queue_init );
+}
+
+void LpelTaskRemove(task_t *t)
+{
+  aulong_dec(&task_count_global);
+}
 
