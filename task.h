@@ -30,6 +30,7 @@ typedef struct task task_t;
  */
 struct task {
   /*TODO  type: IO or normal */
+  unsigned long uid;
   taskstate_t state;
   task_t *prev, *next;  /* queue handling: prev, next */
 
