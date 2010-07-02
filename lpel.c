@@ -21,7 +21,7 @@
 #include "taskqueue.h"
 #include "set.h"
 #include "stream.h"
-
+#include "debug.h"
 
 /* used (imported) modules of LPEL */
 #include "cpuassign.h"
@@ -90,9 +90,9 @@ static void WaitingRemove(task_t *wt)
 }
 
 
-inline static LpelAttrIsSet(unsigned long vec, lpelconfig_attr_t b)
+inline static int LpelAttrIsSet(unsigned long vec, lpelconfig_attr_t b)
 {
-  return ((vec)&(b)==(b));
+  return (vec & b) == b;
 }
 
 
@@ -104,11 +104,17 @@ static void *LpelWorker(void *idptr)
   int id = *((int *)idptr);
   workerdata_t *wd = &workerdata[id];
 
+  DBG("worker %d started", id);
+
   /* set idptr as thread specific */
-  pthread_setspecific(worker_id_key, idptr);
+  (void) pthread_setspecific(worker_id_key, idptr);
 
   /* set affinity to id=CPU */
-  if (b_assigncore) CpuAssignToCore(id);
+  if (b_assigncore) {
+    if (CpuAssignToCore(id)) {
+      DBG("worker %d assigned to core", id);
+    }
+  }
 
   /* set scheduling policy */
   wd->queue_ready = SchedInit();
@@ -117,6 +123,8 @@ static void *LpelWorker(void *idptr)
   do {
     task_t *t;
     timing_t ts;
+
+    DBG("entered main loop");
 
     /* fetch new tasks from init queue, insert into ready queue (sched) */
     pthread_mutex_lock( &wd->mtx_queue_init );
@@ -133,48 +141,59 @@ static void *LpelWorker(void *idptr)
 
     /* select a task from the ready queue (sched) */
     t = SchedFetchNextReady( wd->queue_ready );
-    assert( t->state == TASK_READY );
-    /* set current_task */
-    wd->current_task = t;
+    if (t != NULL) {
+      assert( t->state == TASK_READY );
+      /* set current_task */
+      wd->current_task = t;
 
 
-    /* start timing (mon) */
-    TimingStart(&ts);
+      /* start timing (mon) */
+      TimingStart(&ts);
 
-    /* EXECUTE TASK (context switch) */
-    t->cnt_dispatch++;
-    t->state = TASK_RUNNING;
-    co_call(t->code);
-    /* task returns with a different state, except it reached the end of code */
+      /* EXECUTE TASK (context switch) */
+      t->cnt_dispatch++;
+      t->state = TASK_RUNNING;
+      co_call(t->code);
+      DBG("task returned");
+      /* task returns with a different state, except it reached the end of code */
+      
 
-    /* end timing (mon) */
-    TimingEnd(&ts);
-    TimingSet(&t->time_lastrun, &ts);
-    TimingAdd(&t->time_totalrun, &ts);
-    TimingExpAvg(&t->time_expavg, &ts, EXPAVG_ALPHA);
+      /* end timing (mon) */
+      TimingEnd(&ts);
+      TimingSet(&t->time_lastrun, &ts);
+      TimingAdd(&t->time_totalrun, &ts);
+      TimingExpAvg(&t->time_expavg, &ts, EXPAVG_ALPHA);
 
 
-    /* check state of task, place into appropriate queue */
-    switch(t->state) {
-    case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
-    case TASK_RUNNING: /* task exited by reaching end of code! */
-      TimingEnd(&t->time_alive);
-      /*TODO if joinable, place into join queue, else destroy */
-      TaskDestroy(t);
-      break;
-    case TASK_WAITING: /* task returned from a blocking call*/
-      /* put into waiting queue */
-      TaskqueueAppend( &wd->queue_waiting, t );
-      break;
-    case TASK_READY: /* task yielded execution  */
-      /* put into ready queue */
-      SchedPutReady( wd->queue_ready, t );
-      break;
-    default:
-      assert(0); /* should not be reached */
+      /* check state of task, place into appropriate queue */
+      switch(t->state) {
+      case TASK_RUNNING: /* task exited by reaching end of code! */
+        t->code = NULL; /* TODO check what exactly happens!
+                           co_delete on t->code would result in segfault! */
+      case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
+        TimingEnd(&t->time_alive);
+        /*TODO if joinable, place into join queue, else destroy */
+        TaskDestroy(t);
+        DBG("task destroyed");
+        break;
+
+      case TASK_WAITING: /* task returned from a blocking call*/
+        /* put into waiting queue */
+        TaskqueueAppend( &wd->queue_waiting, t );
+        break;
+
+      case TASK_READY: /* task yielded execution  */
+        /* put into ready queue */
+        SchedPutReady( wd->queue_ready, t );
+        break;
+
+      default:
+        assert(0); /* should not be reached */
+      }
+
+      /*TODO output accounting info (mon) */
     }
 
-    /*TODO output accounting info (mon) */
 
     /* iterate through waiting queue, check r/w events */
     TaskqueueIterateRemove( &wd->queue_waiting,
@@ -189,7 +208,8 @@ static void *LpelWorker(void *idptr)
   /* MAIN LOOP END */
   
   /* exit thread */
-  pthread_exit(NULL);
+  /*pthread_exit(NULL);*/
+  return NULL;
 }
 
 
@@ -277,7 +297,7 @@ void LpelRun(void)
   for (i = 0; i < num_workers; i++) {
     pthread_join(thids[i], NULL);
   }
-  
+  DBG("workers have finished.");
   pthread_key_delete(worker_id_key);
 
 }
@@ -310,6 +330,7 @@ void LpelTaskAdd(task_t *t)
 
   /*TODO placement module */
   to_worker = t->uid % num_workers;
+  t->owner = to_worker;
 
   /* place in init queue */
   wd = &workerdata[to_worker];

@@ -8,6 +8,7 @@
 #include "timing.h"
 #include "lpel.h"
 
+#include "debug.h"
 
 static sequencer_t taskseq = SEQUENCER_INIT;
 
@@ -15,7 +16,7 @@ static sequencer_t taskseq = SEQUENCER_INIT;
 /**
  * Create a task
  */
-task_t *TaskCreate( void (*func)(void *arg), void *arg, unsigned int attr)
+task_t *TaskCreate( void (*func)(void *), void *arg, unsigned int attr)
 {
   task_t *t = (task_t *)malloc( sizeof(task_t) );
   t->uid = ticket(&taskseq);
@@ -27,7 +28,7 @@ task_t *TaskCreate( void (*func)(void *arg), void *arg, unsigned int attr)
   t->event_ptr = NULL;
   t->ev_write = t->ev_read = false;
   
-  t->owner = LpelGetWorkerId();
+  //t->owner = -1;
   t->sched_info = NULL;
 
   TimingStart(&t->time_alive);
@@ -40,6 +41,9 @@ task_t *TaskCreate( void (*func)(void *arg), void *arg, unsigned int attr)
   SetAlloc(&t->streams_reading);
 
   t->code = co_create(func, arg, NULL, 8192); /* 8k stacksize */
+  if (t->code == NULL) {
+    /*TODO throw error!*/
+  }
   t->arg = arg;
  
   /* Notify LPEL */
@@ -60,7 +64,7 @@ void TaskDestroy(task_t *t)
   /* free inner members */
   SetFree(&t->streams_writing);
   SetFree(&t->streams_reading);
-  co_delete(t->code);
+  if (t->code != NULL)  co_delete(t->code);
 
   /* free the TCB itself*/
   free(t);

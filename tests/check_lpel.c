@@ -3,7 +3,13 @@
 
 #include <check.h>
 #include "../lpel.h"
+#include "../task.h"
 
+void MyTask(void *arg)
+{
+  printf("TEST\n");
+  //TaskExit();
+}
 
 
 void setup(void)
@@ -17,7 +23,19 @@ void teardown(void)
 
 START_TEST (test_lpel)
 {
-  
+  lpelconfig_t cfg;
+  task_t *t;
+
+  cfg.num_workers = 4;
+  cfg.attr = 0; //LPEL_ATTR_ASSIGNCORE;
+
+  LpelInit(&cfg);
+
+  t = TaskCreate(MyTask, NULL, 0);
+
+  LpelRun();
+  LpelCleanup();
+
   fail_if( 0, NULL);
 }
 END_TEST

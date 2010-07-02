@@ -20,6 +20,7 @@
 
 
 #include <stdlib.h>
+#include <stdio.h>
 #include "set.h"
 
 
@@ -33,7 +34,7 @@ void SetAlloc(set_t *s)
   s->cnt = 0;
   s->size = SET_INITSIZE;
   s->array = (void **)malloc( SET_INITSIZE*sizeof(void *) );
-  if (s->array != NULL) {
+  if (s->array == NULL) {
     perror("SetAlloc() failed: could not alloc memory");
     exit(EXIT_FAILURE);
   }

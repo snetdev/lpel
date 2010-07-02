@@ -1,4 +1,4 @@
-
+CFLAGS = -g -Wall
 LDFLAGS = -lcheck -L$(HOME)/lib
 
 all: set cpuassign
@@ -17,8 +17,8 @@ cpuassign:
 	./check_cpuassign
 
 lpel:
-	rm check_*.o
-	gcc -c check_lpel.c
-	gcc -c ../*.c -march=i686
+	rm -f check_*.o
+	gcc -c check_lpel.c $(CFLAGS)
+	gcc -c ../*.c $(CFLAGS)
 	gcc -o check_lpel *.o $(LDFLAGS) -lcap -lpcl -lpthread -lrt
 	./check_lpel
