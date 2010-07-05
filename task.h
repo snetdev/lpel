@@ -65,6 +65,8 @@ struct task {
 
 extern task_t *TaskCreate( void (*func)(void *), void *arg, unsigned int attr);
 extern void TaskDestroy(task_t *t);
+extern void TaskWaitOnRead(void);
+extern void TaskWaitOnWrite(void);
 extern void TaskExit(void);
 extern void TaskYield(void);
 

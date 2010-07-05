@@ -9,7 +9,7 @@
 #include <sys/syscall.h> 
 
 
-#include "cpuassign.h" /* defines CPUASSIGN_CAPABILITIES */
+#include "cpuassign.h" /* defines CPUASSIGN_USE_CAPABILITIES */
 
 
 

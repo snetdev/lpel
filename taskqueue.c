@@ -1,5 +1,9 @@
 
 #include <malloc.h>
+#include <assert.h>
+#include "debug.h"
+
+
 #include "taskqueue.h"
 
 
@@ -36,6 +40,8 @@ void TaskqueueInit(taskqueue_t *tq)
  */
 void TaskqueueAppend(taskqueue_t *tq, task_t *t)
 {
+  assert( t->prev==NULL && t->next==NULL );
+
   if ( tq->head == NULL ) {
     tq->head = t;
     /* t->prev = NULL; is precond */
@@ -91,6 +97,7 @@ task_t *TaskqueueRemove(taskqueue_t *tq)
   return t;
 }
 
+
 void TaskqueueIterateRemove(taskqueue_t *tq, 
   bool (*cond)(task_t*), void (*action)(task_t*) )
 {
@@ -101,10 +108,20 @@ void TaskqueueIterateRemove(taskqueue_t *tq,
       task_t *p = cur;
 
       /* relink the queue */
-      if (cur->prev != NULL) { cur->prev->next = cur->next; }
-      if (cur->next != NULL) { cur->next->prev = cur->prev; }
+      if (cur->prev != NULL) {
+        cur->prev->next = cur->next;
+      } else {
+        /* is head */
+        tq->head = cur->next;
+      }
+      if (cur->next != NULL) {
+        cur->next->prev = cur->prev;
+      } else {
+        /* is tail */
+        tq->tail = cur->prev;
+      }
       cur = cur->next;
-    
+      
       p->prev = NULL;
       p->next = NULL;
       /* do action */
@@ -113,6 +130,5 @@ void TaskqueueIterateRemove(taskqueue_t *tq,
       cur = cur->next;
     }
   }
-
-
 }
+

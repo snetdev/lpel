@@ -1,0 +1,39 @@
+DBG[../lpel.c:134] worker 0, loop 1854
+DBG[../lpel.c:134] worker 0, loop 1855
+DBG[../lpel.c:134] worker 0, loop 1856
+DBG[../lpel.c:134] worker 0, loop 1857
+DBG[../lpel.c:134] worker 0, loop 1858
+DBG[../lpel.c:134] worker 0, loop 1859
+DBG[../lpel.c:134] worker 0, loop 1860
+DBG[../lpel.c:134] worker 0, loop 1861
+DBG[../lpel.c:134] worker 0, loop 1862
+DBG[../lpel.c:134] worker 0, loop 1863
+DBG[../lpel.c:134] worker 0, loop 1864
+DBG[../lpel.c:134] worker 0, loop 1865
+DBG[../lpel.c:134] worker 0, loop 1866
+DBG[check_lpel.c:21] Consumer Task
+DBG[../lpel.c:134] worker 0, loop 1867
+0 1 2 3 4 5 6 7 8 9 DBG[../lpel.c:90] task 0 waiting->ready
+10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 DBG[../lpel.c:134] worker 0, loop 1868
+DBG[../task.c:92] task 1 waits on write
+DBG[../lpel.c:164] task 1 returned
+DBG[../task.c:81] task 0 waits on read
+DBG[../lpel.c:190] task 1 into waiting
+32 DBG[../lpel.c:90] task 1 waiting->ready
+DBG[../lpel.c:134] worker 1, loop 1
+DBG[../lpel.c:164] task 0 returned
+DBG[../lpel.c:190] task 0 into waiting
+DBG[../lpel.c:90] task 0 waiting->ready
+DBG[../lpel.c:134] worker 0, loop 1869
+DBG[../lpel.c:164] task 1 returned
+DBG[../lpel.c:180] !!! task 1 returned as RUNNING !!!
+DBG[../lpel.c:184] task 1 destroying ..
+DBG[../lpel.c:134] worker 1, loop 2
+check_lpel: ../stream.c:115: StreamRead: Assertion `s->consumer == LpelGetCurrentTask()' failed.
+DBG[../lpel.c:134] worker 1, loop 3
+DBG[../lpel.c:134] worker 1, loop 4
+DBG[../lpel.c:134] worker 1, loop 5
+DBG[../lpel.c:134] worker 1, loop 6
+DBG[../lpel.c:134] worker 1, loop 7
+Abgebrochen
+

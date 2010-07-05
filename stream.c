@@ -68,7 +68,7 @@ bool StreamOpen(stream_t *s, char mode)
     assert( s->producer == NULL );
     s->producer = ct;
 
-    /* add to tasks list of opened streams for writing */
+    /* add to tasks list of opened streams for writing (only for accounting)*/
     SetAdd(&ct->streams_writing, s);
     break;
 
@@ -76,7 +76,7 @@ bool StreamOpen(stream_t *s, char mode)
     assert( s->consumer == NULL );
     s->consumer = ct;
 
-    /* add to tasks list of opened streams for reading */
+    /* add to tasks list of opened streams for reading (only for accounting)*/
     SetAdd(&ct->streams_reading, s);
     break;
 
@@ -110,18 +110,13 @@ void *StreamPeek(stream_t *s)
 void *StreamRead(stream_t *s)
 {
   void *item;
-  task_t *t = LpelGetCurrentTask();
 
   /* check if opened for reading */
-  assert( s->consumer == t );
+  assert( s->consumer == LpelGetCurrentTask() );
 
   /* wait while buffer is empty */
   while ( s->buf[s->pread] == NULL ) {
-    /* WAIT on write event*/
-    t->event_ptr = &t->ev_write;
-    t->state = TASK_WAITING;
-    /* context switch */
-    co_resume();
+    TaskWaitOnWrite();
   }
 
   /* READ FROM BUFFER */
@@ -164,20 +159,14 @@ bool StreamIsSpace(stream_t *s)
  */
 void StreamWrite(stream_t *s, void *item)
 {
-  task_t *t = LpelGetCurrentTask();
-
   /* check if opened for writing */
-  assert( s->producer == t );
+  assert( s->producer == LpelGetCurrentTask() );
 
   assert( item != NULL );
 
   /* wait while buffer is full */
   while ( s->buf[s->pwrite] != NULL ) {
-    /* WAIT on read event*/;
-    t->event_ptr = &t->ev_read;
-    t->state = TASK_WAITING;
-    /* context switch */
-    co_resume();
+    TaskWaitOnRead();
   }
 
   /* WRITE TO BUFFER */

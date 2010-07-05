@@ -72,6 +72,28 @@ void TaskDestroy(task_t *t)
 }
 
 
+void TaskWaitOnRead(void)
+{
+  task_t *ct = LpelGetCurrentTask();
+  /* WAIT on read event*/;
+  ct->event_ptr = &ct->ev_read;
+  ct->state = TASK_WAITING;
+  DBG("task %lu waits on read", ct->uid);
+  /* context switch */
+  co_resume();
+}
+
+void TaskWaitOnWrite(void)
+{
+  task_t *ct = LpelGetCurrentTask();
+  /* WAIT on write event*/
+  ct->event_ptr = &ct->ev_write;
+  ct->state = TASK_WAITING;
+  DBG("task %lu waits on write", ct->uid);
+  /* context switch */
+  co_resume();
+}
+
 /**
  * Exit the current task
  * TODO joinarg

@@ -3,8 +3,8 @@
  * contains:
  * - startup and shutdown routines
  * - worker thread code
- * - (stream and task management)
  *
+ * TODO: get rid of ugly pthread_mutex by e.g. an MS-Queue
  *
  */
 
@@ -80,12 +80,17 @@ task_t *LpelGetCurrentTask(void)
 
 static bool WaitingTest(task_t *wt)
 {
+  //DBG("waiting test: task %ld", wt->uid);
+  //DBG("event_ptr: %p = %d", wt->event_ptr, *wt->event_ptr);
   return *wt->event_ptr == true;
 }
 
 static void WaitingRemove(task_t *wt)
 {
+  DBG("task %ld waiting->ready", wt->uid);
   wt->state = TASK_READY;
+  *wt->event_ptr = false;
+  wt->event_ptr = NULL;
   SchedPutReady( workerdata[TSD_WORKER_ID].queue_ready, wt );
 }
 
@@ -101,6 +106,7 @@ inline static int LpelAttrIsSet(unsigned long vec, lpelconfig_attr_t b)
  */
 static void *LpelWorker(void *idptr)
 {
+  unsigned int loop;
   int id = *((int *)idptr);
   workerdata_t *wd = &workerdata[id];
 
@@ -120,11 +126,12 @@ static void *LpelWorker(void *idptr)
   wd->queue_ready = SchedInit();
 
   /* MAIN LOOP */
+  loop=0;
   do {
     task_t *t;
     timing_t ts;
 
-    DBG("entered main loop");
+    //DBG("worker %d, loop %u", id, loop);
 
     /* fetch new tasks from init queue, insert into ready queue (sched) */
     pthread_mutex_lock( &wd->mtx_queue_init );
@@ -153,8 +160,9 @@ static void *LpelWorker(void *idptr)
       /* EXECUTE TASK (context switch) */
       t->cnt_dispatch++;
       t->state = TASK_RUNNING;
+      DBG("executing task %lu (worker %d)", t->uid, id);
       co_call(t->code);
-      DBG("task returned");
+      DBG("task %lu returned (worker %d)", t->uid, id);
       /* task returns with a different state, except it reached the end of code */
       
 
@@ -170,20 +178,23 @@ static void *LpelWorker(void *idptr)
       case TASK_RUNNING: /* task exited by reaching end of code! */
         t->code = NULL; /* TODO check what exactly happens!
                            co_delete on t->code would result in segfault! */
+        DBG("!!! task %lu returned as RUNNING !!! (worker %d)", t->uid, id);
       case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
         TimingEnd(&t->time_alive);
         /*TODO if joinable, place into join queue, else destroy */
+        DBG("task %lu destroying .. (worker %d)", t->uid, id);
         TaskDestroy(t);
-        DBG("task destroyed");
         break;
 
       case TASK_WAITING: /* task returned from a blocking call*/
         /* put into waiting queue */
+        DBG("task %lu into waiting (worker %d)", t->uid, id);
         TaskqueueAppend( &wd->queue_waiting, t );
         break;
 
       case TASK_READY: /* task yielded execution  */
         /* put into ready queue */
+        DBG("task %lu into ready (worker %d)", t->uid, id);
         SchedPutReady( wd->queue_ready, t );
         break;
 
@@ -202,7 +213,7 @@ static void *LpelWorker(void *idptr)
 
     /*XXX (iterate through nap queue, check alert-time) */
 
-    
+    loop++;
   } while ( atomic_read(&task_count_global) > 0 );
   /* stop only if there are no more tasks in the system */
   /* MAIN LOOP END */
@@ -275,6 +286,7 @@ void LpelRun(void)
 {
   pthread_t *thids;
   int i, res;
+  int wids[num_workers];
 
   /* Create thread-specific data key for worker_id */
   pthread_key_create(&worker_id_key, NULL);
@@ -285,6 +297,8 @@ void LpelRun(void)
   for (i = 0; i < num_workers; i++) {
     workerdata[i].id = i;
     res = pthread_create(&thids[i], NULL, LpelWorker, &(workerdata[i].id));
+    //wids[i] = i;
+    //res = pthread_create(&thids[i], NULL, LpelWorker, &wids[i]);
     if (res != 0) {
       /*TODO error
       perror("creating worker threads");

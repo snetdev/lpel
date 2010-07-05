@@ -1,5 +1,5 @@
-CFLAGS = -g -Wall
-LDFLAGS = -lcheck -L$(HOME)/lib
+CFLAGS = -g -Wall -march=core2
+LDFLAGS = -L$(HOME)/lib
 
 all: set cpuassign
 .PHONY: all
