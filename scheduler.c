@@ -1,15 +1,22 @@
+#include <stdlib.h>
+
 #include "scheduler.h"
 
 #include "taskqueue.h"
 
-static taskqueue_t queue;
 
 /**
  * returns a pointer for the sched_info
  */
 void *SchedInit(void)
 {
-  return &queue;
+  return calloc( 1, sizeof(taskqueue_t) );
+}
+
+void SchedCleanup(void *ready)
+{
+  free(ready);
+  ready = NULL;
 }
 
 void SchedPutReady(void *ready, task_t *t)

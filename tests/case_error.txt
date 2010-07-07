@@ -1,20 +1,32 @@
 [e0326495@pc284 tests]$ ./check_lpel
-DBG[../lpel.c:112] worker 0 started
+DBG[../lpel.c:113] worker 0 started
+DBG[../lpel.c:163] executing task 0 (worker 0)
 DBG[check_lpel.c:36] Producer Task
 DBG[../task.c:81] task 0 waits on read
-DBG[../lpel.c:162] task 0 returned
-DBG[../lpel.c:187] task 0 into waiting
-DBG[../lpel.c:112] worker 1 started
+DBG[../lpel.c:165] task 0 returned (worker 0)
+DBG[../lpel.c:191] task 0 into waiting (worker 0)
+DBG[../lpel.c:113] worker 1 started
+DBG[../lpel.c:163] executing task 1 (worker 1)
 DBG[check_lpel.c:21] Consumer Task
-0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 DBG[../lpel.c:162] task 1 returned
-DBG[../lpel.c:181] task 1 destroyed
-19 20 21 22 23 24 25 26 27 28 29 30 31 DBG[../task.c:92] task 8737104 waits on write
-DBG[../lpel.c:162] task 8737104 returned
-DBG[../lpel.c:187] task 8737104 into waiting
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28
+29 30 31 DBG[../task.c:92] task 1 waits on write
+DBG[../lpel.c:165] task 1 returned (worker 1)
+DBG[../lpel.c:191] task 1 into waiting (worker 1)
 DBG[../lpel.c:90] task 0 waiting->ready
+DBG[../lpel.c:163] executing task 0 (worker 0)
+DBG[../lpel.c:90] task 1 waiting->ready
+DBG[../lpel.c:163] executing task 1 (worker 1)
+32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56
 DBG[../task.c:81] task 0 waits on read
-DBG[../lpel.c:162] task 0 returned
-DBG[../lpel.c:187] task 0 into waiting
-DBG[../lpel.c:90] task 8737104 waiting->ready
-Speicherzugriffsfehler
+DBG[../lpel.c:165] task 1 returned (worker 1)
+DBG[../lpel.c:181] !!! task 1 returned as RUNNING !!! (worker 1)
+DBG[../lpel.c:185] task 1 destroying .. (worker 1)
+57 58 59 60 61 62 63 DBG[../task.c:92] task 8737104 waits on write
+DBG[../lpel.c:165] task 0 returned (worker 0)
+DBG[../lpel.c:191] task 0 into waiting (worker 0)
+DBG[../lpel.c:90] task 0 waiting->ready
+DBG[../lpel.c:163] executing task 0 (worker 1)
+DBG[../task.c:92] task 0 waits on write
+DBG[../lpel.c:165] task 0 returned (worker 1)
+DBG[../lpel.c:191] task 0 into waiting (worker 1)
 

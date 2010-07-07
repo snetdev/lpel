@@ -4,6 +4,7 @@
 #include "lpel.h"
 
 extern void *SchedInit(void);
+extern void SchedCleanup(void *ready);
 extern void SchedPutReady(void *ready, task_t *t);
 extern task_t *SchedFetchNextReady(void *ready);
 

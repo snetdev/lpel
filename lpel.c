@@ -121,6 +121,9 @@ static void *LpelWorker(void *idptr)
       DBG("worker %d assigned to core", id);
     }
   }
+  
+  /* Init libPCL */
+  co_thread_init();
 
   /* set scheduling policy */
   wd->queue_ready = SchedInit();
@@ -218,6 +221,13 @@ static void *LpelWorker(void *idptr)
   /* stop only if there are no more tasks in the system */
   /* MAIN LOOP END */
   
+  
+  /* cleanup scheduling module */
+  SchedCleanup(wd->queue_ready);
+
+  /* Cleanup libPCL */
+  co_thread_cleanup();
+  
   /* exit thread */
   /*pthread_exit(NULL);*/
   return NULL;
@@ -275,7 +285,6 @@ void LpelInit(lpelconfig_t *cfg)
 
   /* Init libPCL */
   co_thread_init();
-
 }
 
 /**
