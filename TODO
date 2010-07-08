@@ -2,8 +2,23 @@
 TODO
 ====
 
-* lookup timing accounting info in gnu pth
-* add counters for blocked or waiting time (time between two dispatches)
-  could also be deduced from task termination-spawn time and running time
+ * output monitoring information
+ * abstract threading interface ( e.g. by providing SpawnThreads(uint num, bool pinned) )
+ * per module debugging information
+ * implement a lock-free queue structure for the init queues (e.g. MS-queue)
+(* provide a cache optimal local spinning lock in the abstracted threading module, e.g. ticket lock or MCS-lock)
+ * aggregate modules into libraries with clear interface
+ * doxygenify comments
 
-* clarify sort_begin/sort_end injection
+
+In future:
+----------
+
+* write test settings
+* evaluate performance
+
+S-Net-porting:
+* clarify sort_begin/sort_end injection in parallel combinator
+
+and a lot more in farer future
+... tdb
