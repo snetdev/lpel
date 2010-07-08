@@ -31,7 +31,7 @@
 
 
 typedef struct {
-  unsigned int id;           /* worker ID */
+  //unsigned int id;           /* worker ID */
   taskqueue_t queue_init;    /* init queue */
   pthread_mutex_t mtx_queue_init;
   void       *queue_ready;   /* ready queue */
@@ -185,7 +185,7 @@ static void *LpelWorker(void *idptr)
       case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
         TimingEnd(&t->time_alive);
         /*TODO if joinable, place into join queue, else destroy */
-        DBG("task %lu destroying .. (worker %d)", t->uid, id);
+        DBG("calling task %lu destroy (worker %d)", t->uid, id);
         TaskDestroy(t);
         break;
 
@@ -304,10 +304,10 @@ void LpelRun(void)
   // launch worker threads
   thids = (pthread_t *) malloc(num_workers * sizeof(pthread_t));
   for (i = 0; i < num_workers; i++) {
-    workerdata[i].id = i;
-    res = pthread_create(&thids[i], NULL, LpelWorker, &(workerdata[i].id));
-    //wids[i] = i;
-    //res = pthread_create(&thids[i], NULL, LpelWorker, &wids[i]);
+    //workerdata[i].id = i;
+    //res = pthread_create(&thids[i], NULL, LpelWorker, &(workerdata[i].id));
+    wids[i] = i;
+    res = pthread_create(&thids[i], NULL, LpelWorker, &wids[i]);
     if (res != 0) {
       /*TODO error
       perror("creating worker threads");

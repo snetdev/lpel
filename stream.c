@@ -50,6 +50,9 @@ stream_t *StreamCreate(void)
  */
 void StreamDestroy(stream_t *s)
 {
+  if (s->producer != NULL) TaskDestroy(s->producer);
+  if (s->consumer != NULL) TaskDestroy(s->consumer);
+
   free(s);
   s = NULL;
 }
@@ -63,6 +66,10 @@ void StreamDestroy(stream_t *s)
 bool StreamOpen(stream_t *s, char mode)
 {
   task_t *ct = LpelGetCurrentTask();
+  
+  /* increment reference counter of task */
+  atomic_inc(&ct->refcnt);
+
   switch(mode) {
   case 'w':
     assert( s->producer == NULL );

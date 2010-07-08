@@ -5,6 +5,7 @@
 
 #include "set.h"
 #include "timing.h"
+#include "atomic.h"
 
 
 typedef enum {
@@ -38,6 +39,7 @@ struct task {
   /*TODO ? padding ? */
   volatile bool *event_ptr;
   volatile bool ev_write, ev_read;
+  atomic_t refcnt;
 
   int owner;         /* owning worker thread TODO as place_t */
   void *sched_info;  /* scheduling information  */

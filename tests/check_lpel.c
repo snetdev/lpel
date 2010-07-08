@@ -25,6 +25,7 @@ void Consumer(void *arg)
     item = StreamRead( (stream_t *)arg );
     fprintf(stderr, "%d ", *((int *)item) );
   }
+  StreamDestroy(channel);
   TaskExit();
 }
 
@@ -63,7 +64,6 @@ static void testBasic(void)
 
   LpelRun();
   
-  StreamDestroy(channel);
   LpelCleanup();
 
 }

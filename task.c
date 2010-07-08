@@ -24,7 +24,10 @@ task_t *TaskCreate( void (*func)(void *), void *arg, unsigned int attr)
   t->state = TASK_INIT;
   
   t->prev = t->next = NULL;
-  
+
+  /* initialize reference counter to 1*/
+  atomic_set(&t->refcnt, 1);
+
   t->event_ptr = NULL;
   t->ev_write = t->ev_read = false;
   
@@ -58,17 +61,22 @@ task_t *TaskCreate( void (*func)(void *), void *arg, unsigned int attr)
  */
 void TaskDestroy(task_t *t)
 {
-  /* Notify LPEL first */
-  LpelTaskRemove(t);
+  /* only if no stream points to the flags anymore */
+  if ( fetch_and_dec(&t->refcnt) == 1) {
+    DBG("free task %lu", t->uid);
 
-  /* free inner members */
-  SetFree(&t->streams_writing);
-  SetFree(&t->streams_reading);
-  if (t->code != NULL)  co_delete(t->code);
+    /* Notify LPEL first */
+    LpelTaskRemove(t);
 
-  /* free the TCB itself*/
-  free(t);
-  t = NULL;
+    /* free inner members */
+    SetFree(&t->streams_writing);
+    SetFree(&t->streams_reading);
+    if (t->code != NULL)  co_delete(t->code);
+
+    /* free the TCB itself*/
+    free(t);
+    t = NULL;
+  }
 }
 
 
