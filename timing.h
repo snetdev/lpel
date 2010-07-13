@@ -38,9 +38,6 @@ static inline void TimingEnd(timing_t *t)
   /* store start time */
   start = *t;
 
-  DBG("start %d , %d", start.tv_sec, start.tv_nsec);
-  DBG("end   %d , %d", end.tv_sec,   end.tv_nsec);
-
   /* calculate elapsed time to t,
    * assuming end > start and *.tv_nsec < 1000000000L
    */
@@ -50,8 +47,6 @@ static inline void TimingEnd(timing_t *t)
   }
   t->tv_nsec = end.tv_nsec - start.tv_nsec;
   t->tv_sec  = end.tv_sec  - start.tv_sec;
-
-  DBG("diff  %d , %d", t->tv_sec, t->tv_nsec);
 }
 
 /**

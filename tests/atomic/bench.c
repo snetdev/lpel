@@ -6,8 +6,8 @@
 #include "../../timing.h"
 
 
-#define NUM_THREADS 4
-#define MAX_INC (400000000 / NUM_THREADS)
+#define NUM_THREADS 2
+#define MAX_INC (200000000 / NUM_THREADS)
 
 static int counter;
 

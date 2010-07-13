@@ -63,10 +63,12 @@ static pthread_key_t worker_id_key;
 /*
  * Get current worker id
  */
+/*
 int LpelGetWorkerId(void)
 {
   return TSD_WORKER_ID;
 }
+*/
 
 /*
  * Get current executed task
@@ -229,8 +231,8 @@ static void *LpelWorker(void *idptr)
   co_thread_cleanup();
   
   /* exit thread */
-  /*pthread_exit(NULL);*/
-  return NULL;
+  pthread_exit(NULL);
+  //return NULL;
 }
 
 
