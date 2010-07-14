@@ -8,6 +8,9 @@
 #include "atomic.h"
 
 
+#define TASK_STACKSIZE  8192  /* 8k stacksize*/
+
+
 typedef enum {
   TASK_TYPE_NORMAL,
   TASK_TYPE_IO

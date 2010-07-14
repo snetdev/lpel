@@ -43,7 +43,7 @@ task_t *TaskCreate( void (*func)(void *), void *arg, unsigned int attr)
   SetAlloc(&t->streams_writing);
   SetAlloc(&t->streams_reading);
 
-  t->code = co_create(func, arg, NULL, 8192); /* 8k stacksize */
+  t->code = co_create(func, arg, NULL, TASK_STACKSIZE);
   if (t->code == NULL) {
     /*TODO throw error!*/
   }

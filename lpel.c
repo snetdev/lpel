@@ -168,7 +168,10 @@ static void *LpelWorker(void *idptr)
       DBG("executing task %lu (worker %d)", t->uid, id);
       co_call(t->code);
       DBG("task %lu returned (worker %d)", t->uid, id);
-      /* task returns with a different state, except it reached the end of code */
+      /*
+       * task returns with a different state,
+       * except it reached the end of code
+       */
       
 
       /* end timing (mon) */
@@ -207,6 +210,7 @@ static void *LpelWorker(void *idptr)
         assert(0); /* should not be reached */
       }
 
+      wd->current_task = NULL;
       /*TODO output accounting info (mon) */
     }
 
