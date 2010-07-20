@@ -4,27 +4,32 @@
 
 #include "taskqueue.h"
 
+struct readyset {
+  taskqueue_t q;
+};
+
+
 
 /**
- * returns a pointer for the sched_info
+ * return an initialised readyset
  */
-void *SchedInit(void)
+readyset_t *SchedInit(void)
 {
-  return calloc( 1, sizeof(taskqueue_t) );
+  return (readyset_t *) calloc( 1, sizeof(readyset_t) );
 }
 
-void SchedCleanup(void *ready)
+void SchedCleanup(readyset_t *ready)
 {
   free(ready);
   ready = NULL;
 }
 
-void SchedPutReady(void *ready, task_t *t)
+void SchedPutReady(readyset_t *ready, task_t *t)
 {
-  TaskqueueAppend( (taskqueue_t *) ready, t );
+  TaskqueueAppend( &ready->q, t );
 }
 
-task_t *SchedFetchNextReady(void *ready)
+task_t *SchedFetchNextReady(readyset_t *ready)
 {
-  return TaskqueueRemove( (taskqueue_t *) ready );
+  return TaskqueueRemove( &ready->q );
 }

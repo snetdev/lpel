@@ -27,11 +27,11 @@ typedef struct {
 
 extern stream_t *StreamCreate(void);
 extern void StreamDestroy(stream_t *s);
-extern bool StreamOpen(stream_t *s, char mode);
-extern void *StreamPeek(stream_t *s);
-extern void *StreamRead(stream_t *s);
-extern bool StreamIsSpace(stream_t *s);
-extern void StreamWrite(stream_t *s, void *item);
+extern bool StreamOpen(task_t *ct, stream_t *s, char mode);
+extern void *StreamPeek(task_t *ct, stream_t *s);
+extern void *StreamRead(task_t *ct, stream_t *s);
+extern bool StreamIsSpace(task_t *ct, stream_t *s);
+extern void StreamWrite(task_t *ct, stream_t *s, void *item);
 
 
 

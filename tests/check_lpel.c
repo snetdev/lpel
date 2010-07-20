@@ -14,33 +14,31 @@ int myints[100];
 
 
 
-void Consumer(void *arg)
+void Consumer(task_t *t, void *inarg)
 {
   int i;
   void *item;
   DBG("Consumer Task");
 
-  StreamOpen( (stream_t *)arg, 'r');
+  StreamOpen( t, (stream_t *)inarg, 'r');
   for (i=0; i<100; i++) {
-    item = StreamRead( (stream_t *)arg );
+    item = StreamRead( t, (stream_t *)inarg );
     fprintf(stderr, "%d ", *((int *)item) );
   }
   StreamDestroy(channel);
-  TaskExit();
 }
 
 
 
-void Producer(void *arg)
+void Producer(task_t *t, void *inarg)
 {
   int i;
   DBG("Producer Task");
 
-  StreamOpen(channel, 'w');
+  StreamOpen(t, channel, 'w');
   for (i=0; i<100; i++) {
-    StreamWrite(channel, &myints[i] );
+    StreamWrite(t, channel, &myints[i] );
   }
-  TaskExit();
 }
 
 
@@ -52,7 +50,7 @@ static void testBasic(void)
   int i;
 
   cfg.num_workers = 2;
-  cfg.attr = 0; //LPEL_ATTR_ASSIGNCORE;
+  cfg.flags = 0; //LPEL_ATTR_ASSIGNCORE;
 
   LpelInit(&cfg);
 

@@ -4,7 +4,9 @@
  * - startup and shutdown routines
  * - worker thread code
  *
- * TODO: get rid of ugly pthread_mutex by e.g. an MS-Queue
+ * TODO: adopt Michael & Scott's two lock queue, s.t.
+ * worker reading init queue does not need a lock,
+ * only concurrent enqueuers need to lock
  *
  */
 
@@ -31,12 +33,10 @@
 
 
 typedef struct {
-  //unsigned int id;           /* worker ID */
-  taskqueue_t queue_init;    /* init queue */
-  pthread_mutex_t mtx_queue_init;
-  void       *queue_ready;   /* ready queue */
-  taskqueue_t queue_waiting; /* waiting queue */
-  task_t *current_task;      /* current task */
+  taskqueue_t queue_init;         /* init queue */
+  pthread_mutex_t mtx_queue_init; /* init lock */
+  readyset_t *queue_ready;        /* ready queue */
+  taskqueue_t queue_waiting;      /* waiting queue */
   /*TODO monitoring output info */
 } workerdata_t;
 
@@ -59,25 +59,17 @@ static pthread_key_t worker_id_key;
 
 #define TSD_WORKER_ID (*((int *)pthread_getspecific(worker_id_key)))
 
+#define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )
 
-/*
- * Get current worker id
- */
-/*
-int LpelGetWorkerId(void)
-{
-  return TSD_WORKER_ID;
-}
-*/
-
+#if 0
 /*
  * Get current executed task
  */
-task_t *LpelGetCurrentTask(void)
+static task_t *LpelGetCurrentTask(void)
 {
   return workerdata[TSD_WORKER_ID].current_task;
 }
-
+#endif
 
 
 static bool WaitingTest(task_t *wt)
@@ -97,10 +89,6 @@ static void WaitingRemove(task_t *wt)
 }
 
 
-inline static int LpelAttrIsSet(unsigned long vec, lpelconfig_attr_t b)
-{
-  return (vec & b) == b;
-}
 
 
 /**
@@ -155,9 +143,6 @@ static void *LpelWorker(void *idptr)
     t = SchedFetchNextReady( wd->queue_ready );
     if (t != NULL) {
       assert( t->state == TASK_READY );
-      /* set current_task */
-      wd->current_task = t;
-
 
       /* start timing (mon) */
       TimingStart(&ts);
@@ -166,12 +151,9 @@ static void *LpelWorker(void *idptr)
       t->cnt_dispatch++;
       t->state = TASK_RUNNING;
       DBG("executing task %lu (worker %d)", t->uid, id);
-      co_call(t->code);
+      co_call(t->ctx);
       DBG("task %lu returned (worker %d)", t->uid, id);
-      /*
-       * task returns with a different state,
-       * except it reached the end of code
-       */
+      /* task returns in every case with a different state than RUNNING */
       
 
       /* end timing (mon) */
@@ -183,13 +165,10 @@ static void *LpelWorker(void *idptr)
 
       /* check state of task, place into appropriate queue */
       switch(t->state) {
-      case TASK_RUNNING: /* task exited by reaching end of code! */
-        t->code = NULL; /* TODO check what exactly happens!
-                           co_delete on t->code would result in segfault! */
-        DBG("!!! task %lu returned as RUNNING !!! (worker %d)", t->uid, id);
       case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
         TimingEnd(&t->time_alive);
         /*TODO if joinable, place into join queue, else destroy */
+        /*idea: joinable tasks get their refcnt initialized to 2 */
         DBG("calling task %lu destroy (worker %d)", t->uid, id);
         TaskDestroy(t);
         break;
@@ -210,7 +189,6 @@ static void *LpelWorker(void *idptr)
         assert(0); /* should not be reached */
       }
 
-      wd->current_task = NULL;
       /*TODO output accounting info (mon) */
     }
 
@@ -264,7 +242,7 @@ void LpelInit(lpelconfig_t *cfg)
   if (num_workers < 1) num_workers = 1;
   
   /* Exclusive assignment possible? */
-  if ( LpelAttrIsSet(cfg->attr, LPEL_ATTR_ASSIGNCORE) ) {
+  if ( BIT_IS_SET(cfg->flags, LPEL_ATTR_ASSIGNCORE) ) {
     if ( !CpuAssignCanExclusively() ) {
       ;/*TODO emit warning*/
       b_assigncore = false;

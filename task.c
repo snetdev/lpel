@@ -13,10 +13,15 @@
 static sequencer_t taskseq = SEQUENCER_INIT;
 
 
+
+/* declaration of startup function */
+static void TaskStartup(void *data);
+
+
 /**
  * Create a task
  */
-task_t *TaskCreate( void (*func)(void *), void *arg, unsigned int attr)
+task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
 {
   task_t *t = (task_t *)malloc( sizeof(task_t) );
   t->uid = ticket(&taskseq);
@@ -43,11 +48,14 @@ task_t *TaskCreate( void (*func)(void *), void *arg, unsigned int attr)
   SetAlloc(&t->streams_writing);
   SetAlloc(&t->streams_reading);
 
-  t->code = co_create(func, arg, NULL, TASK_STACKSIZE);
-  if (t->code == NULL) {
+  t->code = func;
+  /* function, argument (data), stack base address, stacksize */
+  t->ctx = co_create(TaskStartup, (void *)t, NULL, TASK_STACKSIZE);
+  if (t->ctx == NULL) {
     /*TODO throw error!*/
   }
-  t->arg = arg;
+  t->inarg = inarg;
+  t->outarg = NULL;
  
   /* Notify LPEL */
   LpelTaskAdd(t);
@@ -71,7 +79,8 @@ void TaskDestroy(task_t *t)
     /* free inner members */
     SetFree(&t->streams_writing);
     SetFree(&t->streams_reading);
-    if (t->code != NULL)  co_delete(t->code);
+    /* delete the coroutine */
+    co_delete(t->ctx);
 
     /* free the TCB itself*/
     free(t);
@@ -80,9 +89,31 @@ void TaskDestroy(task_t *t)
 }
 
 
-void TaskWaitOnRead(void)
+/**
+ * Hidden Startup function for user specified task function
+ *
+ * Calls task function with proper signature
+ */
+static void TaskStartup(void *data)
 {
-  task_t *ct = LpelGetCurrentTask();
+  task_t *t = (task_t *)data;
+  taskfunc_t func = t->code;
+  /* call the task function with inarg as parameter */
+  func(t, t->inarg);
+
+  /* if task function returns, exit properly */
+  TaskExit(t, NULL);
+}
+
+
+
+/**
+ * Set Task waiting for a read event
+ *
+ * @param ct  pointer to the current task
+ */
+void TaskWaitOnRead(task_t *ct)
+{
   /* WAIT on read event*/;
   ct->event_ptr = &ct->ev_read;
   ct->state = TASK_WAITING;
@@ -91,9 +122,13 @@ void TaskWaitOnRead(void)
   co_resume();
 }
 
-void TaskWaitOnWrite(void)
+/**
+ * Set Task waiting for a read event
+ *
+ * @param ct  pointer to the current task
+ */
+void TaskWaitOnWrite(task_t *ct)
 {
-  task_t *ct = LpelGetCurrentTask();
   /* WAIT on write event*/
   ct->event_ptr = &ct->ev_write;
   ct->state = TASK_WAITING;
@@ -104,14 +139,16 @@ void TaskWaitOnWrite(void)
 
 /**
  * Exit the current task
- * TODO joinarg
+ *
+ * @param ct  pointer to the current task
+ * @param outarg  join argument
  */
-void TaskExit(void)
+void TaskExit(task_t *ct, void *outarg)
 {
-  task_t *ct = LpelGetCurrentTask();
   assert( ct->state == TASK_RUNNING );
 
   ct->state = TASK_ZOMBIE;
+  ct->outarg = outarg;
   co_resume();
 
   /* execution never comes back here */
@@ -121,10 +158,11 @@ void TaskExit(void)
 
 /**
  * Yield execution back to worker thread
+ *
+ * @param ct  pointer to the current task
  */
-void TaskYield(void)
+void TaskYield(task_t *ct)
 {
-  task_t *ct = LpelGetCurrentTask();
   assert( ct->state == TASK_RUNNING );
 
   ct->state = TASK_READY;

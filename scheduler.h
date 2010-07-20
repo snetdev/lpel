@@ -3,10 +3,13 @@
 
 #include "lpel.h"
 
-extern void *SchedInit(void);
-extern void SchedCleanup(void *ready);
-extern void SchedPutReady(void *ready, task_t *t);
-extern task_t *SchedFetchNextReady(void *ready);
+
+typedef struct readyset readyset_t;
+
+extern readyset_t *SchedInit(void);
+extern void SchedCleanup(readyset_t *ready);
+extern void SchedPutReady(readyset_t *ready, task_t *t);
+extern task_t *SchedFetchNextReady(readyset_t *ready);
 
 
 

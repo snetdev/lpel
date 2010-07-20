@@ -60,13 +60,13 @@ void StreamDestroy(stream_t *s)
 
 /**
  * Open a stream for reading/writing
- * - s != NULL
- * - mode: either 'w' or 'r'
+ *
+ * @param ct  pointer to current task
+ * @param s   stream to write to (not NULL)
+ * @param mode  either 'r' for reading or 'w' for writing
  */
-bool StreamOpen(stream_t *s, char mode)
+bool StreamOpen(task_t *ct, stream_t *s, char mode)
 {
-  task_t *ct = LpelGetCurrentTask();
-  
   /* increment reference counter of task */
   atomic_inc(&ct->refcnt);
 
@@ -96,12 +96,15 @@ bool StreamOpen(stream_t *s, char mode)
 
 /**
  * Non-blocking read from a stream
- * - returns NULL if stream is empty
+ *
+ * @return    NULL if stream is empty
+ * @param ct  pointer to current task
+ * @param s   stream to read from
  */
-void *StreamPeek(stream_t *s)
+void *StreamPeek(task_t *ct, stream_t *s)
 { 
   /* check if opened for reading */
-  assert( s->consumer == LpelGetCurrentTask() );
+  assert( s->consumer == ct );
 
   /* if the buffer is empty, buf[pread]==NULL */
   return s->buf[s->pread];  
@@ -113,17 +116,20 @@ void *StreamPeek(stream_t *s)
  *
  * Implementation note:
  * - modifies only pread pointer (not pwrite)
+ *
+ * @param ct  pointer to current task
+ * @param s   stream to read from
  */
-void *StreamRead(stream_t *s)
+void *StreamRead(task_t *ct, stream_t *s)
 {
   void *item;
 
   /* check if opened for reading */
-  assert( s->consumer == LpelGetCurrentTask() );
+  assert( s->consumer == ct );
 
   /* wait while buffer is empty */
   while ( s->buf[s->pread] == NULL ) {
-    TaskWaitOnWrite();
+    TaskWaitOnWrite(ct);
   }
 
   /* READ FROM BUFFER */
@@ -145,11 +151,14 @@ void *StreamRead(stream_t *s)
  *
  * A writer can use this function before a write
  * to ensure the write succeeds (without blocking)
+ *
+ * @param ct  pointer to current task
+ * @param s   stream opened for writing
  */
-bool StreamIsSpace(stream_t *s)
+bool StreamIsSpace(task_t *ct, stream_t *s)
 {
   /* check if opened for writing */
-  assert( s->producer == LpelGetCurrentTask() );
+  assert( s->producer == ct );
 
   /* if there is space in the buffer, the location at pwrite holds NULL */
   return ( s->buf[s->pwrite] == NULL );
@@ -163,17 +172,21 @@ bool StreamIsSpace(stream_t *s)
  *
  * Implementation note:
  * - modifies only pwrite pointer (not pread)
+ *
+ * @param ct  pointer to current task
+ * @param s   stream to write to
+ * @param item  data item (a pointer) to write
  */
-void StreamWrite(stream_t *s, void *item)
+void StreamWrite(task_t *ct, stream_t *s, void *item)
 {
   /* check if opened for writing */
-  assert( s->producer == LpelGetCurrentTask() );
+  assert( s->producer == ct );
 
   assert( item != NULL );
 
   /* wait while buffer is full */
   while ( s->buf[s->pwrite] != NULL ) {
-    TaskWaitOnRead();
+    TaskWaitOnRead(ct);
   }
 
   /* WRITE TO BUFFER */

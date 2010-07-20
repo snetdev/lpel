@@ -11,6 +11,7 @@
 #define TASK_STACKSIZE  8192  /* 8k stacksize*/
 
 
+
 typedef enum {
   TASK_TYPE_NORMAL,
   TASK_TYPE_IO
@@ -28,6 +29,7 @@ typedef enum {
 
 typedef struct task task_t;
 
+typedef void (*taskfunc_t)(task_t *t, void *inarg);
 
 /*
  * TASK CONTROL BLOCK
@@ -39,7 +41,7 @@ struct task {
   task_t *prev, *next;  /* queue handling: prev, next */
 
   /* signalling events*/
-  /*TODO ? padding ? */
+  /*TODO padding */
   volatile bool *event_ptr;
   volatile bool ev_write, ev_read;
   atomic_t refcnt;
@@ -61,19 +63,21 @@ struct task {
   set_t streams_writing, streams_reading;
 
   /* CODE */
-  coroutine_t code;
-  void *arg;  /* argument */
+  coroutine_t ctx;
+  taskfunc_t code;
+  void *inarg;  /* input argument  */
+  void *outarg; /* output argument */
 };
 
 
 
 
-extern task_t *TaskCreate( void (*func)(void *), void *arg, unsigned int attr);
+extern task_t *TaskCreate( taskfunc_t, void *inarg, unsigned int attr);
 extern void TaskDestroy(task_t *t);
-extern void TaskWaitOnRead(void);
-extern void TaskWaitOnWrite(void);
-extern void TaskExit(void);
-extern void TaskYield(void);
+extern void TaskWaitOnRead(task_t *ct);
+extern void TaskWaitOnWrite(task_t *ct);
+extern void TaskExit(task_t *ct, void *outarg);
+extern void TaskYield(task_t *ct);
 
 
 

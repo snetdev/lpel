@@ -7,21 +7,16 @@
 
 typedef struct {
   int num_workers;
-  unsigned long attr;
+  int flags;
 } lpelconfig_t;
 
-typedef enum {
-  LPEL_ATTR_ASSIGNCORE = (1<<0)
-} lpelconfig_attr_t;
+#define LPEL_ATTR_ASSIGNCORE (1<<0)
 
 
 extern void LpelInit(lpelconfig_t *cfg);
 extern void LpelRun(void);
 extern void LpelCleanup(void);
 
-
-extern int LpelGetWorkerId(void);
-extern task_t *LpelGetCurrentTask(void);
 
 extern void LpelTaskAdd(task_t *t);
 extern void LpelTaskRemove(task_t *t);
