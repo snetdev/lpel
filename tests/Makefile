@@ -1,4 +1,4 @@
-CFLAGS = -g -Wall -march=core2
+CFLAGS = -g -Wall -march=core2 -DNODEBUG
 LDFLAGS = -L$(HOME)/lib
 
 all: set cpuassign

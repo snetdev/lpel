@@ -28,6 +28,7 @@
 /* used (imported) modules of LPEL */
 #include "cpuassign.h"
 #include "timing.h"
+#include "monitoring.h"
 #include "scheduler.h"
 #include "atomic.h"
 
@@ -37,7 +38,7 @@ typedef struct {
   pthread_mutex_t mtx_queue_init; /* init lock */
   readyset_t *queue_ready;        /* ready queue */
   taskqueue_t queue_waiting;      /* waiting queue */
-  /*TODO monitoring output info */
+  monitoring_t *mon_info;
 } workerdata_t;
 
 /* array of workerdata_t, one for each worker */
@@ -55,7 +56,7 @@ static bool b_assigncore = false;
 static pthread_key_t worker_id_key;
 
 
-#define EXPAVG_ALPHA  0.5f
+#define EXPAVG_ALPHA  0.1f
 
 #define TSD_WORKER_ID (*((int *)pthread_getspecific(worker_id_key)))
 
@@ -118,6 +119,9 @@ static void *LpelWorker(void *idptr)
   /* set scheduling policy */
   wd->queue_ready = SchedInit();
 
+  /* initialise monitoring */
+  MonitoringInit(&wd->mon_info, id);
+
   /* MAIN LOOP */
   loop=0;
   do {
@@ -162,6 +166,8 @@ static void *LpelWorker(void *idptr)
       TimingAdd(&t->time_totalrun, &ts);
       TimingExpAvg(&t->time_expavg, &ts, EXPAVG_ALPHA);
 
+      /* output accounting info (mon) */
+      MonitoringPrint(wd->mon_info, t);
 
       /* check state of task, place into appropriate queue */
       switch(t->state) {
@@ -189,8 +195,7 @@ static void *LpelWorker(void *idptr)
         assert(0); /* should not be reached */
       }
 
-      /*TODO output accounting info (mon) */
-    }
+    } /* end if executed ready task */
 
 
     /* iterate through waiting queue, check r/w events */
@@ -205,6 +210,9 @@ static void *LpelWorker(void *idptr)
   /* stop only if there are no more tasks in the system */
   /* MAIN LOOP END */
   
+
+  /* cleanup monitoring info */
+  MonitoringCleanup(wd->mon_info);
   
   /* cleanup scheduling module */
   SchedCleanup(wd->queue_ready);

@@ -7,10 +7,10 @@
 #include "../task.h"
 #include "../stream.h"
 
-
+#define NUM_ITEMS 100000
 
 stream_t *channel;
-int myints[100];
+int myints[NUM_ITEMS];
 
 
 
@@ -21,7 +21,7 @@ void Consumer(task_t *t, void *inarg)
   DBG("Consumer Task");
 
   StreamOpen( t, (stream_t *)inarg, 'r');
-  for (i=0; i<100; i++) {
+  for (i=0; i<NUM_ITEMS; i++) {
     item = StreamRead( t, (stream_t *)inarg );
     fprintf(stderr, "%d ", *((int *)item) );
   }
@@ -36,7 +36,7 @@ void Producer(task_t *t, void *inarg)
   DBG("Producer Task");
 
   StreamOpen(t, channel, 'w');
-  for (i=0; i<100; i++) {
+  for (i=0; i<NUM_ITEMS; i++) {
     StreamWrite(t, channel, &myints[i] );
   }
 }
@@ -54,7 +54,7 @@ static void testBasic(void)
 
   LpelInit(&cfg);
 
-  for (i=0; i<100; i++) myints[i] = i;
+  for (i=0; i<NUM_ITEMS; i++) myints[i] = i;
 
   channel = StreamCreate();
   t = TaskCreate(Producer, NULL, 0);

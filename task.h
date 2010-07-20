@@ -41,9 +41,11 @@ struct task {
   task_t *prev, *next;  /* queue handling: prev, next */
 
   /* signalling events*/
-  /*TODO padding */
   volatile bool *event_ptr;
+  /*TODO padding */
   volatile bool ev_write, ev_read;
+
+  /* reference counter */
   atomic_t refcnt;
 
   int owner;         /* owning worker thread TODO as place_t */
