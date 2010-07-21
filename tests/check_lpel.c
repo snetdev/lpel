@@ -23,7 +23,7 @@ void Consumer(task_t *t, void *inarg)
   StreamOpen( t, (stream_t *)inarg, 'r');
   for (i=0; i<NUM_ITEMS; i++) {
     item = StreamRead( t, (stream_t *)inarg );
-    fprintf(stderr, "%d ", *((int *)item) );
+    //fprintf(stderr, "%d ", *((int *)item) );
   }
   StreamDestroy(channel);
 }
@@ -50,7 +50,7 @@ static void testBasic(void)
   int i;
 
   cfg.num_workers = 2;
-  cfg.flags = 0; //LPEL_ATTR_ASSIGNCORE;
+  cfg.flags = LPEL_ATTR_ASSIGNCORE;
 
   LpelInit(&cfg);
 

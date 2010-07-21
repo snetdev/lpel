@@ -11,6 +11,8 @@
 #define TASK_STACKSIZE  8192  /* 8k stacksize*/
 
 
+/* 64bytes is the common size of a cache line */
+#define longxCacheLine  (64/sizeof(long))
 
 typedef enum {
   TASK_TYPE_NORMAL,
@@ -35,15 +37,19 @@ typedef void (*taskfunc_t)(task_t *t, void *inarg);
  * TASK CONTROL BLOCK
  */
 struct task {
+  /* put the signalling flags on front (alignment) */
+  volatile unsigned long ev_read;
+  long padding1[longxCacheLine-1];
+  volatile unsigned long ev_write;
+  long padding2[longxCacheLine-1];
+
   /*TODO  type: IO or normal */
   unsigned long uid;
   taskstate_t state;
   task_t *prev, *next;  /* queue handling: prev, next */
 
-  /* signalling events*/
-  volatile bool *event_ptr;
-  /*TODO padding */
-  volatile bool ev_write, ev_read;
+  /* pointer to signalling flag */
+  volatile unsigned long *event_ptr;
 
   /* reference counter */
   atomic_t refcnt;

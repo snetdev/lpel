@@ -140,7 +140,7 @@ void *StreamRead(task_t *ct, stream_t *s)
   s->cntread++;
   
   /* signal the producer a read event */
-  if (s->producer != NULL) { s->producer->ev_read = true; }
+  if (s->producer != NULL) { s->producer->ev_read = 1; }
 
   return item;
 }
@@ -204,7 +204,7 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   s->cntwrite++;
   
   /* signal the consumer a write event */
-  if (s->consumer != NULL) { s->consumer->ev_write = true; }
+  if (s->consumer != NULL) { s->consumer->ev_write = 1; }
 
   return;
 }

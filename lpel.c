@@ -77,14 +77,14 @@ static bool WaitingTest(task_t *wt)
 {
   //DBG("waiting test: task %ld", wt->uid);
   //DBG("event_ptr: %p = %d", wt->event_ptr, *wt->event_ptr);
-  return *wt->event_ptr == true;
+  return *wt->event_ptr != 0;
 }
 
 static void WaitingRemove(task_t *wt)
 {
   DBG("task %ld waiting->ready", wt->uid);
   wt->state = TASK_READY;
-  *wt->event_ptr = false;
+  *wt->event_ptr = 0;
   wt->event_ptr = NULL;
   SchedPutReady( workerdata[TSD_WORKER_ID].queue_ready, wt );
 }
@@ -106,13 +106,6 @@ static void *LpelWorker(void *idptr)
   /* set idptr as thread specific */
   (void) pthread_setspecific(worker_id_key, idptr);
 
-  /* set affinity to id=CPU */
-  if (b_assigncore) {
-    if (CpuAssignToCore(id)) {
-      DBG("worker %d assigned to core", id);
-    }
-  }
-  
   /* Init libPCL */
   co_thread_init();
 
@@ -121,6 +114,14 @@ static void *LpelWorker(void *idptr)
 
   /* initialise monitoring */
   MonitoringInit(&wd->mon_info, id);
+  
+  /* set affinity to id=CPU */
+  if (b_assigncore) {
+    if (CpuAssignToCore(id)) {
+      MonitoringDebug(wd->mon_info, "worker %d assigned to core\n", id);
+    }
+  }
+  
 
   /* MAIN LOOP */
   loop=0;
@@ -128,7 +129,6 @@ static void *LpelWorker(void *idptr)
     task_t *t;
     timing_t ts;
 
-    //DBG("worker %d, loop %u", id, loop);
 
     /* fetch new tasks from init queue, insert into ready queue (sched) */
     pthread_mutex_lock( &wd->mtx_queue_init );
@@ -168,6 +168,7 @@ static void *LpelWorker(void *idptr)
 
       /* output accounting info (mon) */
       MonitoringPrint(wd->mon_info, t);
+      MonitoringDebug(wd->mon_info, "worker %d, loop %u\n", id, loop);
 
       /* check state of task, place into appropriate queue */
       switch(t->state) {
@@ -262,6 +263,8 @@ void LpelInit(lpelconfig_t *cfg)
         b_assigncore = true;
       }
     }
+    // TODO remove next line
+    b_assigncore = true;
   }
 
 

@@ -34,7 +34,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
   atomic_set(&t->refcnt, 1);
 
   t->event_ptr = NULL;
-  t->ev_write = t->ev_read = false;
+  t->ev_write = t->ev_read = 0;
   
   //t->owner = -1;
   t->sched_info = NULL;

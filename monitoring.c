@@ -1,6 +1,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <assert.h>
 
 #include "monitoring.h"
@@ -23,22 +24,6 @@ void MonitoringInit(monitoring_t **mon, int worker_id)
   assert((*mon)->outfile != NULL);
 }
 
-void MonitoringPrint(monitoring_t *mon, task_t *t)
-{
-  timing_t ts;
-  TimingStart(&ts);
-
-  fprintf(mon->outfile,
-    "%lu%09lu "
-    "wid %d tid %lu %d "
-    "last %f total %f eavg %f "
-    "\n",
-    (unsigned long) ts.tv_sec, ts.tv_nsec,
-    t->owner, t->uid, t->state,
-    TimingToMSec(&t->time_lastrun), TimingToMSec(&t->time_totalrun), TimingToMSec(&t->time_expavg)
-    );
-}
-
 void MonitoringCleanup(monitoring_t *mon)
 {
   int ret;
@@ -48,3 +33,34 @@ void MonitoringCleanup(monitoring_t *mon)
   free(mon);
 }
 
+void MonitoringPrint(monitoring_t *mon, task_t *t)
+{
+  timing_t ts;
+  TimingStart(&ts);
+
+  fprintf(mon->outfile,
+    "%lu%09lu "
+    "wid %d tid %lu st %d disp %lu "
+    "last %f total %f eavg %f "
+    "\n",
+    (unsigned long) ts.tv_sec, ts.tv_nsec,
+    t->owner, t->uid, t->state, t->cnt_dispatch,
+    TimingToMSec(&t->time_lastrun), TimingToMSec(&t->time_totalrun), TimingToMSec(&t->time_expavg)
+    );
+  fflush(mon->outfile);
+}
+
+void MonitoringDebug(monitoring_t *mon, const char *fmt, ...)
+{
+  timing_t ts;
+  va_list ap;
+
+  TimingStart(&ts);
+  fprintf(mon->outfile, "%lu%09lu ", (unsigned long) ts.tv_sec, ts.tv_nsec);
+
+  va_start(ap, fmt);
+  vfprintf(mon->outfile, fmt, ap);
+  va_end(ap);
+
+  fflush(mon->outfile);
+}
