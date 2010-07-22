@@ -42,7 +42,7 @@ stream_t *StreamCreate(void)
     s->consumer = NULL;
 
     /* refcnt reflects the number of tasks opened this stream {0,1,2}*/
-    atomic_set(&s->refcnt, 0);
+    atomic_set(&s->refcnt, 1);
   }
   return s;
 }
@@ -53,12 +53,12 @@ stream_t *StreamCreate(void)
  */
 void StreamDestroy(stream_t *s)
 {
-  assert( atomic_read(&s->refcnt) == 0 );
-  if (s->producer != NULL) TaskDestroy(s->producer);
-  if (s->consumer != NULL) TaskDestroy(s->consumer);
+  if ( fetch_and_dec(&s->refcnt) <= 1 ) {
+    if (s->producer != NULL) TaskDestroy(s->producer);
+    if (s->consumer != NULL) TaskDestroy(s->consumer);
 
-  free(s);
-  s = NULL;
+    free(s);
+  }
 }
 
 
@@ -108,10 +108,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
 void StreamClose(task_t *ct, stream_t *s)
 {
   assert( ct == s->producer || ct == s->consumer );
-  
-  if ( fetch_and_dec(&s->refcnt) <= 1 ) {
-    StreamDestroy(s);
-  }
+  atomic_dec(&s->refcnt);
 }
 
 

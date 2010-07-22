@@ -28,6 +28,7 @@ void Consumer(task_t *t, void *inarg)
     printf("read Consumer %s\n", msg );
   } while ( 0 != strcmp( msg, "T\n" ) );
   StreamClose( t, (stream_t *)inarg);
+  StreamDestroy( (stream_t *)inarg);
   printf("exit Consumer\n" );
 }
 
@@ -52,6 +53,7 @@ void Relay(task_t *t, void *inarg)
   } while ( 0 != strcmp( msg, "T\n" ) );
   printf("exit Relay\n" );
   StreamClose(t, from);
+  StreamDestroy(from);
   StreamClose(t, to);
 }
 
