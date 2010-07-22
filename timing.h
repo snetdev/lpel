@@ -1,6 +1,8 @@
 #ifndef _TIMING_H_
 #define _TIMING_H_
 
+
+#define BILLION 1000000000L
 /*
  * Link with librt:
  *   -lrt
@@ -39,10 +41,10 @@ static inline void TimingEnd(timing_t *t)
   start = *t;
 
   /* calculate elapsed time to t,
-   * assuming end > start and *.tv_nsec < 1000000000L
+   * assuming end > start and *.tv_nsec < BILLION
    */
   if (end.tv_nsec < start.tv_nsec) {
-    start.tv_nsec -= 1000000000L;
+    start.tv_nsec -= BILLION;
     start.tv_sec  += 1L;
   }
   t->tv_nsec = end.tv_nsec - start.tv_nsec;
@@ -59,8 +61,8 @@ static inline void TimingAdd(timing_t *t, const timing_t *val)
   t->tv_sec  += val->tv_sec;
   t->tv_nsec += val->tv_nsec;
   /* normalize */
-  if (t->tv_nsec > 1000000000L) {
-    t->tv_nsec -= 1000000000L;
+  if (t->tv_nsec > BILLION) {
+    t->tv_nsec -= BILLION;
     t->tv_sec  += 1L;
   }
 }
@@ -83,39 +85,40 @@ static inline void TimingZero(timing_t *t)
   t->tv_nsec = 0;
 }
 
+
+static inline double TimingToNSec(const timing_t *t)
+{
+  return ((double)t->tv_sec)*1000000000.0 + (double)t->tv_nsec;
+}
+
+
 /**
  * Calculate the exponential average
  *
  * Updates t by last with weight factor alpha
- * tnew = last*alpha + told*(1-alpha)
+ * tnew = last*alpha + thist*(1-alpha)
  * 
  * Precond: alpha in [0,1]
  */
 static inline void TimingExpAvg(timing_t *t,
   const timing_t *last, const float alpha)
 {
-  timing_t wlast, whist;
+  double dlast, dhist, dnew;
 
-  wlast.tv_nsec = alpha*last->tv_nsec;
-  wlast.tv_sec  = alpha*last->tv_sec;
+  dlast = TimingToNSec(last);
+  dhist = TimingToNSec(t);
 
-  whist.tv_nsec = (1-alpha)*t->tv_nsec;
-  whist.tv_sec =  (1-alpha)*t->tv_sec;
+  dnew = dlast*alpha + dhist*(1-alpha);
 
-  t->tv_nsec = wlast.tv_nsec + whist.tv_nsec;
-  t->tv_sec  = wlast.tv_sec  + whist.tv_sec;
-  /* normalize */
-  if (t->tv_nsec > 1000000000L) {
-    t->tv_nsec -= 1000000000L;
-    t->tv_sec  += 1L;
-  }
+  t->tv_sec = (unsigned long)(dnew/1000000000.0);
+  t->tv_nsec  = (unsigned long)(dnew - (double)t->tv_sec*1000000000);
 }
 
 
 /**
  * Get milliseconds from timing
  */
-static inline double TimingToMSec(timing_t *t)
+static inline double TimingToMSec(const timing_t *t)
 {
   return (((double)t->tv_sec) * 1000.0f) + (((double)t->tv_nsec) / 1000000.0f);
 }
