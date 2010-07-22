@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <pthread.h>
 
@@ -54,6 +55,7 @@ void Relay(task_t *t, void *inarg)
   printf("exit Relay\n" );
   StreamClose(t, from);
   StreamDestroy(from);
+  sleep(1);
   StreamClose(t, to);
 }
 
@@ -86,7 +88,7 @@ static void testBasic(void)
   lpelconfig_t cfg;
   pthread_t th;
 
-  cfg.num_workers = 1;
+  cfg.num_workers = 2;
   cfg.flags = LPEL_ATTR_ASSIGNCORE;
 
   LpelInit(&cfg);

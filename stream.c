@@ -53,7 +53,7 @@ stream_t *StreamCreate(void)
  */
 void StreamDestroy(stream_t *s)
 {
-  if ( fetch_and_dec(&s->refcnt) <= 1 ) {
+  if ( fetch_and_dec(&s->refcnt) == 1 ) {
     if (s->producer != NULL) TaskDestroy(s->producer);
     if (s->consumer != NULL) TaskDestroy(s->consumer);
 
@@ -108,7 +108,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
 void StreamClose(task_t *ct, stream_t *s)
 {
   assert( ct == s->producer || ct == s->consumer );
-  atomic_dec(&s->refcnt);
+  StreamDestroy(s);
 }
 
 

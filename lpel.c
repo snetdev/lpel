@@ -117,7 +117,7 @@ static void *LpelWorker(void *idptr)
   
   /* set affinity to id=CPU */
   if (b_assigncore) {
-    if ( CpuAssignToCore(id) && CpuAssignSetPreemptable(false) ) {
+    if ( CpuAssignToCore(id) ) {
       MonitoringDebug(wd->mon_info, "worker %d assigned to core\n", id);
     }
   }
@@ -148,6 +148,8 @@ static void *LpelWorker(void *idptr)
     if (t != NULL) {
       assert( t->state == TASK_READY );
 
+      CpuAssignSetPreemptable(false);
+
       /* start timing (mon) */
       TimingStart(&ts);
 
@@ -165,6 +167,8 @@ static void *LpelWorker(void *idptr)
       TimingSet(&t->time_lastrun, &ts);
       TimingAdd(&t->time_totalrun, &ts);
       TimingExpAvg(&t->time_expavg, &ts, EXPAVG_ALPHA);
+
+      CpuAssignSetPreemptable(true);
 
       /* output accounting info (mon) */
       MonitoringPrint(wd->mon_info, t);
