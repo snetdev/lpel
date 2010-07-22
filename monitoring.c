@@ -35,6 +35,7 @@ void MonitoringCleanup(monitoring_t *mon)
 
 void MonitoringPrint(monitoring_t *mon, task_t *t)
 {
+  int ret;
   timing_t ts;
   TimingStart(&ts);
 
@@ -47,7 +48,8 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
     t->owner, t->uid, t->state, t->cnt_dispatch,
     TimingToMSec(&t->time_lastrun), TimingToMSec(&t->time_totalrun), TimingToMSec(&t->time_expavg)
     );
-  fflush(mon->outfile);
+  ret = fflush(mon->outfile);
+  assert(ret == 0);
 }
 
 void MonitoringDebug(monitoring_t *mon, const char *fmt, ...)

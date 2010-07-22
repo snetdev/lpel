@@ -117,7 +117,7 @@ static void *LpelWorker(void *idptr)
   
   /* set affinity to id=CPU */
   if (b_assigncore) {
-    if (CpuAssignToCore(id)) {
+    if ( CpuAssignToCore(id) && CpuAssignSetPreemptable(false) ) {
       MonitoringDebug(wd->mon_info, "worker %d assigned to core\n", id);
     }
   }

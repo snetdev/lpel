@@ -43,9 +43,9 @@ int CpuAssignQueryNumCpus(void)
 bool CpuAssignToCore(int coreid)
 {
   int res;
-  cpu_set_t cpuset; 
   pid_t tid;
-  struct sched_param param;
+  cpu_set_t cpuset; 
+
   tid = gettid();
   CPU_ZERO(&cpuset);
 
@@ -58,17 +58,32 @@ bool CpuAssignToCore(int coreid)
     return false;
   }
 
-  param.sched_priority = 1; /* lowest real-time, TODO other? */
+  return true;
 
-  res = sched_setscheduler(tid, SCHED_FIFO, &param);
+}
+
+
+bool CpuAssignSetPreemptable(bool preempt)
+{
+  int res;
+  pid_t tid;
+  struct sched_param param;
+
+  tid = gettid();
+  if (preempt) {
+    param.sched_priority = 0; /* default nice value */
+    res = sched_setscheduler(tid, SCHED_OTHER, &param);
+  } else {
+    param.sched_priority = 1; /* lowest real-time, TODO other? */
+    res = sched_setscheduler(tid, SCHED_FIFO, &param);
+  }
+
   if (res == -1) {
     /*TODO check errno? */
     return false;
   }
-
   return true;
 }
-
 
 bool CpuAssignCanExclusively(void)
 {

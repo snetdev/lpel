@@ -40,6 +40,9 @@ stream_t *StreamCreate(void)
     /* producer/consumer not assigned */
     s->producer = NULL;
     s->consumer = NULL;
+
+    /* refcnt reflects the number of tasks opened this stream {0,1,2}*/
+    atomic_set(&s->refcnt, 0);
   }
   return s;
 }
@@ -50,6 +53,7 @@ stream_t *StreamCreate(void)
  */
 void StreamDestroy(stream_t *s)
 {
+  assert( atomic_read(&s->refcnt) == 0 );
   if (s->producer != NULL) TaskDestroy(s->producer);
   if (s->consumer != NULL) TaskDestroy(s->consumer);
 
@@ -69,6 +73,8 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
 {
   /* increment reference counter of task */
   atomic_inc(&ct->refcnt);
+  /* increment reference counter of stream */
+  atomic_inc(&s->refcnt);
 
   switch(mode) {
   case 'w':
@@ -91,6 +97,21 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
     return false;
   }
   return true;
+}
+
+/**
+ * Close a stream previously opened for reading/writing
+ *
+ * @param ct  pointer to current task
+ * @param s   stream to write to (not NULL)
+ */
+void StreamClose(task_t *ct, stream_t *s)
+{
+  assert( ct == s->producer || ct == s->consumer );
+  
+  if ( fetch_and_dec(&s->refcnt) <= 1 ) {
+    StreamDestroy(s);
+  }
 }
 
 
@@ -158,7 +179,7 @@ void *StreamRead(task_t *ct, stream_t *s)
 bool StreamIsSpace(task_t *ct, stream_t *s)
 {
   /* check if opened for writing */
-  assert( s->producer == ct );
+  assert( ct == NULL ||  s->producer == ct );
 
   /* if there is space in the buffer, the location at pwrite holds NULL */
   return ( s->buf[s->pwrite] == NULL );
@@ -180,7 +201,7 @@ bool StreamIsSpace(task_t *ct, stream_t *s)
 void StreamWrite(task_t *ct, stream_t *s, void *item)
 {
   /* check if opened for writing */
-  assert( s->producer == ct );
+  assert( ct == NULL ||  s->producer == ct );
 
   assert( item != NULL );
 

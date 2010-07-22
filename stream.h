@@ -6,6 +6,7 @@
 #endif
 
 #include "task.h"
+#include "atomic.h"
 
 
 /* 64bytes is the common size of a cache line */
@@ -22,12 +23,14 @@ typedef struct {
   void *buf[STREAM_BUFFER_SIZE];
   task_t *producer;
   task_t *consumer;
+  atomic_t refcnt;
 } stream_t;
 
 
 extern stream_t *StreamCreate(void);
 extern void StreamDestroy(stream_t *s);
 extern bool StreamOpen(task_t *ct, stream_t *s, char mode);
+extern void StreamClose(task_t *ct, stream_t *s);
 extern void *StreamPeek(task_t *ct, stream_t *s);
 extern void *StreamRead(task_t *ct, stream_t *s);
 extern bool StreamIsSpace(task_t *ct, stream_t *s);

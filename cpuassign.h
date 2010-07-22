@@ -10,6 +10,7 @@
 extern bool CpuAssignCanExclusively(void);
 extern int  CpuAssignQueryNumCpus(void);
 extern bool CpuAssignToCore(int coreid);
+extern bool CpuAssignSetPreemptable(bool preempt);
 
 
 #endif /* _CPUASSIGN_H_ */
