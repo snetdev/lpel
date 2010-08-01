@@ -4,6 +4,8 @@
  *
  * Actually, only the Tail-lock is required, as only the owning worker
  * is dequeueing tasks from the head.
+ * 
+ * Head always points to a dummy node;
  *
  * Pseudocode can be found at:
  * http://www.cs.rochester.edu/research/synchronization/pseudocode/queues.html#tlq
@@ -15,31 +17,55 @@
 
 #include "initqueue.h"
 
+typedef struct iqnode iqnode_t;
+
+struct initqueue {
+  iqnode_t *head;
+  iqnode_t *tail;
+  pthread_mutex_t lock_tail;
+};
+
+
+struct iqnode {
+  iqnode_t *next;
+  task_t *task;
+};
+
 /**
  * Initialise an init-queue
  */
-void InitqueueInit(initqueue_t *iq)
+initqueue_t *InitqueueCreate(void)
 {
-  /* create a dummy node */
-  task_t *dummy = (task_t *) calloc( 1, sizeof(task_t) );
+  initqueue_t *iq = (initqueue_t *) malloc( sizeof(initqueue_t) );
+
+  /* create a first dummy node */
+  iqnode_t *node = (iqnode_t *) malloc( sizeof(iqnode_t) );
   /* make it only node in the linked list */
-  dummy->next = NULL;
-  dummy->prev = NULL;
+  node->next = NULL;
+  node->task = NULL;
 
   /* both head and tail point to it */
-  iq->head = dummy;
-  iq->tail = dummy;
+  iq->head = node;
+  iq->tail = node;
 
   pthread_mutex_init(&iq->lock_tail, NULL);
+
+  return iq;
 }
 
 /**
  * Cleanup the initqueue
  */
-void InitqueueCleanup(initqueue_t *iq)
+void InitqueueDestroy(initqueue_t *iq)
 {
   assert( iq->head->next == NULL ); /* queue empty */
+
+  /* free dummy */
+  free(iq->head);
+  /* destroy lock */
   pthread_mutex_destroy(&iq->lock_tail);
+
+  free(iq);
 }
 
 /**
@@ -48,13 +74,21 @@ void InitqueueCleanup(initqueue_t *iq)
  */
 void InitqueueEnqueue(initqueue_t *iq, task_t *t)
 {
-  assert( t->next == NULL );
+  iqnode_t *node;
+
+  assert( t->next == NULL && t->prev == NULL );
+
+  /* allocate new node */
+  node = (iqnode_t *) malloc( sizeof(iqnode_t) );
+  node->next = NULL;
+  node->task = t;
+
   /* aquire tail lock */
-  pthread_mutex_lock(&iq->lock_tail);
-  /* link task at the end of the linked list */
-  iq->tail->next = t;
-  /* swing tail to task */
-  iq->tail = t;
+  while ( 0 != pthread_mutex_trylock(&iq->lock_tail)) {};
+  /* link node at the end of the linked list */
+  iq->tail->next = node;
+  /* swing tail to node */
+  iq->tail = node;
   /* release tail lock */
   pthread_mutex_unlock(&iq->lock_tail);
 }
@@ -72,20 +106,28 @@ void InitqueueEnqueue(initqueue_t *iq, task_t *t)
  */
 task_t *InitqueueDequeue(initqueue_t *iq)
 {
-  /* read head */
-  task_t *node = iq->head;
+  task_t *t;
+  
+  /* with two locks: lock head lock */
+
+  /* read head (dummy) */
+  iqnode_t *node = iq->head;
   /* read next pointer */
-  task_t *new_head = node->next;
+  iqnode_t *new_head = node->next;
 
   /* is queue empty? */
   if (new_head == NULL) return NULL;
   
   /* queue is not empty, copy values */
-  memcpy(node, new_head, sizeof(task_t));
-  node->next = NULL;
+  t = new_head->task;
 
   /* swing head to next node (becomes new dummy) */
   iq->head = new_head;
 
-  return node;
+  /* with two locks: unlock head lock */
+
+  /* free the node */
+  free(node);
+
+  return t;
 }

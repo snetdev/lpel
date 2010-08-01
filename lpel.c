@@ -21,6 +21,7 @@
 
 #include "task.h"
 #include "taskqueue.h"
+#include "initqueue.h"
 #include "set.h"
 #include "stream.h"
 #include "debug.h"
@@ -34,10 +35,9 @@
 
 
 typedef struct {
-  taskqueue_t queue_init;         /* init queue */
-  pthread_mutex_t mtx_queue_init; /* init lock */
-  readyset_t *queue_ready;        /* ready queue */
-  taskqueue_t queue_waiting;      /* waiting queue */
+  initqueue_t *queue_init;         /* init queue */
+  readyset_t  *queue_ready;        /* ready queue */
+  taskqueue_t  queue_waiting;      /* waiting queue */
   monitoring_t *mon_info;
 } workerdata_t;
 
@@ -108,12 +108,6 @@ static void *LpelWorker(void *idptr)
 
   /* Init libPCL */
   co_thread_init();
-
-  /* set scheduling policy */
-  wd->queue_ready = SchedInit();
-
-  /* initialise monitoring */
-  MonitoringInit(&wd->mon_info, id);
   
   /* set affinity to id=CPU */
   if (b_assigncore) {
@@ -131,16 +125,14 @@ static void *LpelWorker(void *idptr)
 
 
     /* fetch new tasks from init queue, insert into ready queue (sched) */
-    pthread_mutex_lock( &wd->mtx_queue_init );
-    t = TaskqueueRemove( &wd->queue_init );
+    t = InitqueueDequeue( wd->queue_init );
     while (t != NULL) {
       assert( t->state == TASK_INIT );
       t->state = TASK_READY;
       SchedPutReady( wd->queue_ready, t );
       /* for next iteration: */
-      t = TaskqueueRemove( &wd->queue_init );
+      t = InitqueueDequeue( wd->queue_init );
     }
-    pthread_mutex_unlock( &wd->mtx_queue_init );
     
 
     /* select a task from the ready queue (sched) */
@@ -214,13 +206,6 @@ static void *LpelWorker(void *idptr)
   } while ( atomic_read(&task_count_global) > 0 );
   /* stop only if there are no more tasks in the system */
   /* MAIN LOOP END */
-  
-
-  /* cleanup monitoring info */
-  MonitoringCleanup(wd->mon_info);
-  
-  /* cleanup scheduling module */
-  SchedCleanup(wd->queue_ready);
 
   /* Cleanup libPCL */
   co_thread_cleanup();
@@ -275,10 +260,15 @@ void LpelInit(lpelconfig_t *cfg)
   /* Create the data structures */
   workerdata = (workerdata_t *) malloc( num_workers*sizeof(workerdata_t) );
   for (i=0; i<num_workers; i++) {
-    TaskqueueInit(&workerdata[i].queue_init);
-    pthread_mutex_init( &workerdata[i].mtx_queue_init, NULL );
+    workerdata[i].queue_init = InitqueueCreate();
 
     TaskqueueInit(&workerdata[i].queue_waiting);
+
+    /* set scheduling policy */
+    workerdata[i].queue_ready = SchedInit();
+
+    /* initialise monitoring */
+    MonitoringInit(&workerdata[i].mon_info, i);
 
   }
 
@@ -333,7 +323,13 @@ void LpelCleanup(void)
 {
   int i;
   for (i=0; i<num_workers; i++) {
-    pthread_mutex_destroy( &workerdata[i].mtx_queue_init );
+    InitqueueDestroy(workerdata[i].queue_init);
+
+    /* cleanup monitoring info */
+    MonitoringCleanup(workerdata[i].mon_info);
+
+    /* cleanup scheduling module */
+    SchedCleanup(workerdata[i].queue_ready);
   }
   free(workerdata);
 
@@ -356,9 +352,7 @@ void LpelTaskAdd(task_t *t)
 
   /* place in init queue */
   wd = &workerdata[to_worker];
-  pthread_mutex_lock( &wd->mtx_queue_init );
-  TaskqueueAppend( &wd->queue_init, t );
-  pthread_mutex_unlock( &wd->mtx_queue_init );
+  InitqueueEnqueue( wd->queue_init, t );
 }
 
 void LpelTaskRemove(task_t *t)
