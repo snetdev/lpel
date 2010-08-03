@@ -10,6 +10,12 @@ set:
 	gcc -o check_set check_set.o set.o $(LDFLAGS)
 	./check_set
 
+streamtable:
+	gcc -c -g check_streamtable.c
+	gcc -c -g ../streamtable.c
+	gcc -o check_streamtable check_streamtable.o streamtable.o $(LDFLAGS)
+	./check_streamtable
+
 timing:
 	gcc -c check_timing.c
 	gcc -o check_timing check_timing.o $(LDFLAGS) -lrt
