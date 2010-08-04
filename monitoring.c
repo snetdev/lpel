@@ -4,6 +4,8 @@
 #include <stdarg.h>
 #include <assert.h>
 
+#include "streamtable.h"
+
 #include "monitoring.h"
 #include "timing.h"
 
@@ -42,12 +44,16 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
   fprintf(mon->outfile,
     "%lu%09lu "
     "wid %d tid %lu st %d disp %lu "
-    "last %f total %f eavg %f "
-    "\n",
+    "last %f total %f eavg %f ",
     (unsigned long) ts.tv_sec, ts.tv_nsec,
     t->owner, t->uid, t->state, t->cnt_dispatch,
     TimingToMSec(&t->time_lastrun), TimingToMSec(&t->time_totalrun), TimingToMSec(&t->time_expavg)
     );
+  
+  StreamtablePrint(&t->streamtab, mon->outfile);
+  StreamtableClean(&t->streamtab);
+
+  fprintf(mon->outfile, "\n");
   ret = fflush(mon->outfile);
   assert(ret == 0);
 }

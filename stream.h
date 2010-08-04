@@ -21,8 +21,8 @@ struct stream {
   volatile unsigned long pwrite;
   long padding2[longxCacheLine-1];
   void *buf[STREAM_BUFFER_SIZE];
-  volatile unsigned long *cntread;
-  volatile unsigned long *cntwrite;
+  unsigned long *cntread;
+  unsigned long *cntwrite;
   task_t *producer;
   task_t *consumer;
   atomic_t refcnt;

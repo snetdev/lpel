@@ -157,7 +157,7 @@ void *StreamRead(task_t *ct, stream_t *s)
   s->buf[s->pread]=NULL;
   s->pread += (s->pread+1 >= STREAM_BUFFER_SIZE) ?
               (1-STREAM_BUFFER_SIZE) : 1;
-  *s->cntread++;
+  *s->cntread += 1;
   
   /* signal the producer a read event */
   if (s->producer != NULL) { s->producer->ev_read = 1; }
@@ -221,7 +221,7 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   s->buf[s->pwrite] = item;
   s->pwrite += (s->pwrite+1 >= STREAM_BUFFER_SIZE) ?
                (1-STREAM_BUFFER_SIZE) : 1;
-  *s->cntwrite++;
+  *s->cntwrite += 1;
   
   /* signal the consumer a write event */
   if (s->consumer != NULL) { s->consumer->ev_write = 1; }

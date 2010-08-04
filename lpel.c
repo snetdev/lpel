@@ -24,6 +24,7 @@
 #include "initqueue.h"
 #include "set.h"
 #include "stream.h"
+#include "streamtable.h"
 #include "debug.h"
 
 /* used (imported) modules of LPEL */
