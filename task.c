@@ -45,8 +45,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
   t->time_lastrun = t->time_expavg = t->time_totalrun;
 
   t->cnt_dispatch = 0;
-  SetAlloc(&t->streams_writing);
-  SetAlloc(&t->streams_reading);
+  t->streamtab = NULL;
 
   t->code = func;
   /* function, argument (data), stack base address, stacksize */
@@ -76,9 +75,10 @@ void TaskDestroy(task_t *t)
     /* Notify LPEL first */
     LpelTaskRemove(t);
 
-    /* free inner members */
-    SetFree(&t->streams_writing);
-    SetFree(&t->streams_reading);
+    /* is the streamtable empty? */
+    StreamtableClean(&t->streamtab);
+    assert( t->streamtab == NULL );
+
     /* delete the coroutine */
     co_delete(t->ctx);
 

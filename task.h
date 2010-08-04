@@ -3,7 +3,7 @@
 
 #include <pcl.h> /* coroutine_t */
 
-#include "set.h"
+#include "streamtable.h"
 #include "timing.h"
 #include "atomic.h"
 
@@ -68,7 +68,7 @@ struct task {
   unsigned long cnt_dispatch; /* dispatch counter */
 
   /* array of streams opened for writing/reading */
-  set_t streams_writing, streams_reading;
+  streamtable_t streamtab;
 
   /* CODE */
   coroutine_t ctx;

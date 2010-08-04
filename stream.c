@@ -31,12 +31,13 @@ stream_t *StreamCreate(void)
   stream_t *s = (stream_t *) malloc( sizeof(stream_t) );
   if (s != NULL) {
     s->pread = 0;
-    s->cntread = 0;
     s->pwrite = 0;
-    s->cntwrite = 0;
     /* clear all the buffer space */
     memset(&(s->buf), 0, STREAM_BUFFER_SIZE*sizeof(void *));
 
+    s->cntread = NULL;
+    s->cntwrite = NULL;
+    
     /* producer/consumer not assigned */
     s->producer = NULL;
     s->consumer = NULL;
@@ -82,7 +83,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
     s->producer = ct;
 
     /* add to tasks list of opened streams for writing (only for accounting)*/
-    SetAdd(&ct->streams_writing, s);
+    s->cntwrite = StreamtablePut(&ct->streamtab, s, mode);
     break;
 
   case 'r':
@@ -90,7 +91,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
     s->consumer = ct;
 
     /* add to tasks list of opened streams for reading (only for accounting)*/
-    SetAdd(&ct->streams_reading, s);
+    s->cntread = StreamtablePut(&ct->streamtab, s, mode);
     break;
 
   default:
@@ -108,6 +109,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
 void StreamClose(task_t *ct, stream_t *s)
 {
   assert( ct == s->producer || ct == s->consumer );
+  StreamtableMark(&ct->streamtab, s);
   StreamDestroy(s);
 }
 
@@ -155,7 +157,7 @@ void *StreamRead(task_t *ct, stream_t *s)
   s->buf[s->pread]=NULL;
   s->pread += (s->pread+1 >= STREAM_BUFFER_SIZE) ?
               (1-STREAM_BUFFER_SIZE) : 1;
-  s->cntread++;
+  *s->cntread++;
   
   /* signal the producer a read event */
   if (s->producer != NULL) { s->producer->ev_read = 1; }
@@ -219,7 +221,7 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   s->buf[s->pwrite] = item;
   s->pwrite += (s->pwrite+1 >= STREAM_BUFFER_SIZE) ?
                (1-STREAM_BUFFER_SIZE) : 1;
-  s->cntwrite++;
+  *s->cntwrite++;
   
   /* signal the consumer a write event */
   if (s->consumer != NULL) { s->consumer->ev_write = 1; }

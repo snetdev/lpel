@@ -9,6 +9,7 @@ typedef struct inport inport_t;
 struct inport {
   stream_t *stream;
   task_t *task;
+  unsigned long cntwrite;
 };
 
 extern inport_t *InportCreate(stream_t *s);

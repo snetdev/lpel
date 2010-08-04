@@ -8,8 +8,8 @@
 #include "../debug.h"
 #include "../cpuassign.h"
 #include "../lpel.h"
+#include "../streamtable.h"
 #include "../task.h"
-#include "../stream.h"
 #include "../inport.h"
 
 

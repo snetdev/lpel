@@ -10,6 +10,8 @@
 
 #include "streamtable.h"
 
+typedef struct stream stream_t;
+
 
 struct streamtbe {
   struct streamtbe *next;

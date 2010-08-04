@@ -12,19 +12,21 @@
 /* 64bytes is the common size of a cache line */
 #define longxCacheLine  (64/sizeof(long))
 
+typedef struct stream stream_t;
+
 /* Padding is required to avoid false-sharing between core's private cache */
-typedef struct {
+struct stream {
   volatile unsigned long pread;
-  volatile unsigned long cntread;
-  long padding1[longxCacheLine-2];
+  long padding1[longxCacheLine-1];
   volatile unsigned long pwrite;
-  volatile unsigned long cntwrite;
-  long padding2[longxCacheLine-2];
+  long padding2[longxCacheLine-1];
   void *buf[STREAM_BUFFER_SIZE];
+  volatile unsigned long *cntread;
+  volatile unsigned long *cntwrite;
   task_t *producer;
   task_t *consumer;
   atomic_t refcnt;
-} stream_t;
+};
 
 
 extern stream_t *StreamCreate(void);
