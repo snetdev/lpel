@@ -2,8 +2,6 @@
 TODO
 ====
 
- * output monitoring information
- * abstract threading interface ( e.g. by providing SpawnThreads(uint num, bool pinned) )
  * per module debugging information
  * implement a lock-free queue structure for the init queues (e.g. MS-queue)
 (* provide a cache optimal local spinning lock in the abstracted threading module, e.g. ticket lock or MCS-lock)

@@ -70,7 +70,8 @@ void TaskDestroy(task_t *t)
 {
   /* only if no stream points to the flags anymore */
   if ( fetch_and_dec(&t->refcnt) == 1) {
-    DBG("free task %lu", t->uid);
+    /* capture end of task lifetime */
+    TimingEnd(&ct->time_alive);
 
     /* Notify LPEL first */
     LpelTaskRemove(t);
@@ -114,10 +115,12 @@ static void TaskStartup(void *data)
  */
 void TaskWaitOnRead(task_t *ct)
 {
+  assert( ct->state == TASK_RUNNING );
+  
   /* WAIT on read event*/;
   ct->event_ptr = &ct->ev_read;
   ct->state = TASK_WAITING;
-  DBG("task %lu waits on read", ct->uid);
+  
   /* context switch */
   co_resume();
 }
@@ -129,10 +132,12 @@ void TaskWaitOnRead(task_t *ct)
  */
 void TaskWaitOnWrite(task_t *ct)
 {
+  assert( ct->state == TASK_RUNNING );
+
   /* WAIT on write event*/
   ct->event_ptr = &ct->ev_write;
   ct->state = TASK_WAITING;
-  DBG("task %lu waits on write", ct->uid);
+  
   /* context switch */
   co_resume();
 }
@@ -148,7 +153,9 @@ void TaskExit(task_t *ct, void *outarg)
   assert( ct->state == TASK_RUNNING );
 
   ct->state = TASK_ZOMBIE;
+  
   ct->outarg = outarg;
+  /* context switch */
   co_resume();
 
   /* execution never comes back here */
@@ -166,6 +173,7 @@ void TaskYield(task_t *ct)
   assert( ct->state == TASK_RUNNING );
 
   ct->state = TASK_READY;
+  /* context switch */
   co_resume();
 }
 

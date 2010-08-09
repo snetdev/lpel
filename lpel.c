@@ -20,30 +20,20 @@
 #include "lpel.h"
 
 #include "task.h"
-#include "taskqueue.h"
-#include "initqueue.h"
 #include "set.h"
 #include "stream.h"
 #include "streamtable.h"
 #include "debug.h"
+#include "scheduler.h"
 
 /* used (imported) modules of LPEL */
 #include "cpuassign.h"
 #include "timing.h"
 #include "monitoring.h"
-#include "scheduler.h"
 #include "atomic.h"
 
 
-typedef struct {
-  initqueue_t *queue_init;         /* init queue */
-  readyset_t  *queue_ready;        /* ready queue */
-  taskqueue_t  queue_waiting;      /* waiting queue */
-  monitoring_t *mon_info;
-} workerdata_t;
 
-/* array of workerdata_t, one for each worker */
-static workerdata_t *workerdata = NULL;
 
 /*
  * Global task count, i.e. number of tasks in the LPEL.
@@ -63,32 +53,8 @@ static pthread_key_t worker_id_key;
 
 #define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )
 
-#if 0
-/*
- * Get current executed task
- */
-static task_t *LpelGetCurrentTask(void)
-{
-  return workerdata[TSD_WORKER_ID].current_task;
-}
-#endif
 
 
-static bool WaitingTest(task_t *wt)
-{
-  //DBG("waiting test: task %ld", wt->uid);
-  //DBG("event_ptr: %p = %d", wt->event_ptr, *wt->event_ptr);
-  return *wt->event_ptr != 0;
-}
-
-static void WaitingRemove(task_t *wt)
-{
-  DBG("task %ld waiting->ready", wt->uid);
-  wt->state = TASK_READY;
-  *wt->event_ptr = 0;
-  wt->event_ptr = NULL;
-  SchedPutReady( workerdata[TSD_WORKER_ID].queue_ready, wt );
-}
 
 
 
@@ -96,16 +62,16 @@ static void WaitingRemove(task_t *wt)
 /**
  * Worker thread code
  */
-static void *LpelWorker(void *idptr)
+static void *LpelWorker(void *arg)
 {
   unsigned int loop;
-  int id = *((int *)idptr);
-  workerdata_t *wd = &workerdata[id];
+  scheddata_t *sdt = ((scheddata_t *)arg);
+  monitoring_t *mon_info;
+  int id = sdt->id;
 
-  DBG("worker %d started", id);
 
-  /* set idptr as thread specific */
-  (void) pthread_setspecific(worker_id_key, idptr);
+  /* initialise monitoring */
+  MonitoringInit(&mon_info, id);
 
   /* Init libPCL */
   co_thread_init();
@@ -113,33 +79,23 @@ static void *LpelWorker(void *idptr)
   /* set affinity to id=CPU */
   if (b_assigncore) {
     if ( CpuAssignToCore(id) ) {
-      MonitoringDebug(wd->mon_info, "worker %d assigned to core\n", id);
+      MonitoringDebug(mon_info, "worker %d assigned to core\n", id);
     }
   }
   
 
-  /* MAIN LOOP */
+
+  /* MAIN SCHEDULER LOOP */
   loop=0;
   do {
     task_t *t;
     timing_t ts;
 
 
-    /* fetch new tasks from init queue, insert into ready queue (sched) */
-    t = InitqueueDequeue( wd->queue_init );
-    while (t != NULL) {
-      assert( t->state == TASK_INIT );
-      t->state = TASK_READY;
-      SchedPutReady( wd->queue_ready, t );
-      /* for next iteration: */
-      t = InitqueueDequeue( wd->queue_init );
-    }
-    
-
     /* select a task from the ready queue (sched) */
     t = SchedFetchNextReady( wd->queue_ready );
+
     if (t != NULL) {
-      assert( t->state == TASK_READY );
 
       CpuAssignSetPreemptable(false);
 
@@ -149,9 +105,7 @@ static void *LpelWorker(void *idptr)
       /* EXECUTE TASK (context switch) */
       t->cnt_dispatch++;
       t->state = TASK_RUNNING;
-      DBG("executing task %lu (worker %d)", t->uid, id);
       co_call(t->ctx);
-      DBG("task %lu returned (worker %d)", t->uid, id);
       /* task returns in every case with a different state than RUNNING */
       
 
@@ -167,53 +121,22 @@ static void *LpelWorker(void *idptr)
       MonitoringPrint(wd->mon_info, t);
       MonitoringDebug(wd->mon_info, "worker %d, loop %u\n", id, loop);
 
-      /* check state of task, place into appropriate queue */
-      switch(t->state) {
-      case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
-        TimingEnd(&t->time_alive);
-        /*TODO if joinable, place into join queue, else destroy */
-        /*idea: joinable tasks get their refcnt initialized to 2 */
-        DBG("calling task %lu destroy (worker %d)", t->uid, id);
-        TaskDestroy(t);
-        break;
-
-      case TASK_WAITING: /* task returned from a blocking call*/
-        /* put into waiting queue */
-        DBG("task %lu into waiting (worker %d)", t->uid, id);
-        TaskqueueAppend( &wd->queue_waiting, t );
-        break;
-
-      case TASK_READY: /* task yielded execution  */
-        /* put into ready queue */
-        DBG("task %lu into ready (worker %d)", t->uid, id);
-        SchedPutReady( wd->queue_ready, t );
-        break;
-
-      default:
-        assert(0); /* should not be reached */
-      }
-
+      SchedReschedule(wd->scheddata, t);
     } /* end if executed ready task */
 
-
-    /* iterate through waiting queue, check r/w events */
-    TaskqueueIterateRemove( &wd->queue_waiting,
-                            WaitingTest, WaitingRemove
-                            );
-
-    /*XXX (iterate through nap queue, check alert-time) */
 
     loop++;
   } while ( atomic_read(&task_count_global) > 0 );
   /* stop only if there are no more tasks in the system */
-  /* MAIN LOOP END */
+  /* MAIN SCHEDULER LOOP END */
+    
+  MonitoringCleanup(mon_info);
 
   /* Cleanup libPCL */
   co_thread_cleanup();
   
   /* exit thread */
   pthread_exit(NULL);
-  //return NULL;
 }
 
 
@@ -224,7 +147,6 @@ static void *LpelWorker(void *idptr)
 /**
  * Initialise the LPEL
  * - if num_workers==-1, determine the number of worker threads automatically
- * - create the data structures for each worker thread
  */
 void LpelInit(lpelconfig_t *cfg)
 {
@@ -258,21 +180,6 @@ void LpelInit(lpelconfig_t *cfg)
   }
 
 
-  /* Create the data structures */
-  workerdata = (workerdata_t *) malloc( num_workers*sizeof(workerdata_t) );
-  for (i=0; i<num_workers; i++) {
-    workerdata[i].queue_init = InitqueueCreate();
-
-    TaskqueueInit(&workerdata[i].queue_waiting);
-
-    /* set scheduling policy */
-    workerdata[i].queue_ready = SchedInit();
-
-    /* initialise monitoring */
-    MonitoringInit(&workerdata[i].mon_info, i);
-
-  }
-
   /* Init libPCL */
   co_thread_init();
 }
@@ -284,20 +191,18 @@ void LpelInit(lpelconfig_t *cfg)
 void LpelRun(void)
 {
   pthread_t *thids;
+  scheddata_t sdt[num_workers];
   int i, res;
-  int wids[num_workers];
-
-  /* Create thread-specific data key for worker_id */
-  pthread_key_create(&worker_id_key, NULL);
 
 
   // launch worker threads
   thids = (pthread_t *) malloc(num_workers * sizeof(pthread_t));
   for (i = 0; i < num_workers; i++) {
-    //workerdata[i].id = i;
-    //res = pthread_create(&thids[i], NULL, LpelWorker, &(workerdata[i].id));
-    wids[i] = i;
-    res = pthread_create(&thids[i], NULL, LpelWorker, &wids[i]);
+
+    /* initialise scheduler data*/
+    sdt[i] = SchedInit(i, num_workers);
+    
+    res = pthread_create(&thids[i], NULL, LpelWorker, sdt[i]);
     if (res != 0) {
       /*TODO error
       perror("creating worker threads");
@@ -309,9 +214,8 @@ void LpelRun(void)
   // join on finish
   for (i = 0; i < num_workers; i++) {
     pthread_join(thids[i], NULL);
+    SchedDestroy(sdt[i]);
   }
-  DBG("workers have finished.");
-  pthread_key_delete(worker_id_key);
 
 }
 
@@ -322,18 +226,6 @@ void LpelRun(void)
  */
 void LpelCleanup(void)
 {
-  int i;
-  for (i=0; i<num_workers; i++) {
-    InitqueueDestroy(workerdata[i].queue_init);
-
-    /* cleanup monitoring info */
-    MonitoringCleanup(workerdata[i].mon_info);
-
-    /* cleanup scheduling module */
-    SchedCleanup(workerdata[i].queue_ready);
-  }
-  free(workerdata);
-
   /* Cleanup libPCL */
   co_thread_cleanup();
 }

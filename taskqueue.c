@@ -99,12 +99,12 @@ task_t *TaskqueueRemove(taskqueue_t *tq)
 
 
 void TaskqueueIterateRemove(taskqueue_t *tq, 
-  bool (*cond)(task_t*), void (*action)(task_t*) )
+  bool (*cond)(task_t*, void*), void (*action)(task_t*, void*), void *arg )
 {
   task_t *cur = tq->head;
   while (cur != NULL) {
     /* check condition */
-    if ( cond(cur) ) {
+    if ( cond(cur, arg) ) {
       task_t *p = cur;
 
       /* relink the queue */
@@ -124,8 +124,10 @@ void TaskqueueIterateRemove(taskqueue_t *tq,
       
       p->prev = NULL;
       p->next = NULL;
+      /* decrement task count */
+      tq->count--;
       /* do action */
-      action(p);
+      action(p, arg);
     } else {
       cur = cur->next;
     }
