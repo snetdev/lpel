@@ -1,16 +1,22 @@
 #ifndef _SCHEDULER_H_
 #define _SCHEDULER_H_
 
-#include "lpel.h"
+#include "task.h"
+
+typedef struct schedctx schedctx_t;
+
+typedef struct schedcfg schedcfg_t;
 
 
-typedef struct readyset readyset_t;
-
-extern readyset_t *SchedInit(void);
-extern void SchedCleanup(readyset_t *ready);
-extern void SchedPutReady(readyset_t *ready, task_t *t);
-extern task_t *SchedFetchNextReady(readyset_t *ready);
+extern void SchedInitialise(int size, schedcfg_t *cfg);
+extern schedctx_t *SchedGetContext(int id);
+extern void SchedCleanup(void);
 
 
+extern void SchedPutReady(schedctx_t *sc, task_t *t);
+extern task_t *SchedFetchNextReady(schedctx_t *sc);
+extern void SchedReschedule(schedctx_t *sc, task_t *t);
+
+extern schedctx_t *SchedAddTaskGlobal(task_t *t);
 
 #endif /* _SCHEDULER_H_ */

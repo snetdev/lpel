@@ -65,17 +65,19 @@ static pthread_key_t worker_id_key;
 static void *LpelWorker(void *arg)
 {
   unsigned int loop;
-  scheddata_t *sdt = ((scheddata_t *)arg);
+  int id = *((int *)arg);
+  schedctx_t *sc = SchedGetContext( id );
   monitoring_t *mon_info;
-  int id = sdt->id;
-
-
-  /* initialise monitoring */
-  MonitoringInit(&mon_info, id);
 
   /* Init libPCL */
   co_thread_init();
   
+
+  /* initialise monitoring */
+  MonitoringInit(&mon_info, id);
+
+  MonitoringDebug(mon_info, "worker %d started\n", id);
+
   /* set affinity to id=CPU */
   if (b_assigncore) {
     if ( CpuAssignToCore(id) ) {
@@ -90,10 +92,11 @@ static void *LpelWorker(void *arg)
   do {
     task_t *t;
     timing_t ts;
-
+  
+    assert( sc != NULL );
 
     /* select a task from the ready queue (sched) */
-    t = SchedFetchNextReady( wd->queue_ready );
+    t = SchedFetchNextReady( sc );
 
     if (t != NULL) {
 
@@ -118,10 +121,10 @@ static void *LpelWorker(void *arg)
       CpuAssignSetPreemptable(true);
 
       /* output accounting info (mon) */
-      MonitoringPrint(wd->mon_info, t);
-      MonitoringDebug(wd->mon_info, "worker %d, loop %u\n", id, loop);
+      MonitoringPrint(mon_info, t);
+      MonitoringDebug(mon_info, "worker %d, loop %u\n", id, loop);
 
-      SchedReschedule(wd->scheddata, t);
+      SchedReschedule(sc, t);
     } /* end if executed ready task */
 
 
@@ -150,7 +153,7 @@ static void *LpelWorker(void *arg)
  */
 void LpelInit(lpelconfig_t *cfg)
 {
-  int i, cpus;
+  int cpus;
 
   cpus = CpuAssignQueryNumCpus();
   if (cfg->num_workers == -1) {
@@ -179,6 +182,8 @@ void LpelInit(lpelconfig_t *cfg)
     b_assigncore = true;
   }
 
+  /* initialise scheduler */
+  SchedInitialise(num_workers, NULL);
 
   /* Init libPCL */
   co_thread_init();
@@ -191,18 +196,15 @@ void LpelInit(lpelconfig_t *cfg)
 void LpelRun(void)
 {
   pthread_t *thids;
-  scheddata_t sdt[num_workers];
   int i, res;
+  int wid[num_workers];
 
 
   // launch worker threads
   thids = (pthread_t *) malloc(num_workers * sizeof(pthread_t));
   for (i = 0; i < num_workers; i++) {
-
-    /* initialise scheduler data*/
-    sdt[i] = SchedInit(i, num_workers);
-    
-    res = pthread_create(&thids[i], NULL, LpelWorker, sdt[i]);
+    wid[i] = i;
+    res = pthread_create(&thids[i], NULL, LpelWorker, &wid[i]);
     if (res != 0) {
       /*TODO error
       perror("creating worker threads");
@@ -214,7 +216,6 @@ void LpelRun(void)
   // join on finish
   for (i = 0; i < num_workers; i++) {
     pthread_join(thids[i], NULL);
-    SchedDestroy(sdt[i]);
   }
 
 }
@@ -226,6 +227,8 @@ void LpelRun(void)
  */
 void LpelCleanup(void)
 {
+  SchedCleanup();
+
   /* Cleanup libPCL */
   co_thread_cleanup();
 }
@@ -234,7 +237,6 @@ void LpelCleanup(void)
 void LpelTaskAdd(task_t *t)
 {
   int to_worker;
-  workerdata_t *wd;
 
   /* increase num of tasks in the lpel system*/
   atomic_inc(&task_count_global);
@@ -244,8 +246,7 @@ void LpelTaskAdd(task_t *t)
   t->owner = to_worker;
 
   /* place in init queue */
-  wd = &workerdata[to_worker];
-  InitqueueEnqueue( wd->queue_init, t );
+  SchedAddTaskGlobal( t );
 }
 
 void LpelTaskRemove(task_t *t)

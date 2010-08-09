@@ -71,7 +71,7 @@ void TaskDestroy(task_t *t)
   /* only if no stream points to the flags anymore */
   if ( fetch_and_dec(&t->refcnt) == 1) {
     /* capture end of task lifetime */
-    TimingEnd(&ct->time_alive);
+    TimingEnd(&t->time_alive);
 
     /* Notify LPEL first */
     LpelTaskRemove(t);
