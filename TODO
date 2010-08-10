@@ -2,9 +2,11 @@
 TODO
 ====
 
- * per module debugging information
- * implement a lock-free queue structure for the init queues (e.g. MS-queue)
-(* provide a cache optimal local spinning lock in the abstracted threading module, e.g. ticket lock or MCS-lock)
+ * write tasks with attribute WAKEUP_ON_WRITE_ANY
+ * write streamtable structure with k streams sequentially in array
+ * write an iterator
+ * write signalling tree handling
+ * implement the RW-Lock
  * aggregate modules into libraries with clear interface
  * doxygenify comments
 
@@ -18,5 +20,3 @@ In future:
 S-Net-porting:
 * clarify sort_begin/sort_end injection in parallel combinator
 
-and a lot more in farer future
-... tdb
