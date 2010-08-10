@@ -41,8 +41,10 @@ stream_t *StreamCreate(void)
     /* producer/consumer not assigned */
     s->producer = NULL;
     s->consumer = NULL;
-
-    /* refcnt reflects the number of tasks opened this stream {0,1,2}*/
+    spinlock_init(s->lock_prod);
+    spinlock_init(s->lock_cons);
+    /* refcnt reflects the number of tasks
+       + the stream itself opened this stream {1,2,3} */
     atomic_set(&s->refcnt, 1);
   }
   return s;
@@ -55,9 +57,10 @@ stream_t *StreamCreate(void)
 void StreamDestroy(stream_t *s)
 {
   if ( fetch_and_dec(&s->refcnt) == 1 ) {
+    /*
     if (s->producer != NULL) TaskDestroy(s->producer);
     if (s->consumer != NULL) TaskDestroy(s->consumer);
-
+    */
     free(s);
   }
 }
@@ -73,25 +76,30 @@ void StreamDestroy(stream_t *s)
 bool StreamOpen(task_t *ct, stream_t *s, char mode)
 {
   /* increment reference counter of task */
-  atomic_inc(&ct->refcnt);
+  //atomic_inc(&ct->refcnt);
+
   /* increment reference counter of stream */
   atomic_inc(&s->refcnt);
 
   switch(mode) {
   case 'w':
-    assert( s->producer == NULL );
-    s->producer = ct;
+    spinlock_lock(s->lock_prod);
+      assert( s->producer == NULL );
+      s->producer = ct;
 
-    /* add to tasks list of opened streams for writing (only for accounting)*/
-    s->cntwrite = StreamtablePut(&ct->streamtab, s, mode);
+      /* add to tasks list of opened streams for writing (only for accounting)*/
+      s->cntwrite = StreamtablePut(&ct->streamtab, s, mode);
+    spinlock_unlock(s->lock_prod);
     break;
 
   case 'r':
-    assert( s->consumer == NULL );
-    s->consumer = ct;
+    spinlock_lock(s->lock_cons);
+      assert( s->consumer == NULL );
+      s->consumer = ct;
 
-    /* add to tasks list of opened streams for reading (only for accounting)*/
-    s->cntread = StreamtablePut(&ct->streamtab, s, mode);
+      /* add to tasks list of opened streams for reading (only for accounting)*/
+      s->cntread = StreamtablePut(&ct->streamtab, s, mode);
+    spinlock_unlock(s->lock_cons);
     break;
 
   default:
@@ -108,8 +116,25 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
  */
 void StreamClose(task_t *ct, stream_t *s)
 {
+  char mode;
   assert( ct == s->producer || ct == s->consumer );
-  StreamtableMark(&ct->streamtab, s);
+
+  mode = StreamtableMark(&ct->streamtab, s);
+  switch(mode) {
+  case 'w':
+  spinlock_lock(s->lock_prod);
+    s->producer = NULL;
+  spinlock_unlock(s->lock_prod);
+  break;
+  case 'r':
+  spinlock_lock(s->lock_cons);
+    s->consumer = NULL;
+  spinlock_unlock(s->lock_cons);
+  break;
+  default:
+    assert(0);
+  }
+  /* destroy request */
   StreamDestroy(s);
 }
 
@@ -160,7 +185,9 @@ void *StreamRead(task_t *ct, stream_t *s)
   *s->cntread += 1;
   
   /* signal the producer a read event */
+  spinlock_lock(s->lock_prod);
   if (s->producer != NULL) { s->producer->ev_read = 1; }
+  spinlock_unlock(s->lock_prod);
 
   return item;
 }
@@ -224,7 +251,9 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   *s->cntwrite += 1;
   
   /* signal the consumer a write event */
+  spinlock_lock(s->lock_cons);
   if (s->consumer != NULL) { s->consumer->ev_write = 1; }
+  spinlock_unlock(s->lock_cons);
 
   return;
 }

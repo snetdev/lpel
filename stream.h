@@ -6,6 +6,7 @@
 #endif
 
 #include "task.h"
+#include "spinlock.h"
 #include "atomic.h"
 
 
@@ -25,6 +26,8 @@ struct stream {
   unsigned long *cntwrite;
   task_t *producer;
   task_t *consumer;
+  spinlock_t lock_prod;
+  spinlock_t lock_cons;
   atomic_t refcnt;
 };
 

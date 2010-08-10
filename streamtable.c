@@ -61,9 +61,10 @@ unsigned long *StreamtablePut(streamtable_t *tab, stream_t *s, char mode)
  * with entries added earlier in time.
  * In O(n).
  *
- * Precond: s is contained in the table
+ * @pre    s is contained in the table
+ * @return the mode in which s was opened
  */
-void StreamtableMark(streamtable_t *tab, stream_t *s)
+char StreamtableMark(streamtable_t *tab, stream_t *s)
 {
   /* cursor points initially to first element */
   struct streamtbe *cur = (*tab)->next;
@@ -75,6 +76,7 @@ void StreamtableMark(streamtable_t *tab, stream_t *s)
 
   /* now cur points to the entry containing s */
   cur->closed = 1;
+  return cur->mode;
 }
 
 /**
