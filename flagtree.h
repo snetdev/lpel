@@ -7,6 +7,9 @@
 /* number of leafs for a given height h: 2^h */
 #define LEAFS(h)  (1<<(h))
 
+/* number of nodes at a certain level v (root=0): 2^v */
+#define NODES_AT_LEVEL(v)   (1<<(v))
+
 /* number of flags to set for a given height h: h+1 */
 #define CNT_FLAGS(h)  ((h)+1)
 
@@ -21,10 +24,10 @@
  *  leaf #0 -> index 7  if h=3
  *  leaf #3 -> index 10 if h=3
  */
-#define MAP(h,i)  ( (i) + (1<<(h)) - 1 )
+#define LEAF_TO_IDX(h,i)  ( (i) + (1<<(h)) - 1 )
 
-/* inverse function of MAP: i+1 - 2^h */
-#define MAP_INV(h,i)  ( (i)+1 - (1<<(h)) )
+/* inverse function of LEAF_TO_IDX: i+1 - 2^h */
+#define IDX_TO_LEAF(h,i)  ( (i)+1 - (1<<(h)) )
 
 /* parent index of index i: floor( (i-1)/2 ) */
 #define PARENT(i)   ( ((i)-1)/2 )
@@ -43,18 +46,17 @@ typedef struct {
 
 
 /**
- * mark the tree up to the root starting with leaf #idx,
- * writing value val
+ * mark the tree up to the root starting with leaf #idx
  *
  * @pre 0 <= idx < LEAFS(heap.height) [=2^height]
  */
-static inline void flagtree_mark(flagtree_t *heap, int idx, int val)
+static inline void FlagtreeMark(flagtree_t *heap, int idx)
 {
-  int j = MAP(heap->height, idx);
-  heap->buf[j] = val;
+  int j = LEAF_TO_IDX(heap->height, idx);
+  heap->buf[j] = 1;
   while (j != 0) {
     j = PARENT(j);
-    heap->buf[j] = val;
+    heap->buf[j] = 1;
   }
 }
 
