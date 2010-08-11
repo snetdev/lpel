@@ -21,13 +21,13 @@ struct stream {
   long padding1[longxCacheLine-1];
   volatile unsigned long pwrite;
   long padding2[longxCacheLine-1];
+  spinlock_t lock_prod;
+  spinlock_t lock_cons;
   void *buf[STREAM_BUFFER_SIZE];
   unsigned long *cntread;
   unsigned long *cntwrite;
   task_t *producer;
   task_t *consumer;
-  spinlock_t lock_prod;
-  spinlock_t lock_cons;
   atomic_t refcnt;
 };
 
