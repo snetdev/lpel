@@ -2,7 +2,7 @@
 #define _FLAGTREE_H_
 
 /* number of nodes for a given height h: 2^(h+1)-1*/
-#define NODES(h)  (1<<((h)+1) - 1)
+#define NODES(h)  ( (1<<((h)+1)) - 1 )
 
 /* number of leafs for a given height h: 2^h */
 #define LEAFS(h)  (1<<(h))
@@ -39,6 +39,11 @@
 #define RIGHT(i)  ( 2*((i)+1) )
 
 
+
+/**
+ * This function has to be defined by the including module
+ */
+
 typedef struct {
   int height;
   int *buf;
@@ -61,5 +66,54 @@ static inline void FlagtreeMark(flagtree_t *heap, int idx)
 }
 
 
+/**
+ * Gather marked leafs iteratively,
+ * clearing the marks in preorder
+ */
+static inline void FlagtreeGather(flagtree_t *heap, void (*gather)(int) )
+{
+  int prev, cur, next;
+  /* start from root */
+  prev = cur = 0;
+  do {
+    /* for stepwise debugging: */
+#ifndef NDEBUG
+    /* FlagtreePrint(heap); */
+#endif
+    if (prev == PARENT(cur)) {
+      /* clear cur */
+      heap->buf[cur] = 0;
+      if ( cur < LEAF_START_IDX(heap->height) ) {
+        if ( heap->buf[LEFT(cur)] != 0 ) { next = LEFT(cur); }
+        else if ( heap->buf[RIGHT(cur)] != 0 ) { next = RIGHT(cur); }
+        else { next = PARENT(cur); }
+      } else {
+        /* gather leaf of idx */
+        gather( IDX_TO_LEAF(heap->height, cur) );
+        next = PARENT(cur);
+      }
+
+    } else if (prev == LEFT(cur)) {
+      if ( heap->buf[RIGHT(cur)] != 0 ) { next = RIGHT(cur); }
+      else { next = PARENT(cur); }
+
+    } else if (prev == RIGHT(cur)) {
+      next = PARENT(cur);
+    }
+    prev = cur;
+    cur = next;;
+  } while (cur != prev);
+}
+
+
+
+extern void FlagtreeAlloc(flagtree_t *heap, int height);
+extern void FlagtreeFree(flagtree_t *heap);
+extern void FlagtreeGrow(flagtree_t *heap);
+extern void FlagtreeGatherRec(flagtree_t *heap, void (*gather)(int) );
+
+#ifndef NDEBUG
+extern void FlagtreePrint(flagtree_t *heap);
+#endif
 
 #endif /* _FLAGTREE_H_ */

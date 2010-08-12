@@ -16,6 +16,12 @@ streamtable:
 	gcc -o check_streamtable check_streamtable.o streamtable.o $(LDFLAGS)
 	./check_streamtable
 
+flagtree:
+	gcc -c -g check_flagtree.c
+	gcc -c -g ../flagtree.c
+	gcc -o check_flagtree check_flagtree.o flagtree.o $(LDFLAGS)
+	./check_flagtree
+
 timing:
 	gcc -c check_timing.c
 	gcc -o check_timing check_timing.o $(LDFLAGS) -lrt

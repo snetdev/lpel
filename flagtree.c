@@ -1,12 +1,15 @@
 
 #include <stdlib.h>
+
+#ifndef NDEBUG
 #include <stdio.h>
+#include <string.h>
+#endif
 
 #include "flagtree.h"
 
 
-#define GATHER_LEAF(i)  /*TODO*/
-
+static void (*callback_gather)(int);
 
 /**
  * Allocate the heap for a given height
@@ -18,11 +21,20 @@ void FlagtreeAlloc(flagtree_t *heap, int height)
 }
 
 /**
+ * Free the heap
+ */
+void FlagtreeFree(flagtree_t *heap)
+{
+  heap->height = -1;
+  free(heap->buf);
+}
+
+/**
  * Grow the heap by one level
  */
 void FlagtreeGrow(flagtree_t *heap)
 {
-  int *old_heap, *new_heap;
+  int *old_buf, *new_buf;
   int old_height;
   int i;
 
@@ -31,11 +43,11 @@ void FlagtreeGrow(flagtree_t *heap)
   old_buf = heap->buf;
 
   /* allocate space */
-  new_heap = (int *) calloc( NODES(old_height+1), sizeof(int) );
+  new_buf = (int *) calloc( NODES(old_height+1), sizeof(int) );
 
   //LOCK
   heap->height += 1;
-  heap->buf = new_heap;
+  heap->buf = new_buf;
   
   /* set the appropriate flags */
   for (i=0; i<LEAFS(old_height); i++) {
@@ -70,37 +82,51 @@ static void Visit(flagtree_t *heap, int idx)
     }
   } else {
     /* gather leaf of idx */
-    GATHER_LEAF( IDX_TO_LEAF(heap->height, idx) );
+    callback_gather( IDX_TO_LEAF(heap->height, idx) );
   }
 }
 
 /**
- * TODO make gathering iterative
+ * Gather marked leafs recursively,
+ * clearing the marks in preorder
  */
-void FlagtreeGather(flagtree_t *heap)
+void FlagtreeGatherRec(flagtree_t *heap, void (*gather)(int) )
 {
+  callback_gather = gather;
   /* start from root */
   Visit(heap, 0);
-}
+};
 
 
+#ifndef NDEBUG
+/**
+ * Print a flagtree to stderr
+ */
 void FlagtreePrint(flagtree_t *heap)
 {
   int lvl, i, j;
-  char *pad;
+  int maxpad = (1<<(heap->height+1))-2;
+  int curpad;
+  char pad[maxpad+1];
 
+  memset(pad, (int)' ', maxpad);
+  curpad = maxpad;
   i=0;
   for (lvl=0; lvl<=heap->height; lvl++) {
+    pad[ curpad ] = '\0';
     for (j=0; j<NODES_AT_LEVEL(lvl); j++) {
-      printf(pad);
+      fprintf(stderr,"%s", pad);
       if (heap->buf[i] != 0) {
-        printf("(%2d)",i);
+        fprintf(stderr,"(%2d)",i);
       } else {
-        printf(" %2d ",i);
+        fprintf(stderr," %2d ",i);
       }
-      printf(pad);
+      fprintf(stderr,"%s",pad);
       i++;
     }
-    printf("\n");
+    curpad = curpad - (1<<(heap->height-lvl));
+    fprintf(stderr,"\n\n");
   }
 }
+
+#endif
