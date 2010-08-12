@@ -57,12 +57,14 @@ typedef struct {
  */
 static inline void FlagtreeMark(flagtree_t *ft, int idx)
 {
+  //LOCK READ
   int j = FT_LEAF_TO_IDX(ft->height, idx);
   ft->buf[j] = 1;
   while (j != 0) {
     j = FT_PARENT(j);
     ft->buf[j] = 1;
   }
+  //UNLOCK READ
 }
 
 #if 0

@@ -56,6 +56,7 @@ void FlagtreeGrow(flagtree_t *ft)
   //LOCK WRITE
   ft->height += 1;
   ft->buf = new_buf;
+  //UNLOCK WRITE
   
   /* set the appropriate flags */
   for (i=0; i<FT_LEAFS(old_height); i++) {
@@ -65,7 +66,6 @@ void FlagtreeGrow(flagtree_t *ft)
       FlagtreeMark( ft, i );
     }
   }
-  //UNLOCK WRITE
 
   /* free the old ft space */
   free(old_buf);
