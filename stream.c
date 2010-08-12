@@ -86,7 +86,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
     spinlock_lock(s->lock_prod);
       assert( s->producer == NULL );
       s->producer = ct;
-
+      
       /* add to tasks list of opened streams for writing (only for accounting)*/
       s->cntwrite = StreamtablePut(&ct->streamtab, s, mode);
     spinlock_unlock(s->lock_prod);
@@ -97,7 +97,8 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
       assert( s->consumer == NULL );
       s->consumer = ct;
 
-      /*TODO if consumer task is a collector, register flagtree */
+      /*TODO if consumer task is a collector, register flagtree,
+        set the flag if stream not empty? */
 
       /* add to tasks list of opened streams for reading (only for accounting)*/
       s->cntread = StreamtablePut(&ct->streamtab, s, mode);
