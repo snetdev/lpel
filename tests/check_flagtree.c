@@ -23,7 +23,7 @@ static void testAlloc(void)
   header("Allocate"); 
   for (i=0; i<=4; i++) {
     FlagtreeAlloc(&H, i);
-    fprintf(stderr,"height %d nodes %d\n", H.height, NODES(H.height));
+    fprintf(stderr,"height %d nodes %d\n", H.height, FT_NODES(H.height));
     FlagtreePrint(&H);
     FlagtreeFree(&H);
   }
@@ -40,7 +40,7 @@ static void testMark(void)
   FlagtreeAlloc(&H, 3);
   for (i=0; i<num_marks; i++) {
     leaf=marks[i];
-    fprintf(stderr,"marking leaf %d (=idx %d)\n", leaf, LEAF_TO_IDX(H.height,leaf));
+    fprintf(stderr,"marking leaf %d (=idx %d)\n", leaf, FT_LEAF_TO_IDX(H.height,leaf));
     FlagtreeMark(&H, leaf);
     FlagtreePrint(&H);
   }

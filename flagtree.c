@@ -1,6 +1,14 @@
+/**
+ * Implements a flag signalling tree for Collector tasks
+ *
+ * Assumption: FlagtreeGrow and FlagtreeGather are never
+ *             called concurrently on the same flagtree!
+ */
+
 
 #include <stdlib.h>
 
+/* FlagtreePrint will only be included if NDEBUG is not set */
 #ifndef NDEBUG
 #include <stdio.h>
 #include <string.h>
@@ -12,77 +20,77 @@
 static void (*callback_gather)(int);
 
 /**
- * Allocate the heap for a given height
+ * Allocate the ft for a given height
  */
-void FlagtreeAlloc(flagtree_t *heap, int height)
+void FlagtreeAlloc(flagtree_t *ft, int height)
 {
-  heap->height = height;
-  heap->buf = (int *) calloc( NODES(height), sizeof(int) );
+  ft->height = height;
+  ft->buf = (int *) calloc( FT_NODES(height), sizeof(int) );
 }
 
 /**
- * Free the heap
+ * Free the ft
  */
-void FlagtreeFree(flagtree_t *heap)
+void FlagtreeFree(flagtree_t *ft)
 {
-  heap->height = -1;
-  free(heap->buf);
+  ft->height = -1;
+  free(ft->buf);
 }
 
 /**
- * Grow the heap by one level
+ * Grow the ft by one level
  */
-void FlagtreeGrow(flagtree_t *heap)
+void FlagtreeGrow(flagtree_t *ft)
 {
   int *old_buf, *new_buf;
   int old_height;
   int i;
 
   /* store the old values */
-  old_height = heap->height;
-  old_buf = heap->buf;
+  old_height = ft->height;
+  old_buf = ft->buf;
 
   /* allocate space */
-  new_buf = (int *) calloc( NODES(old_height+1), sizeof(int) );
+  new_buf = (int *) calloc( FT_NODES(old_height+1), sizeof(int) );
 
-  //LOCK
-  heap->height += 1;
-  heap->buf = new_buf;
+  //LOCK WRITE
+  ft->height += 1;
+  ft->buf = new_buf;
   
   /* set the appropriate flags */
-  for (i=0; i<LEAFS(old_height); i++) {
-    /* test each leaf in the old heap */
-    if ( old_buf[LEAF_TO_IDX(old_height, i)] == 1 ) {
-      /* mark this leaf in the new heap as well */
-      FlagtreeMark( heap, i );
+  for (i=0; i<FT_LEAFS(old_height); i++) {
+    /* test each leaf in the old ft */
+    if ( old_buf[FT_LEAF_TO_IDX(old_height, i)] == 1 ) {
+      /* mark this leaf in the new ft as well */
+      FlagtreeMark( ft, i );
     }
   }
-  //UNLOCK
+  //UNLOCK WRITE
 
-  /* free the old heap space */
+  /* free the old ft space */
   free(old_buf);
 }
 
 /**
  * @pre idx is marked
  */
-static void Visit(flagtree_t *heap, int idx)
+static void Visit(flagtree_t *ft, int idx)
 {
   /* preorder: clear current node */
-  heap->buf[idx] = 0;
-  if ( idx < LEAF_START_IDX(heap->height) ) {
+  ft->buf[idx] = 0;
+  if ( idx < FT_LEAF_START_IDX(ft->height) ) {
     /* if inner node, descend: */
     /* left child */
-    if (heap->buf[LEFT(idx)] != 0) {
-      Visit(heap, LEFT(idx));
+    if (ft->buf[FT_LEFT_CHILD(idx)] != 0) {
+      Visit(ft, FT_LEFT_CHILD(idx));
     }
     /* right child */
-    if (heap->buf[RIGHT(idx)] != 0) {
-      Visit(heap, RIGHT(idx));
+    if (ft->buf[FT_RIGHT_CHILD(idx)] != 0) {
+      Visit(ft, FT_RIGHT_CHILD(idx));
     }
   } else {
     /* gather leaf of idx */
-    callback_gather( IDX_TO_LEAF(heap->height, idx) );
+    callback_gather( FT_IDX_TO_LEAF(ft->height, idx) );
   }
 }
 
@@ -90,11 +98,12 @@ static void Visit(flagtree_t *heap, int idx)
  * Gather marked leafs recursively,
  * clearing the marks in preorder
  */
-void FlagtreeGatherRec(flagtree_t *heap, void (*gather)(int) )
+void FlagtreeGatherRec(flagtree_t *ft, void (*gather)(int) )
 {
+  /* no locking necessary, as only the gatherer will grow the tree */
   callback_gather = gather;
   /* start from root */
-  Visit(heap, 0);
+  Visit(ft, 0);
 };
 
 
@@ -102,21 +111,21 @@ void FlagtreeGatherRec(flagtree_t *heap, void (*gather)(int) )
 /**
  * Print a flagtree to stderr
  */
-void FlagtreePrint(flagtree_t *heap)
+void FlagtreePrint(flagtree_t *ft)
 {
   int lvl, i, j;
-  int maxpad = (1<<(heap->height+1))-2;
+  int maxpad = (1<<(ft->height+1))-2;
   int curpad;
   char pad[maxpad+1];
 
   memset(pad, (int)' ', maxpad);
   curpad = maxpad;
   i=0;
-  for (lvl=0; lvl<=heap->height; lvl++) {
+  for (lvl=0; lvl<=ft->height; lvl++) {
     pad[ curpad ] = '\0';
-    for (j=0; j<NODES_AT_LEVEL(lvl); j++) {
+    for (j=0; j<FT_NODES_AT_LEVEL(lvl); j++) {
       fprintf(stderr,"%s", pad);
-      if (heap->buf[i] != 0) {
+      if (ft->buf[i] != 0) {
         fprintf(stderr,"(%2d)",i);
       } else {
         fprintf(stderr," %2d ",i);
@@ -124,7 +133,7 @@ void FlagtreePrint(flagtree_t *heap)
       fprintf(stderr,"%s",pad);
       i++;
     }
-    curpad = curpad - (1<<(heap->height-lvl));
+    curpad = curpad - (1<<(ft->height-lvl));
     fprintf(stderr,"\n\n");
   }
 }

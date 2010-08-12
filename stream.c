@@ -1,5 +1,5 @@
 /*
- * This file is based on the implementation of FastFlow
+ * This file was based on the implementation of FastFlow.
  */
 
 
@@ -97,6 +97,8 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
       assert( s->consumer == NULL );
       s->consumer = ct;
 
+      /*TODO if consumer task is a collector, register flagtree */
+
       /* add to tasks list of opened streams for reading (only for accounting)*/
       s->cntread = StreamtablePut(&ct->streamtab, s, mode);
     spinlock_unlock(s->lock_cons);
@@ -128,6 +130,7 @@ void StreamClose(task_t *ct, stream_t *s)
   break;
   case 'r':
   spinlock_lock(s->lock_cons);
+    /*TODO if consumer was collector, unregister flagtree */
     s->consumer = NULL;
   spinlock_unlock(s->lock_cons);
   break;
@@ -142,14 +145,17 @@ void StreamClose(task_t *ct, stream_t *s)
 /**
  * Non-blocking read from a stream
  *
- * @return    NULL if stream is empty
  * @param ct  pointer to current task
+ * @pre       current task is single reader
  * @param s   stream to read from
+ * @return    NULL if stream is empty
  */
 void *StreamPeek(task_t *ct, stream_t *s)
 { 
   /* check if opened for reading */
   assert( s->consumer == ct );
+
+  /*TODO put stream in 'interesting' set for monitoring */
 
   /* if the buffer is empty, buf[pread]==NULL */
   return s->buf[s->pread];  
@@ -164,6 +170,7 @@ void *StreamPeek(task_t *ct, stream_t *s)
  *
  * @param ct  pointer to current task
  * @param s   stream to read from
+ * @pre       current task is single reader
  */
 void *StreamRead(task_t *ct, stream_t *s)
 {
@@ -183,6 +190,7 @@ void *StreamRead(task_t *ct, stream_t *s)
   s->pread += (s->pread+1 >= STREAM_BUFFER_SIZE) ?
               (1-STREAM_BUFFER_SIZE) : 1;
   *s->cntread += 1;
+  /*TODO put stream in 'interesting' set for monitoring */
   
   /* signal the producer a read event */
   spinlock_lock(s->lock_prod);
@@ -201,11 +209,14 @@ void *StreamRead(task_t *ct, stream_t *s)
  *
  * @param ct  pointer to current task
  * @param s   stream opened for writing
+ * @pre       current task is single writer
  */
 bool StreamIsSpace(task_t *ct, stream_t *s)
 {
   /* check if opened for writing */
   assert( ct == NULL ||  s->producer == ct );
+
+  /*TODO put stream in 'interesting' set for monitoring */
 
   /* if there is space in the buffer, the location at pwrite holds NULL */
   return ( s->buf[s->pwrite] == NULL );
@@ -220,9 +231,10 @@ bool StreamIsSpace(task_t *ct, stream_t *s)
  * Implementation note:
  * - modifies only pwrite pointer (not pread)
  *
- * @param ct  pointer to current task
- * @param s   stream to write to
+ * @param ct    pointer to current task
+ * @param s     stream to write to
  * @param item  data item (a pointer) to write
+ * @pre         current task is single writer
  */
 void StreamWrite(task_t *ct, stream_t *s, void *item)
 {
@@ -249,9 +261,11 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   s->pwrite += (s->pwrite+1 >= STREAM_BUFFER_SIZE) ?
                (1-STREAM_BUFFER_SIZE) : 1;
   *s->cntwrite += 1;
-  
+  /*TODO put stream in 'interesting' set for monitoring */
+
   /* signal the consumer a write event */
   spinlock_lock(s->lock_cons);
+  /* TODO if flagtree registered, use flagtree mark */
   if (s->consumer != NULL) { s->consumer->ev_write = 1; }
   spinlock_unlock(s->lock_cons);
 
