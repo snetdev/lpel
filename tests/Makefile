@@ -10,6 +10,12 @@ set:
 	gcc -o check_set check_set.o set.o $(LDFLAGS)
 	./check_set
 
+streamset:
+	gcc -c -g check_streamset.c
+	gcc -c -g ../streamset.c
+	gcc -o check_streamset check_streamset.o streamset.o $(LDFLAGS)
+	./check_streamset
+
 streamtable:
 	gcc -c -g check_streamtable.c
 	gcc -c -g ../streamtable.c

@@ -137,7 +137,7 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
 {
   struct streamgrp *grp;
   streamtbe_t *ste;
-
+  int ret_idx;
 
   /* first try to obtain an obsolete entry */
   if (set->cnt_obsolete > 0) {
@@ -149,6 +149,7 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
       for (j=0; j<STREAMSET_GRP_SIZE; j++) {
         if (grp->tab[j].state == OBSOLETE) {
           ste = &grp->tab[j];
+          ret_idx = i;
           goto found_obsolete;
         }
       }
@@ -200,11 +201,12 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
     } else {
       grp = set->lookup[set->idx_grp];
     }
+    ret_idx = set->idx_grp;
   }
   /* grp points to the right group */
 
   /* set out parameter grp_idx */
-  *grp_idx = set->idx_grp;
+  *grp_idx = ret_idx;
   
   /* get a ptr to the table entry */
   ste = &grp->tab[set->idx_tab];
@@ -284,20 +286,20 @@ void StreamsetPrint(streamset_t *set, FILE *file)
 {
   streamtbe_t *tbe, *next;
 
-  /* Iterate through dirty list^ */
+  /* Iterate through dirty list */
   tbe = set->dirty_list;
   
   if (file!=NULL) {
-    /* fprintf( file,"--TAB--\n" ); */
-    fprintf( file,"[" );
+    fprintf( file,"--TAB--\n" );
+    /* fprintf( file,"[" ); */
   }
 
   while (tbe != DIRTY_END) {
     /* print tbe */
     if (file!=NULL) {
       fprintf( file,
-          /* "%p %d %lu\n", */
-          "%p,%d,%lu;",
+          "%p %d %lu\n",
+          /* "%p,%d,%lu;", */
           tbe->s, tbe->state, tbe->cnt
           );
     }
@@ -313,8 +315,8 @@ void StreamsetPrint(streamset_t *set, FILE *file)
     tbe = next;
   }
   if (file!=NULL) {
-    /* fprintf( file,"-------\n" ); */
-    fprintf( file,"]" );
+    fprintf( file,"-------\n" );
+    /* fprintf( file,"]" ); */
   }
   /* dirty_list is now empty again */
   set->dirty_list = DIRTY_END;
