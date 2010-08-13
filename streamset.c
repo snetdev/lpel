@@ -25,8 +25,11 @@ typedef struct streamtbe streamtbe_t;
 
 
 typedef enum {
-  OPEN=0, CLOSED=1, OBSOLETE=2
+  OPEN=0, CLOSED=1, REPLACED=2, OBSOLETE=3
 } streamtbe_state_t;
+
+
+#define DIRTY_EMPTY   ((streamtbe_t *)-1)
 
 /**
  * each stream has a stream table entry
@@ -36,13 +39,14 @@ struct streamtbe {
   stream_t *s;
   streamtbe_state_t state;
   unsigned long cnt;
+  streamtbe_t *dirty;  /* for chaining 'dirty' entries */
 };
 
 struct streamgrp {
   int grp_idx;
   struct streamgrp *next;
   struct streamgrp *it_next;  /* for the iterator */
-  struct streamtbe tab[STREAMSET_GRP_SIZE];
+  streamtbe_t tab[STREAMSET_GRP_SIZE];
 };
 
 
@@ -53,7 +57,26 @@ struct streamset {
   int idx_tab; /* current index of the tab within
                   the grp for next free entry */
   int cnt_obsolete; /* number of obsolete stream table entries */
+  streamtbe_t *dirty_list; /* start of 'dirty' list */
 };
+
+
+
+
+/**
+ * Mark a table entry as dirty
+ */
+static inline void MarkDirty(streamset_t *set, streamtbe_t *tbe)
+{
+  /* only add if not dirty yet */
+  if (tbe->dirty == NULL) {
+    /* set the dirty ptr of tbe to the dirty_list ptr of the set */
+    /* initially, dirty_list of the set is empty DIRTY_EMPTY (!= NULL) */
+    tbe->dirty = set->dirty_list;
+    set->dirty_list = tbe;
+  }
+}
+
 
 
 
@@ -82,6 +105,8 @@ streamset_t *StreamsetCreate(int init_cap2)
   set->idx_tab = 0;
   /* there is no obsolete entry initially */
   set->cnt_obsolete = 0;
+  /* 'dirty' list is empty */
+  set->dirty_list = DIRTY_EMPTY;
 }
 
 
@@ -106,6 +131,9 @@ void StreamsetDestroy(streamset_t *set)
   /* free the set itself */
   free(set);
 }
+
+
+
 
 
 /**
@@ -185,6 +213,9 @@ streamtbe_t *StreamsetAdd(streamset_t *set, stream_t *s, int *grp_idx)
   ste->state = OPEN;
   ste->cnt = 0;
 
+  /* mark the entry as dirty */
+  MarkDirty(set, ste);
+
   /* increment the next-free position */
   set->idx_tab++;
   if (set->idx_tab == STREAMSET_GRP_SIZE) {
@@ -198,91 +229,54 @@ streamtbe_t *StreamsetAdd(streamset_t *set, stream_t *s, int *grp_idx)
 }
 
 
-
-
 /**
- * Marks a stream as closed in the streamtable
- *
- * The entry containing the stream is searched linearly, starting 
- * with entries added earlier in time.
- * In O(n).
- *
- * @pre    s is contained in the table
- * @return the mode in which s was opened
+ * Signal a state change for the stream
  */
-char StreamtableMark(streamtable_t *tab, stream_t *s)
+void StreamsetEvent(streamset_t *set, streamtbe_t *tbe)
 {
-  /* cursor points initially to first element */
-  struct streamtbe *cur = (*tab)->next;
+  assert( tbe->state == OPEN || tbe->state == REPLACED );
 
-  while (cur->s != s) {
-    assert( cur != *tab ); /* not contained! */
-    cur = cur->next;
-  }
-
-  /* now cur points to the entry containing s */
-  cur->closed = 1;
-  return cur->mode;
+  tbe->cnt++;
+  MarkDirty(set, tbe);
 }
 
-/**
- * Clean the table, i.e., remove all entries containing streams
- * marked as closed.
- *
- * In O(n).
- */
-unsigned int StreamtableClean(streamtable_t *tab)
+
+void StreamsetRemove(streamset_t *set, streamtbe_t *tbe)
 {
-  struct streamtbe *prev, *cur;
-  unsigned int cnt;
-  
-  /* if the table is empty, there is nothing to do */
-  if (*tab == NULL) return 0;
+  assert( tbe->state == OPEN || tbe->state == REPLACED );
 
-  cnt = 0;
+  tbe->state = CLOSED;
+  MarkDirty(set, tbe);
+}
 
-  prev = *tab;
-  do {
-    cur = prev->next;
 
-    /* hande case if there is only a single element */
-    if (prev == cur) {
-      if (cur->closed != 0) {
-        cnt++;
-        free(cur);
-        *tab = NULL;
-        break;
-      }
-    } else {
+void StreamsetReplace(streamset_t *set, streamtbe_t *tbe, stream_t *s)
+{
+  assert( tbe->state == OPEN || tbe->state == REPLACED );
 
-      if (cur->closed != 0) {
-        /* if the last element is to be deleted, correct *tab */
-        if (*tab == cur) *tab = prev;
-        /* remove cur */
-        prev->next = cur->next;
-        cnt++;
-        free(cur); /* cur becomes invalid */
-        cur = NULL;
-      } else {
-        /* advance prev  */
-        prev = cur;
-      }
+  tbe->s = s;
+  tbe->cnt = 0;
+  tbe->state = REPLACED;
+  MarkDirty(set, tbe);
+}
+
+
+void StreamsetPrint(streamset_t *set, FILE *file)
+{
+  int i;
+  streamtbe_t *tbe;
+
+  /* TODO go through dirty chain, do not forget to clear dirty ptrs,
+    restore set->dirty_list = DIRTY_EMPTY */
+  /*
+    while (tbe != NULL) {
+        print tbe
+        if (tbe->state == REPLACED) tbe->state = OPEN;
+        if (tbe->state == CLOSED)   tbe->state = OBSOLETE;
     }
-    /* we must check on cur here as well: in case the first element was
-       removed, prev == *tab still */
-  } while ( prev != (*tab) || cur == NULL);
-
-  return cnt;
+  */
 }
 
-
-/**
- * 
- */
-bool StreamtableEmpty(streamtable_t *tab)
-{
-  return (*tab == NULL);
-}
 
 /**
  * Prints the streamtable to a file
