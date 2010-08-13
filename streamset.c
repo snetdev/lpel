@@ -1,27 +1,12 @@
 /**
- * Implements a streamtable as circular single linked list.
  *
- * Each task_t has a single streamtable where its streams opened
- * for reading and writing are maintained.
  */
 
 #include <stdlib.h>
 #include <assert.h>
 
-//#include "streamset.h"
+#include "streamset.h"
 
-#define STREAMSET_GRP_SIZE  4
-
-
-typedef struct streamset streamset_t;
-
-
-/* for convenience */
-struct stream;
-typedef struct stream stream_t;
-
-
-typedef struct streamtbe streamtbe_t;
 
 
 typedef enum {
@@ -29,22 +14,20 @@ typedef enum {
 } streamtbe_state_t;
 
 
-#define DIRTY_EMPTY   ((streamtbe_t *)-1)
+#define DIRTY_END   ((streamtbe_t *)-1)
 
 /**
  * each stream has a stream table entry
  * - a pointer to this should be placed in a (hash)set for "dirty" streams
  */
 struct streamtbe {
-  stream_t *s;
+  struct stream *s;
   streamtbe_state_t state;
   unsigned long cnt;
   streamtbe_t *dirty;  /* for chaining 'dirty' entries */
 };
 
 struct streamgrp {
-  int grp_idx;
-  struct streamgrp *next;
   struct streamgrp *it_next;  /* for the iterator */
   streamtbe_t tab[STREAMSET_GRP_SIZE];
 };
@@ -52,7 +35,7 @@ struct streamgrp {
 
 struct streamset {
   int grp_capacity;
-  struct streamgrp *lookup[]; /* array of pointers to the grps */
+  struct streamgrp **lookup; /* array of pointers to the grps */
   int idx_grp; /* current grp for next free entry */
   int idx_tab; /* current index of the tab within
                   the grp for next free entry */
@@ -70,8 +53,12 @@ static inline void MarkDirty(streamset_t *set, streamtbe_t *tbe)
 {
   /* only add if not dirty yet */
   if (tbe->dirty == NULL) {
-    /* set the dirty ptr of tbe to the dirty_list ptr of the set */
-    /* initially, dirty_list of the set is empty DIRTY_EMPTY (!= NULL) */
+    /*
+     * Set the dirty ptr of tbe to the dirty_list ptr of the set
+     * and the dirty_list ptr of the set to tbe, i.e.,
+     * append the tbe at the front of the dirty_list.
+     * Initially, dirty_list of the set is empty DIRTY_END (!= NULL)
+     */
     tbe->dirty = set->dirty_list;
     set->dirty_list = tbe;
   }
@@ -92,9 +79,8 @@ static inline void MarkDirty(streamset_t *set, streamtbe_t *tbe)
 streamset_t *StreamsetCreate(int init_cap2)
 {
   streamset_t *set;
-  struct streamgrp *first;
 
-  set = (streamset_t *) malloc( sizeof(streamset) );
+  set = (streamset_t *) malloc( sizeof(streamset_t) );
   set->grp_capacity = (1<<init_cap2);
   /* allocate lookup table, initialized to NULL values */
   set->lookup = (struct streamgrp **) calloc(
@@ -106,7 +92,9 @@ streamset_t *StreamsetCreate(int init_cap2)
   /* there is no obsolete entry initially */
   set->cnt_obsolete = 0;
   /* 'dirty' list is empty */
-  set->dirty_list = DIRTY_EMPTY;
+  set->dirty_list = DIRTY_END;
+
+  return set;
 }
 
 
@@ -145,7 +133,7 @@ void StreamsetDestroy(streamset_t *set)
  *                group index will be written to the given location
  * @return        pointer to the stream table entry
  */
-streamtbe_t *StreamsetAdd(streamset_t *set, stream_t *s, int *grp_idx)
+streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
 {
   struct streamgrp *grp;
   streamtbe_t *ste;
@@ -153,9 +141,23 @@ streamtbe_t *StreamsetAdd(streamset_t *set, stream_t *s, int *grp_idx)
 
   /* first try to obtain an obsolete entry */
   if (set->cnt_obsolete > 0) {
+    int i,j;
+    ste = NULL;
     /* iterate through all table entries from the beginning */
+    for(i=0; i<=set->idx_grp; i++) {
+      grp = set->lookup[i];
+      for (j=0; j<STREAMSET_GRP_SIZE; j++) {
+        if (grp->tab[j].state == OBSOLETE) {
+          ste = &grp->tab[j];
+          goto found_obsolete;
+        }
+      }
+    }
+    found_obsolete:
     /* one will be found eventually (lower position than idx_grp/idx_tab) */
-    //TODO
+    assert(ste != NULL);
+    set->cnt_obsolete--;
+  
   } else {
     /*
      * No obsolete entry could be reused. Get a new entry.
@@ -192,8 +194,6 @@ streamtbe_t *StreamsetAdd(streamset_t *set, stream_t *s, int *grp_idx)
       assert( set->idx_tab == 0 );
 
       grp  = (struct streamgrp *) malloc( sizeof(struct streamgrp) );
-      grp->grp_idx = set->idx_grp;
-      grp->next = NULL;
       grp->it_next = NULL;
       /* put in lookup table */
       set->lookup[set->idx_grp] = grp;
@@ -204,7 +204,7 @@ streamtbe_t *StreamsetAdd(streamset_t *set, stream_t *s, int *grp_idx)
   /* grp points to the right group */
 
   /* set out parameter grp_idx */
-  *grp_idx = grp->grp_idx;
+  *grp_idx = set->idx_grp;
   
   /* get a ptr to the table entry */
   ste = &grp->tab[set->idx_tab];
@@ -231,6 +231,8 @@ streamtbe_t *StreamsetAdd(streamset_t *set, stream_t *s, int *grp_idx)
 
 /**
  * Signal a state change for the stream
+ *
+ * Increments the counter of teh table entry and marks it dirty
  */
 void StreamsetEvent(streamset_t *set, streamtbe_t *tbe)
 {
@@ -241,6 +243,12 @@ void StreamsetEvent(streamset_t *set, streamtbe_t *tbe)
 }
 
 
+/**
+ * Remove a table entry
+ *
+ * It remains in the set as closed and marked dirty,
+ * until the next call to StreamsetPrint
+ */
 void StreamsetRemove(streamset_t *set, streamtbe_t *tbe)
 {
   assert( tbe->state == OPEN || tbe->state == REPLACED );
@@ -249,8 +257,12 @@ void StreamsetRemove(streamset_t *set, streamtbe_t *tbe)
   MarkDirty(set, tbe);
 }
 
-
-void StreamsetReplace(streamset_t *set, streamtbe_t *tbe, stream_t *s)
+/**
+ * Replace a stream in the stream table entry
+ *
+ * Resets counter, marks it as replaced and dirty
+ */
+void StreamsetReplace(streamset_t *set, streamtbe_t *tbe, struct stream *s)
 {
   assert( tbe->state == OPEN || tbe->state == REPLACED );
 
@@ -260,50 +272,51 @@ void StreamsetReplace(streamset_t *set, streamtbe_t *tbe, stream_t *s)
   MarkDirty(set, tbe);
 }
 
-
+/**
+ * Prints information about the dirty table entries
+ *
+ * @param set   the set for which the information is to be printed
+ * @param file  the file where to print the information to, or NULL
+ *              if only the dirty list should be cleared
+ * @pre         if file != NULL, it must be open for writing
+ */
 void StreamsetPrint(streamset_t *set, FILE *file)
 {
-  int i;
-  streamtbe_t *tbe;
+  streamtbe_t *tbe, *next;
 
-  /* TODO go through dirty chain, do not forget to clear dirty ptrs,
-    restore set->dirty_list = DIRTY_EMPTY */
-  /*
-    while (tbe != NULL) {
-        print tbe
-        if (tbe->state == REPLACED) tbe->state = OPEN;
-        if (tbe->state == CLOSED)   tbe->state = OBSOLETE;
-    }
-  */
-}
-
-
-/**
- * Prints the streamtable to a file
- *
- * Precond: file is opened for writing
- */
-void StreamtablePrint(streamtable_t *tab, FILE *file)
-{
-  struct streamtbe *cur;
-
-  /* fprintf( file,"--TAB--\n" ); */
-  fprintf( file,"[" );
-
-  if (*tab != NULL) {
-    cur = (*tab)->next;
-    do {
-    
-      fprintf( file,
-        /* "%p %c %d %lu\n", */
-        "%p,%c,%d,%lu;",
-        cur->s, cur->mode, cur->closed, cur->cnt
-        );
-      cur = cur->next;
-    } while (cur != (*tab)->next);
+  /* Iterate through dirty list^ */
+  tbe = set->dirty_list;
+  
+  if (file!=NULL) {
+    /* fprintf( file,"--TAB--\n" ); */
+    fprintf( file,"[" );
   }
 
-  /* fprintf( file,"-------\n" ); */
-  fprintf( file,"]" );
-
+  while (tbe != DIRTY_END) {
+    /* print tbe */
+    if (file!=NULL) {
+      fprintf( file,
+          /* "%p %d %lu\n", */
+          "%p,%d,%lu;",
+          tbe->s, tbe->state, tbe->cnt
+          );
+    }
+    /* update states */
+    if (tbe->state == REPLACED) { tbe->state = OPEN; }
+    if (tbe->state == CLOSED) {
+      tbe->state = OBSOLETE;
+      set->cnt_obsolete++;
+    }
+    /* get the next dirty entry, and clear the link in the current entry */
+    next = tbe->dirty;
+    tbe->dirty = NULL;
+    tbe = next;
+  }
+  if (file!=NULL) {
+    /* fprintf( file,"-------\n" ); */
+    fprintf( file,"]" );
+  }
+  /* dirty_list is now empty again */
+  set->dirty_list = DIRTY_END;
 }
+
