@@ -347,13 +347,19 @@ void StreamsetDebug(streamset_t *set)
     set->dirty_list
     );
 
-
   fprintf(stderr,"\nLookup:\n");
   for (i=0; i<set->grp_capacity; i++) {
     fprintf(stderr,"[%d] %p\n",i, set->lookup[i]);
   }
+  
+  fprintf(stderr,"\nDirty list state:\n");
+  tbe = set->dirty_list;
+  while (tbe != DIRTY_END) {
+    fprintf(stderr, "-> [%p]", tbe);
+    tbe = tbe->dirty;
+  }
+  fprintf(stderr, "-> [%p]\n", tbe);
 
-  fprintf(stderr,"\n");
   for (i=0; i<set->grp_capacity; i++) {
     grp = set->lookup[i];
     if (grp != NULL) {
@@ -371,13 +377,6 @@ void StreamsetDebug(streamset_t *set)
     }
   }
 
-  fprintf(stderr,"\nDirty list state:\n");
-  tbe = set->dirty_list;
-  while (tbe != DIRTY_END) {
-    fprintf(stderr, "-> [%p]", tbe);
-    tbe = tbe->dirty;
-  }
-  fprintf(stderr, "-> [%p]\n", tbe);
   fprintf(stderr, "\n========================================\n");
 }
 #endif
