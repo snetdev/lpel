@@ -10,7 +10,10 @@
 
 
 typedef enum {
-  OPEN=0, CLOSED=1, REPLACED=2, OBSOLETE=3
+  OPEN='O',
+  CLOSED='C',
+  REPLACED='R',
+  OBSOLETE='X'
 } streamtbe_state_t;
 
 
@@ -201,15 +204,24 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
     } else {
       grp = set->lookup[set->idx_grp];
     }
+    /* get a ptr to the table entry */
+    ste = &grp->tab[set->idx_tab];
     ret_idx = set->idx_grp;
+
+    /* increment the next-free position */
+    set->idx_tab++;
+    if (set->idx_tab == STREAMSET_GRP_SIZE) {
+      /* wrap */
+      set->idx_tab = 0;
+      set->idx_grp++;
+    }
   }
-  /* grp points to the right group */
+  /* ste points to the right table entry */
+  /* ret_idx contains the group number of ste */
 
   /* set out parameter grp_idx */
   *grp_idx = ret_idx;
   
-  /* get a ptr to the table entry */
-  ste = &grp->tab[set->idx_tab];
   /* fill the entry */
   ste->s = s;
   ste->state = OPEN;
@@ -217,14 +229,6 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
 
   /* mark the entry as dirty */
   MarkDirty(set, ste);
-
-  /* increment the next-free position */
-  set->idx_tab++;
-  if (set->idx_tab == STREAMSET_GRP_SIZE) {
-    /* wrap */
-    set->idx_tab = 0;
-    set->idx_grp++;
-  }
 
   /* return the pointer to the table entry */
   return ste;
@@ -298,8 +302,8 @@ void StreamsetPrint(streamset_t *set, FILE *file)
     /* print tbe */
     if (file!=NULL) {
       fprintf( file,
-          "%p %d %lu\n",
-          /* "%p,%d,%lu;", */
+          "%p %c %lu\n",
+          /* "%p,%c,%lu;", */
           tbe->s, tbe->state, tbe->cnt
           );
     }
@@ -322,3 +326,58 @@ void StreamsetPrint(streamset_t *set, FILE *file)
   set->dirty_list = DIRTY_END;
 }
 
+#ifndef NDEBUG
+/**
+ * Print complete state of streamset for debugging purposes
+ */
+void StreamsetDebug(streamset_t *set)
+{
+  int i,j;
+  streamtbe_t *tbe, *next;
+  struct streamgrp *grp;
+
+  fprintf(stderr, "\n=== Streamset state (debug) ============\n");
+
+  fprintf(stderr,
+    "Group capacity %d\n"
+    "idx_grp %d, idx_tab %d\n"
+    "dirty_list %p\n",
+    set->grp_capacity,
+    set->idx_grp, set->idx_tab,
+    set->dirty_list
+    );
+
+
+  fprintf(stderr,"\nLookup:\n");
+  for (i=0; i<set->grp_capacity; i++) {
+    fprintf(stderr,"[%d] %p\n",i, set->lookup[i]);
+  }
+
+  fprintf(stderr,"\n");
+  for (i=0; i<set->grp_capacity; i++) {
+    grp = set->lookup[i];
+    if (grp != NULL) {
+      fprintf(stderr,"\nGroup [%d: %p]\n",i, set->lookup[i]);
+      for (j=0; j<STREAMSET_GRP_SIZE; j++) {
+        tbe = &grp->tab[j];
+        if (j>=set->idx_tab && i>=set->idx_grp) {
+          fprintf(stderr, "[%d: %p]\n", j, tbe);
+          continue;
+        }
+        fprintf(stderr, "[%d: %p] stream %p  state %c  cnt %lu  dirty %p\n",
+            j, tbe, tbe->s, tbe->state, tbe->cnt, tbe->dirty
+            );
+      }
+    }
+  }
+
+  fprintf(stderr,"\nDirty list state:\n");
+  tbe = set->dirty_list;
+  while (tbe != DIRTY_END) {
+    fprintf(stderr, "-> [%p]", tbe);
+    tbe = tbe->dirty;
+  }
+  fprintf(stderr, "-> [%p]\n", tbe);
+  fprintf(stderr, "\n========================================\n");
+}
+#endif

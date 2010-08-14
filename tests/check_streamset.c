@@ -20,24 +20,27 @@ static void testAdd(void)
 
   for (i=0; i<num; i++) {
     tbe[i] = StreamsetAdd( set, (stream_t *)streams[i], &idx );
-    printf("%d ", idx);
+    fprintf(stderr, "%d ", idx);
   }
-  printf("\n");
-  StreamsetPrint(set, stdout);
+  fprintf(stderr, "\n");
+  StreamsetDebug(set);
+  StreamsetPrint(set, NULL);
   
-  StreamsetPrint(set, stdout);
   
   StreamsetEvent(set, tbe[2]);
   StreamsetEvent(set, tbe[2]);
   StreamsetEvent(set, tbe[0]);
-  StreamsetPrint(set, stdout);
+  StreamsetDebug(set);
+  StreamsetPrint(set, NULL);
  
   StreamsetRemove(set, tbe[1]);
-  StreamsetPrint(set, stdout);
+  StreamsetDebug(set);
+  StreamsetPrint(set, NULL);
   
   tbe[5] = StreamsetAdd( set, (stream_t *)0x105, &idx );
-  printf("%d ", idx);
-  StreamsetPrint(set, stdout);
+  fprintf(stderr, "%d ", idx);
+  StreamsetDebug(set);
+  StreamsetPrint(set, NULL);
 
   StreamsetDestroy(set);
 }

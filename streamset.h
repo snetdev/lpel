@@ -24,5 +24,9 @@ extern void StreamsetRemove(streamset_t *set, streamtbe_t *tbe);
 extern void StreamsetReplace(streamset_t *set, streamtbe_t *tbe, struct stream *s);
 extern void StreamsetPrint(streamset_t *set, FILE *file);
 
+#ifndef NDEBUG
+extern void StreamsetDebug(streamset_t *set);
+#endif
+
 
 #endif /* _STREAMSET_H_ */
