@@ -294,16 +294,14 @@ void StreamsetPrint(streamset_t *set, FILE *file)
   tbe = set->dirty_list;
   
   if (file!=NULL) {
-    fprintf( file,"--TAB--\n" );
-    /* fprintf( file,"[" ); */
+    fprintf( file,"[" );
   }
 
   while (tbe != DIRTY_END) {
     /* print tbe */
     if (file!=NULL) {
       fprintf( file,
-          "%p %c %lu\n",
-          /* "%p,%c,%lu;", */
+          "%p,%c,%lu;",
           tbe->s, tbe->state, tbe->cnt
           );
     }
@@ -319,8 +317,7 @@ void StreamsetPrint(streamset_t *set, FILE *file)
     tbe = next;
   }
   if (file!=NULL) {
-    fprintf( file,"-------\n" );
-    /* fprintf( file,"]" ); */
+    fprintf( file,"]" );
   }
   /* dirty_list is now empty again */
   set->dirty_list = DIRTY_END;
