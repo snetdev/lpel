@@ -330,7 +330,7 @@ void StreamsetPrint(streamset_t *set, FILE *file)
 void StreamsetDebug(streamset_t *set)
 {
   int i,j;
-  streamtbe_t *tbe, *next;
+  streamtbe_t *tbe;
   struct streamgrp *grp;
 
   fprintf(stderr, "\n=== Streamset state (debug) ============\n");

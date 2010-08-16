@@ -18,25 +18,25 @@
 typedef struct {
   volatile int l;
   int padding[intxCacheline-1];
-} spinlock_t[1];
+} spinlock_t;
 
-static inline void spinlock_init(spinlock_t v)
+static inline void spinlock_init(spinlock_t *v)
 {
-  v[0].l = 0;
+  v->l = 0;
 }
 
-static inline void spinlock_lock(spinlock_t v)
+static inline void spinlock_lock(spinlock_t *v)
 {
-  while (SWAP( (int *)&v[0].l, 1) != 0) {
+  while (SWAP( (int *)&v->l, 1) != 0) {
     /* spin locally (only reads) - reduces bus traffic */
-    while (v[0].l);
+    while (v->l);
   }
 }
 
-static inline void spinlock_unlock(spinlock_t v)
+static inline void spinlock_unlock(spinlock_t *v)
 {
   WMB();
-  v[0].l = 0;
+  v->l = 0;
 }
 
 #endif /* _SPINLOCK_H_ */

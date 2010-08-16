@@ -2,6 +2,7 @@
 #define _RWLOCK_H_
 
 
+#include <malloc.h>
 #include <assert.h>
 #include "sysdep.h"
 
@@ -15,91 +16,77 @@
 
 #define intxCacheline (64/sizeof(int))
 
-#if 0
-typedef struct {
+struct rwlock_flag {
   volatile int l;
   int padding[intxCacheline-1];
-} spinlock_t[1];
-
-static inline void spinlock_init(spinlock_t v)
-{
-  v[0].l = 0;
-}
-
-static inline void spinlock_lock(spinlock_t v)
-{
-  while (SWAP( (int *)&v[0].l, 1) != 0) {
-    /* spin locally (only reads) - reduces bus traffic */
-    while (v[0].l);
-  }
-}
-
-static inline void spinlock_unlock(spinlock_t v)
-{
-  WMB();
-  v[0].l = 0;
-}
-#endif
+};
 
 typedef struct {
-  /*TODO
-  volatile int l;
-  int padding[intxCacheline-1];
-  */
-} rwlock_t[1];
+  struct rwlock_flag writer;
+  int num_readers;
+  struct rwlock_flag *readers;
+} rwlock_t;
 
-static inline void rwlock_init( rwlock_t v, int num_readers )
+static inline void rwlock_init( rwlock_t *v, int num_readers )
 {
-  //TODO
+  v->writer.l = 0;
+  v->num_readers = num_readers;
+  v->readers = (struct rwlock_flag *) calloc(num_readers, sizeof(struct rwlock_flag));
 }
 
-static inline void rwlock_reader_lock( rwlock_t v, int ridx )
+static inline void rwlock_cleanup( rwlock_t *v )
+{
+  free(v->readers);
+}
+
+static inline void rwlock_reader_lock( rwlock_t *v, int ridx )
 {
   while(1) {
     WMB();
-    while( L.writer != 0 ); /*spin*/
+    while( v->writer.l != 0 ); /*spin*/
     
     // set me as trying
-    L.readers[ridx] = 1;
+    v->readers[ridx].l = 1;
 
     WMB();
-    if (L.writer == 0) {
+    if (v->writer.l == 0) {
       // no writer: success!
       break;
     }
 
     /* backoff to let writer go through */
-    L.readers[ridx] = 0;
+    v->readers[ridx].l = 0;
   }
 }
 
-static inline void rwlock_reader_unlock( rwlock_t v, int ridx )
+static inline void rwlock_reader_unlock( rwlock_t *v, int ridx )
 {
   WMB();
-  L.readers[ridx] = 0;
+  v->readers[ridx].l = 0;
 }
 
 
-static inline void rwlock_writer_lock( rwlock_t v )
+static inline void rwlock_writer_lock( rwlock_t *v )
 {
+  int i;
   /* assume no competing writer and a sane lock/unlock usage */
-  assert( L.writer == 0 );
+  assert( v->writer.l == 0 );
 
-  L.writer = 1;
+  v->writer.l = 1;
   /*
    * now write lock is held, but we have to wait until current
    * readers have finished
    */
   WMB();
-  for (int i=0; i<N; i++) {
-    while( L.readers[i] != 0 ); /*spin*/
+  for (i=0; i<v->num_readers; i++) {
+    while( v->readers[i].l != 0 ); /*spin*/
   }
 }
 
-static inline void rwlock_writer_unlock( rwlock_t v )
+static inline void rwlock_writer_unlock( rwlock_t *v )
 {
   WMB();
-  L.writer = 0;
+  v->writer.l = 0;
 }
 
 #endif /* _RWLOCK_H_ */

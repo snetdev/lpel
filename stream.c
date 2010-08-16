@@ -41,8 +41,8 @@ stream_t *StreamCreate(void)
     /* producer/consumer not assigned */
     s->producer = NULL;
     s->consumer = NULL;
-    spinlock_init(s->lock_prod);
-    spinlock_init(s->lock_cons);
+    spinlock_init(&s->lock_prod);
+    spinlock_init(&s->lock_cons);
     /* refcnt reflects the number of tasks
        + the stream itself opened this stream {1,2,3} */
     atomic_set(&s->refcnt, 1);
@@ -83,17 +83,17 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
 
   switch(mode) {
   case 'w':
-    spinlock_lock(s->lock_prod);
+    spinlock_lock(&s->lock_prod);
       assert( s->producer == NULL );
       s->producer = ct;
       
       /* add to tasks list of opened streams for writing (only for accounting)*/
       s->cntwrite = StreamtablePut(&ct->streamtab, s, mode);
-    spinlock_unlock(s->lock_prod);
+    spinlock_unlock(&s->lock_prod);
     break;
 
   case 'r':
-    spinlock_lock(s->lock_cons);
+    spinlock_lock(&s->lock_cons);
       assert( s->consumer == NULL );
       s->consumer = ct;
 
@@ -102,7 +102,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
 
       /* add to tasks list of opened streams for reading (only for accounting)*/
       s->cntread = StreamtablePut(&ct->streamtab, s, mode);
-    spinlock_unlock(s->lock_cons);
+    spinlock_unlock(&s->lock_cons);
     break;
 
   default:
@@ -125,15 +125,15 @@ void StreamClose(task_t *ct, stream_t *s)
   mode = StreamtableMark(&ct->streamtab, s);
   switch(mode) {
   case 'w':
-  spinlock_lock(s->lock_prod);
+  spinlock_lock(&s->lock_prod);
     s->producer = NULL;
-  spinlock_unlock(s->lock_prod);
+  spinlock_unlock(&s->lock_prod);
   break;
   case 'r':
-  spinlock_lock(s->lock_cons);
+  spinlock_lock(&s->lock_cons);
     /*TODO if consumer was collector, unregister flagtree */
     s->consumer = NULL;
-  spinlock_unlock(s->lock_cons);
+  spinlock_unlock(&s->lock_cons);
   break;
   default:
     assert(0);
@@ -194,9 +194,9 @@ void *StreamRead(task_t *ct, stream_t *s)
   /*TODO put stream in 'interesting' set for monitoring */
   
   /* signal the producer a read event */
-  spinlock_lock(s->lock_prod);
+  spinlock_lock(&s->lock_prod);
   if (s->producer != NULL) { s->producer->ev_read = 1; }
-  spinlock_unlock(s->lock_prod);
+  spinlock_unlock(&s->lock_prod);
 
   return item;
 }
@@ -265,10 +265,10 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   /*TODO put stream in 'interesting' set for monitoring */
 
   /* signal the consumer a write event */
-  spinlock_lock(s->lock_cons);
+  spinlock_lock(&s->lock_cons);
   /* TODO if flagtree registered, use flagtree mark */
   if (s->consumer != NULL) { s->consumer->ev_write = 1; }
-  spinlock_unlock(s->lock_cons);
+  spinlock_unlock(&s->lock_cons);
 
   return;
 }

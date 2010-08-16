@@ -28,6 +28,11 @@ flagtree:
 	gcc -o check_flagtree check_flagtree.o flagtree.o $(LDFLAGS)
 	./check_flagtree
 
+rwlock:
+	gcc -c check_rwlock.c
+	gcc -o check_rwlock check_rwlock.o $(LDFLAGS) -lpthread
+	./check_rwlock > /dev/null
+
 timing:
 	gcc -c check_timing.c
 	gcc -o check_timing check_timing.o $(LDFLAGS) -lrt

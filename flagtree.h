@@ -125,7 +125,7 @@ static inline void FlagtreeGather(flagtree_t *ft, void (*gather)(int) )
     /*FlagtreePrint(ft);*/
 #endif
     if (prev == FT_PARENT(cur)) {
-      /* clear cur */
+      /* clear cur (preorder)*/
       ft->buf[cur] = 0;
       if ( cur >= FT_LEAF_START_IDX(ft->height) ) {
         /* gather leaf of idx */
@@ -138,24 +138,23 @@ static inline void FlagtreeGather(flagtree_t *ft, void (*gather)(int) )
       goto lab_parent;
     }
 
-    lab_left:
-      if ( ft->buf[FT_LEFT_CHILD(cur)] != 0 ) {
-        next = FT_LEFT_CHILD(cur);
-        goto lab_out;
-      }
+    if ( ft->buf[FT_LEFT_CHILD(cur)] != 0 ) {
+      next = FT_LEFT_CHILD(cur);
+      goto lab_out;
+    }
 
-    lab_right:
-      if ( ft->buf[FT_RIGHT_CHILD(cur)] != 0 ) {
-        next = FT_RIGHT_CHILD(cur);
-        goto lab_out;
-      }
+lab_right:
+    if ( ft->buf[FT_RIGHT_CHILD(cur)] != 0 ) {
+      next = FT_RIGHT_CHILD(cur);
+      goto lab_out;
+    }
 
-    lab_parent:
-      next = FT_PARENT(cur);
+lab_parent:
+    next = FT_PARENT(cur);
 
-    lab_out:
-      prev = cur;
-      cur = next;
+lab_out:
+    prev = cur;
+    cur = next;
   } while (cur != prev);
   /* cur == prev only at root */
 }
