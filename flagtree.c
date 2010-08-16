@@ -25,7 +25,7 @@ static void (*callback_gather)(int);
 void FlagtreeAlloc(flagtree_t *ft, int height)
 {
   ft->height = height;
-  ft->buf = (int *) calloc( FT_NODES(height), sizeof(int) );
+  ft->buf = (volatile int *) calloc( FT_NODES(height), sizeof(int) );
 }
 
 /**
@@ -42,7 +42,7 @@ void FlagtreeFree(flagtree_t *ft)
  */
 void FlagtreeGrow(flagtree_t *ft)
 {
-  int *old_buf, *new_buf;
+  volatile int *old_buf, *new_buf;
   int old_height;
   int i;
 
@@ -51,7 +51,7 @@ void FlagtreeGrow(flagtree_t *ft)
   old_buf = ft->buf;
 
   /* allocate space */
-  new_buf = (int *) calloc( FT_NODES(old_height+1), sizeof(int) );
+  new_buf = (volatile int *) calloc( FT_NODES(old_height+1), sizeof(int) );
 
   //LOCK WRITE
   ft->height += 1;

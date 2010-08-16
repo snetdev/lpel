@@ -34,7 +34,6 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
   atomic_set(&t->refcnt, 1);
 
   t->event_ptr = NULL;
-  t->ev_write = t->ev_read = 0;
   
   //t->owner = -1;
   t->sched_info = NULL;
@@ -113,12 +112,12 @@ static void TaskStartup(void *data)
  *
  * @param ct  pointer to the current task
  */
-void TaskWaitOnRead(task_t *ct)
+void TaskWaitOnRead(task_t *ct, stream_t *s)
 {
   assert( ct->state == TASK_RUNNING );
   
   /* WAIT on read event*/;
-  ct->event_ptr = &ct->ev_read;
+  ct->event_ptr = (int *) &s->buf[s->pwrite];
   ct->state = TASK_WAITING;
   
   /* context switch */
@@ -130,12 +129,12 @@ void TaskWaitOnRead(task_t *ct)
  *
  * @param ct  pointer to the current task
  */
-void TaskWaitOnWrite(task_t *ct)
+void TaskWaitOnWrite(task_t *ct, stream_t *s)
 {
   assert( ct->state == TASK_RUNNING );
 
   /* WAIT on write event*/
-  ct->event_ptr = &ct->ev_write;
+  ct->event_ptr = (int *) &s->buf[s->pread];
   ct->state = TASK_WAITING;
   
   /* context switch */

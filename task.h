@@ -37,19 +37,13 @@ typedef void (*taskfunc_t)(task_t *t, void *inarg);
  * TASK CONTROL BLOCK
  */
 struct task {
-  /* put the signalling flags on front (alignment) */
-  volatile unsigned long ev_read;
-  long padding1[longxCacheLine-1];
-  volatile unsigned long ev_write;
-  long padding2[longxCacheLine-1];
-
   /*TODO  type: IO or normal */
   unsigned long uid;
   taskstate_t state;
   task_t *prev, *next;  /* queue handling: prev, next */
 
   /* pointer to signalling flag */
-  volatile unsigned long *event_ptr;
+  volatile int *event_ptr;
 
   /* reference counter */
   atomic_t refcnt;
@@ -82,8 +76,8 @@ struct task {
 
 extern task_t *TaskCreate( taskfunc_t, void *inarg, unsigned int attr);
 extern void TaskDestroy(task_t *t);
-extern void TaskWaitOnRead(task_t *ct);
-extern void TaskWaitOnWrite(task_t *ct);
+extern void TaskWaitOnRead(task_t *ct, stream_t *s);
+extern void TaskWaitOnWrite(task_t *ct, stream_t *s);
 extern void TaskExit(task_t *ct, void *outarg);
 extern void TaskYield(task_t *ct);
 

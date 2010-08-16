@@ -5,7 +5,7 @@
 #include <string.h>
 #include "../streamset.h"
 
-#define NUM_STREAMS 20
+#define NUM_STREAMS 40
 
 streamset_t *set = NULL;
   
@@ -83,6 +83,50 @@ static void testEvent(void)
   StreamsetDestroy(set);
 }
 
+
+
+static void testIterate(void)
+{
+  int i, add_num = 24;
+  streamtbe_t *tbe[2*NUM_STREAMS];
+  streamtbe_t *it_cur;
+  streamtbe_iter_t iter;
+  int idx;
+
+  header("Iterator");
+  
+  /* create the streamset */
+  set = StreamsetCreate(2);
+
+  for (i=0; i<add_num; i++) {
+    tbe[i] = StreamsetAdd( set, (stream_t *)streams[i], &idx );
+    assert( idx == i/STREAMSET_GRP_SIZE );
+  }
+  StreamsetPrint(set, NULL);
+  StreamsetDebug(set);
+
+  /* chain up */
+  StreamsetChainStart(set);
+  StreamsetChainAdd(set, 0);
+  StreamsetChainAdd(set, 1);
+  StreamsetChainAdd(set, 3);
+  StreamsetChainAdd(set, 5);
+
+  /* iterate */
+  fprintf(stderr, "Iterator start:\n");
+  StreamsetIterateStart(set, &iter);
+  while( StreamsetIterateHasNext(set, &iter) > 0 ) {
+    it_cur = StreamsetIterateNext(set, &iter);
+    assert( it_cur != NULL );
+    fprintf(stderr, "[%p]\n", it_cur->s);
+  }
+
+  /* destroy the streamset */
+  StreamsetDestroy(set);
+}
+
+
+
 int main(void)
 {
   int i;
@@ -92,8 +136,9 @@ int main(void)
   }
   
   /* tests */
-  testAdd();
-  testEvent();
+  //testAdd();
+  //testEvent();
+  testIterate();
 
   return 0;
 }

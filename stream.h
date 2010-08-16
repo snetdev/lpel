@@ -7,6 +7,8 @@
 
 #include "task.h"
 #include "spinlock.h"
+#include "rwlock.h"
+#include "streamset.h"
 #include "atomic.h"
 
 
@@ -24,10 +26,9 @@ struct stream {
   spinlock_t lock_prod;
   spinlock_t lock_cons;
   void *buf[STREAM_BUFFER_SIZE];
-  unsigned long *cntread;
-  unsigned long *cntwrite;
   task_t *producer;
   task_t *consumer;
+  // streamtbe prod/cons
   atomic_t refcnt;
 };
 

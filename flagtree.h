@@ -46,7 +46,7 @@
 
 typedef struct {
   int height;
-  int *buf;
+  volatile int *buf;
 } flagtree_t;
 
 

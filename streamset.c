@@ -8,44 +8,13 @@
 #include "streamset.h"
 
 
-
-typedef enum {
-  OPEN='O',
-  CLOSED='C',
-  REPLACED='R',
-  OBSOLETE='X'
-} streamtbe_state_t;
+#define STBE_OPEN     'O'
+#define STBE_CLOSED   'C'
+#define STBE_REPLACED 'R'
+#define STBE_OBSOLETE 'X'
 
 
 #define DIRTY_END   ((streamtbe_t *)-1)
-
-/**
- * each stream has a stream table entry
- * - a pointer to this should be placed in a (hash)set for "dirty" streams
- */
-struct streamtbe {
-  struct stream *s;
-  streamtbe_state_t state;
-  unsigned long cnt;
-  streamtbe_t *dirty;  /* for chaining 'dirty' entries */
-};
-
-struct streamgrp {
-  struct streamgrp *it_next;  /* for the iterator */
-  streamtbe_t tab[STREAMSET_GRP_SIZE];
-};
-
-
-struct streamset {
-  int grp_capacity;
-  struct streamgrp **lookup; /* array of pointers to the grps */
-  int idx_grp; /* current grp for next free entry */
-  int idx_tab; /* current index of the tab within
-                  the grp for next free entry */
-  int cnt_obsolete; /* number of obsolete stream table entries */
-  streamtbe_t *dirty_list; /* start of 'dirty' list */
-};
-
 
 
 
@@ -94,9 +63,11 @@ streamset_t *StreamsetCreate(int init_cap2)
   set->idx_tab = 0;
   /* there is no obsolete entry initially */
   set->cnt_obsolete = 0;
-  /* 'dirty' list is empty */
+  /* dirty list is empty */
   set->dirty_list = DIRTY_END;
 
+  /* group chain is uninitialized */
+  
   return set;
 }
 
@@ -150,7 +121,7 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
     for(i=0; i<=set->idx_grp; i++) {
       grp = set->lookup[i];
       for (j=0; j<STREAMSET_GRP_SIZE; j++) {
-        if (grp->tab[j].state == OBSOLETE) {
+        if (grp->tab[j].state == STBE_OBSOLETE) {
           ste = &grp->tab[j];
           ret_idx = i;
           goto found_obsolete;
@@ -198,7 +169,7 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
       assert( set->idx_tab == 0 );
 
       grp  = (struct streamgrp *) malloc( sizeof(struct streamgrp) );
-      grp->it_next = NULL;
+      grp->next = NULL;
       /* put in lookup table */
       set->lookup[set->idx_grp] = grp;
     } else {
@@ -224,7 +195,7 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
   
   /* fill the entry */
   ste->s = s;
-  ste->state = OPEN;
+  ste->state = STBE_OPEN;
   ste->cnt = 0;
 
   /* mark the entry as dirty */
@@ -242,7 +213,7 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
  */
 void StreamsetEvent(streamset_t *set, streamtbe_t *tbe)
 {
-  assert( tbe->state == OPEN || tbe->state == REPLACED );
+  assert( tbe->state == STBE_OPEN || tbe->state == STBE_REPLACED );
 
   tbe->cnt++;
   MarkDirty(set, tbe);
@@ -257,9 +228,9 @@ void StreamsetEvent(streamset_t *set, streamtbe_t *tbe)
  */
 void StreamsetRemove(streamset_t *set, streamtbe_t *tbe)
 {
-  assert( tbe->state == OPEN || tbe->state == REPLACED );
+  assert( tbe->state == STBE_OPEN || tbe->state == STBE_REPLACED );
 
-  tbe->state = CLOSED;
+  tbe->state = STBE_CLOSED;
   MarkDirty(set, tbe);
 }
 
@@ -270,13 +241,107 @@ void StreamsetRemove(streamset_t *set, streamtbe_t *tbe)
  */
 void StreamsetReplace(streamset_t *set, streamtbe_t *tbe, struct stream *s)
 {
-  assert( tbe->state == OPEN || tbe->state == REPLACED );
+  assert( tbe->state == STBE_OPEN || tbe->state == STBE_REPLACED );
 
   tbe->s = s;
   tbe->cnt = 0;
-  tbe->state = REPLACED;
+  tbe->state = STBE_REPLACED;
   MarkDirty(set, tbe);
 }
+
+
+
+/**
+ * Start collecting groups in the chain
+ *
+ * @note  changes only hnd and count of set->chain
+ */
+void StreamsetChainStart(streamset_t *set)
+{
+  set->chain.hnd = NULL;
+  set->chain.count = 0;
+}
+
+/**
+ * Add to the chain of groups
+ *
+ * The groups are collected in a circular singly linked list.
+ * The chain handle always points to the last group in the list.
+ *
+ * @note  changes only hnd and count of set->chain
+ * @pre   grp_idx is only added once, the grp with grp_idx exists
+ */
+void StreamsetChainAdd(streamset_t *set, int grp_idx)
+{
+  struct streamgrp *grp;
+
+  grp = set->lookup[grp_idx];
+  assert( grp != NULL );
+
+  if (set->chain.hnd == NULL) {
+    /* chain is empty */
+    set->chain.hnd = grp;
+    grp->next = grp; /* self-loop */
+  } else {
+    /* insert grp between last (=set->chain)
+       and first (=set->chain->next) */
+    grp->next = set->chain.hnd->next;
+    set->chain.hnd->next = grp;
+    /* chain always points to last grp */
+    set->chain.hnd = grp;
+  }
+  
+  set->chain.count += ( set->idx_grp==grp_idx && set->idx_tab!=0 )
+    ? set->idx_grp : STREAMSET_GRP_SIZE;
+}
+
+
+
+/**
+ *
+ * @note  changes only cur, cur_ti and consumed of set->chain
+ */
+void StreamsetIterateStart(streamset_t *set, streamtbe_iter_t *iter)
+{
+  iter->grp = NULL;
+  iter->tab_idx = 0;
+  iter->count = 0;
+  if (set->chain.hnd != NULL) {
+    iter->grp = set->chain.hnd->next;
+  }
+}
+
+
+/**
+ * @return the number of entries left to consume
+ */
+int StreamsetIterateHasNext(streamset_t *set, streamtbe_iter_t *iter)
+{
+  return set->chain.count - iter->count;
+}
+
+
+/**
+ * get the next tbe in the chain
+ */
+streamtbe_t *StreamsetIterateNext(streamset_t *set, streamtbe_iter_t *iter)
+{
+  streamtbe_t *next;
+
+  next = &iter->grp->tab[ iter->tab_idx ];
+  iter->count++;
+
+  /* advance next */
+  iter->tab_idx++;
+  if (iter->tab_idx == STREAMSET_GRP_SIZE) {
+    iter->tab_idx = 0;
+    iter->grp = iter->grp->next;
+  }
+  return next;
+}
+
+
+
 
 /**
  * Prints information about the dirty table entries
@@ -306,9 +371,9 @@ void StreamsetPrint(streamset_t *set, FILE *file)
           );
     }
     /* update states */
-    if (tbe->state == REPLACED) { tbe->state = OPEN; }
-    if (tbe->state == CLOSED) {
-      tbe->state = OBSOLETE;
+    if (tbe->state == STBE_REPLACED) { tbe->state = STBE_OPEN; }
+    if (tbe->state == STBE_CLOSED) {
+      tbe->state = STBE_OBSOLETE;
       set->cnt_obsolete++;
     }
     /* get the next dirty entry, and clear the link in the current entry */
