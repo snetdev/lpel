@@ -18,6 +18,8 @@ extern void LpelRun(void);
 extern void LpelCleanup(void);
 
 
+extern int LpelNumWorkers(void);
+
 extern void LpelTaskAdd(task_t *t);
 extern void LpelTaskRemove(task_t *t);
 

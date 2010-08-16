@@ -10,6 +10,18 @@
 
 #include "debug.h"
 
+
+#define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )
+
+/**
+ * 2 to the power of following constant
+ * determines the initial group capacity of streamsets
+ * in tasks that can wait on any input
+ */
+#define TASK_WAITANY_GRPS_INIT  2
+
+
+
 static sequencer_t taskseq = SEQUENCER_INIT;
 
 
@@ -25,10 +37,9 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
 {
   task_t *t = (task_t *)malloc( sizeof(task_t) );
   t->uid = ticket(&taskseq);
-
   t->state = TASK_INIT;
-  
   t->prev = t->next = NULL;
+  t->attr = attr;
 
   /* initialize reference counter to 1*/
   atomic_set(&t->refcnt, 1);
@@ -44,7 +55,20 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
   t->time_lastrun = t->time_expavg = t->time_totalrun;
 
   t->cnt_dispatch = 0;
-  t->streamtab = NULL;
+
+  /* create streamset to write */
+  t->streams_write = StreamsetCreate(0);
+
+
+  /* stuff that is special for WAIT_ANY tasks */
+  if (BIT_IS_SET(t->attr, TASK_ATTR_WAITANY)) {
+    t->streams_read = StreamsetCreate(TASK_WAITANY_GRPS_INIT);
+    FlagtreeAlloc( &t->flagtree, TASK_WAITANY_GRPS_INIT );
+    rwlock_init( &t->rwlock, LpelNumWorkers() );
+    t->max_grp_idx = (1<<TASK_WAITANY_GRPS_INIT)-1;
+  } else {
+    t->streams_read = StreamsetCreate(0);
+  }
 
   t->code = func;
   /* function, argument (data), stack base address, stacksize */
@@ -75,9 +99,16 @@ void TaskDestroy(task_t *t)
     /* Notify LPEL first */
     LpelTaskRemove(t);
 
-    /* is the streamtable empty? */
-    StreamtableClean(&t->streamtab);
-    assert( t->streamtab == NULL );
+    /* free the streamsets */
+    StreamsetDestroy(t->streams_write);
+    StreamsetDestroy(t->streams_read);
+
+
+    /* waitany-specific cleanup */
+    if (BIT_IS_SET(t->attr, TASK_ATTR_WAITANY)) {
+      rwlock_cleanup( &t->rwlock );
+      FlagtreeFree( &t->flagtree );
+    }
 
     /* delete the coroutine */
     co_delete(t->ctx);
@@ -119,6 +150,7 @@ void TaskWaitOnRead(task_t *ct, stream_t *s)
   /* WAIT on read event*/;
   ct->event_ptr = (int *) &s->buf[s->pwrite];
   ct->state = TASK_WAITING;
+  ct->wait_on = WAIT_ON_READ;
   
   /* context switch */
   co_resume();
@@ -136,10 +168,30 @@ void TaskWaitOnWrite(task_t *ct, stream_t *s)
   /* WAIT on write event*/
   ct->event_ptr = (int *) &s->buf[s->pread];
   ct->state = TASK_WAITING;
+  ct->wait_on = WAIT_ON_WRITE;
   
   /* context switch */
   co_resume();
 }
+
+
+void TaskWaitAny(task_t *ct, streamset_iter_t *iter)
+{
+  assert( ct->state == TASK_RUNNING );
+  assert( BIT_IS_SET(ct->attr, TASK_ATTR_WAITANY) );
+
+  /* WAIT upon any input stream setting root flag */
+  ct->event_ptr = &ct->flagtree->buf[0];
+  ct->state = TASK_WAITING;
+  ct->wait_on = WAIT_ON_ANY;
+  
+  /* context switch */
+  co_resume();
+
+  /* provide iter */
+  StreamsetIterateStart(ct->streams_read, iter);
+}
+
 
 /**
  * Exit the current task

@@ -299,7 +299,6 @@ void StreamsetChainAdd(streamset_t *set, int grp_idx)
 
 /**
  *
- * @note  changes only cur, cur_ti and consumed of set->chain
  */
 void StreamsetIterateStart(streamset_t *set, streamtbe_iter_t *iter)
 {

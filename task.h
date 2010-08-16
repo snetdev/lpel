@@ -3,7 +3,9 @@
 
 #include <pcl.h> /* coroutine_t */
 
-#include "streamtable.h"
+#include "streamset.h"
+#include "flagtree.h"
+#include "rwlock.h"
 #include "timing.h"
 #include "atomic.h"
 
@@ -14,11 +16,8 @@
 /* 64bytes is the common size of a cache line */
 #define longxCacheLine  (64/sizeof(long))
 
-typedef enum {
-  TASK_TYPE_NORMAL,
-  TASK_TYPE_IO
-} tasktype_t;
-
+#define TASK_ATTR_DEFAULT      (0)
+#define TASK_ATTR_WAITANY   (1<<0)
 
 typedef enum {
   TASK_INIT,
@@ -28,6 +27,11 @@ typedef enum {
   TASK_ZOMBIE
 } taskstate_t;
 
+typedef enum {
+  WAIT_ON_READ,
+  WAIT_ON_WRITE,
+  WAIT_ON_ANY
+} taskstate_wait_t;
 
 typedef struct task task_t;
 
@@ -42,8 +46,15 @@ struct task {
   taskstate_t state;
   task_t *prev, *next;  /* queue handling: prev, next */
 
+  /* attributes */
+  unsigned int attr;
+
   /* pointer to signalling flag */
   volatile int *event_ptr;
+  taskstate_wait_t wait_on;
+  flagtree_t flagtree;
+  rwlock_t rwlock;
+  int max_grp_idx;
 
   /* reference counter */
   atomic_t refcnt;
@@ -62,7 +73,7 @@ struct task {
   unsigned long cnt_dispatch; /* dispatch counter */
 
   /* array of streams opened for writing/reading */
-  streamtable_t streamtab;
+  streamset_t *streams_read, *streams_write;
 
   /* CODE */
   coroutine_t ctx;

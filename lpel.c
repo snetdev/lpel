@@ -44,19 +44,16 @@ static atomic_t task_count_global = ATOMIC_INIT(0);
 static int num_workers = -1;
 static bool b_assigncore = false;
 
-static pthread_key_t worker_id_key;
-
 
 #define EXPAVG_ALPHA  0.1f
 
-#define TSD_WORKER_ID (*((int *)pthread_getspecific(worker_id_key)))
 
 #define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )
 
-
-
-
-
+int LpelNumWorkers(void)
+{
+  return num_workers;
+}
 
 
 /**
