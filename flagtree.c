@@ -22,10 +22,11 @@ static void (*callback_gather)(int);
 /**
  * Allocate the ft for a given height
  */
-void FlagtreeAlloc(flagtree_t *ft, int height)
+void FlagtreeAlloc(flagtree_t *ft, int height, rwlock_t *lock)
 {
   ft->height = height;
-  ft->buf = (volatile int *) calloc( FT_NODES(height), sizeof(int) );
+  ft->buf = (int *) calloc( FT_NODES(height), sizeof(int) );
+  ft->lock = lock;
 }
 
 /**
@@ -42,7 +43,7 @@ void FlagtreeFree(flagtree_t *ft)
  */
 void FlagtreeGrow(flagtree_t *ft)
 {
-  volatile int *old_buf, *new_buf;
+  int *old_buf, *new_buf;
   int old_height;
   int i;
 
@@ -51,19 +52,23 @@ void FlagtreeGrow(flagtree_t *ft)
   old_buf = ft->buf;
 
   /* allocate space */
-  new_buf = (volatile int *) calloc( FT_NODES(old_height+1), sizeof(int) );
+  new_buf = (int *) calloc( FT_NODES(old_height+1), sizeof(int) );
 
-  //LOCK WRITE
-  ft->height += 1;
-  ft->buf = new_buf;
-  //UNLOCK WRITE
+  /* lock for writing */
+  rwlock_writer_lock( ft->lock );
+  { /*CS ENTER*/
+    ft->height += 1;
+    ft->buf = new_buf;
+  } /*CS LEAVE*/
+  /* unlock for writing */
+  rwlock_writer_unlock( ft->lock );
   
   /* set the appropriate flags */
   for (i=0; i<FT_LEAFS(old_height); i++) {
     /* test each leaf in the old ft */
     if ( old_buf[FT_LEAF_TO_IDX(old_height, i)] == 1 ) {
       /* mark this leaf in the new ft as well */
-      FlagtreeMark( ft, i );
+      FlagtreeMark( ft, i, -1);
     }
   }
 
