@@ -10,7 +10,6 @@ inport_t *InportCreate(stream_t *s)
 
   ip = (inport_t *) malloc(sizeof(inport_t));
   ip->stream = s;
-  s->cntwrite = &ip->cntwrite;
 
   return ip;
 }

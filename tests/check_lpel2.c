@@ -8,7 +8,6 @@
 #include "../debug.h"
 #include "../cpuassign.h"
 #include "../lpel.h"
-#include "../streamtable.h"
 #include "../task.h"
 #include "../inport.h"
 
@@ -48,6 +47,7 @@ void Relay(task_t *t, void *inarg)
   TaskCreate(Consumer, (void *)to, 0);
   do {
     item = StreamRead(t, from);
+    assert( item != NULL );
     msg = (char *)item;
     printf("read Relay %s\n", msg );
     StreamWrite(t, to, item);

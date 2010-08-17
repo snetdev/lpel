@@ -18,7 +18,11 @@ struct schedcfg {
 struct schedctx {
   int wid;
   taskqueue_t ready_queue;
-  taskqueue_t waiting_queue;
+  struct {
+    taskqueue_t on_read;
+    taskqueue_t on_write;
+    taskqueue_t on_any;
+  } waiting_queue;
   mpscqueue_t *init_queue;
   int cnt_tasks;
 };
@@ -29,7 +33,12 @@ static schedctx_t *schedarray;
 
 /* prototypes for private functions */
 static int CollectFromInit(schedctx_t *sc);
-static bool WaitingTest(task_t *wt, void *arg);
+
+static bool WaitingTestOnRead(task_t *wt, void *arg);
+static bool WaitingTestOnWrite(task_t *wt, void *arg);
+static bool WaitingTestOnAny(task_t *wt, void *arg);
+
+
 static void WaitingRemove(task_t *wt, void *arg);
 
 
@@ -59,7 +68,11 @@ void SchedInitialise(int size, schedcfg_t *cfg)
       sc = &schedarray[i];
       sc->wid = i;
       TaskqueueInit(&sc->ready_queue);
-      TaskqueueInit(&sc->waiting_queue);
+      
+      TaskqueueInit(&sc->waiting_queue.on_read);
+      TaskqueueInit(&sc->waiting_queue.on_write);
+      TaskqueueInit(&sc->waiting_queue.on_any);
+      
       sc->init_queue = MPSCQueueCreate();
       sc->cnt_tasks = 0;
   }
@@ -133,11 +146,28 @@ task_t *SchedFetchNextReady(schedctx_t *sc)
   sc->cnt_tasks += cnt;
 
   /* wakeup waiting tasks */
-  if (sc->waiting_queue.count > 0) {
-    /* iterate through waiting queue, check r/w events */
-    TaskqueueIterateRemove( &sc->waiting_queue,
-        WaitingTest, WaitingRemove, (void*)sc
-        );
+  {
+    if (sc->waiting_queue.on_read.count > 0) {
+      TaskqueueIterateRemove(
+          &sc->waiting_queue.on_read,
+          WaitingTestOnRead,  /* on read test */
+          WaitingRemove, (void*)sc
+          );
+    }
+    if (sc->waiting_queue.on_write.count > 0) {
+      TaskqueueIterateRemove(
+          &sc->waiting_queue.on_write,
+          WaitingTestOnWrite,  /* on write test */
+          WaitingRemove, (void*)sc
+          );
+    }
+    if (sc->waiting_queue.on_any.count > 0) {
+      TaskqueueIterateRemove(
+          &sc->waiting_queue.on_any,
+          WaitingTestOnAny,  /* on any test */
+          WaitingRemove, (void*)sc
+          );
+    }
   }
 
   /* fetch a task from the ready queue */
@@ -164,8 +194,17 @@ void SchedReschedule(schedctx_t *sc, task_t *t)
       break;
 
     case TASK_WAITING: /* task returned from a blocking call*/
-      /* put into waiting queue */
-      TaskqueueAppend( &sc->waiting_queue, t );
+      {
+        taskqueue_t *wq;
+        switch (t->wait_on) {
+          case WAIT_ON_READ:  wq = &sc->waiting_queue.on_read;  break;
+          case WAIT_ON_WRITE: wq = &sc->waiting_queue.on_write; break;
+          case WAIT_ON_ANY:   wq = &sc->waiting_queue.on_any;   break;
+          default: assert(0);
+        }
+        /* put into appropriate waiting queue */
+        TaskqueueAppend( wq, t );
+      }
       break;
 
     case TASK_READY: /* task yielded execution  */
@@ -227,18 +266,33 @@ static int CollectFromInit(schedctx_t *sc)
 }
 
 
-static bool WaitingTest(task_t *wt, void *arg)
+static bool WaitingTestOnRead(task_t *wt, void *arg)
 {
+  /* event_ptr points to the position in the buffer
+     where task wants to write to */
+  return *wt->event_ptr == 0;
+}
+
+static bool WaitingTestOnWrite(task_t *wt, void *arg)
+{
+  /* event_ptr points to the position in the buffer
+     where task wants to read from */
   return *wt->event_ptr != 0;
 }
+
+static bool WaitingTestOnAny(task_t *wt, void *arg)
+{
+  /* event_ptr points to the root of the flagtree */
+  return *wt->event_ptr != 0;
+}
+
 
 static void WaitingRemove(task_t *wt, void *arg)
 {
   schedctx_t *sc = (schedctx_t *)arg;
 
   wt->state = TASK_READY;
-  *wt->event_ptr = 0;
-  wt->event_ptr = NULL;
+  /*wt->event_ptr = NULL;*/
   
   /* waiting queue contains only own tasks */
   TaskqueueAppend( &sc->ready_queue, wt );

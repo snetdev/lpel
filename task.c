@@ -8,6 +8,7 @@
 #include "timing.h"
 #include "lpel.h"
 
+#include "stream.h"
 #include "debug.h"
 
 
@@ -176,13 +177,13 @@ void TaskWaitOnWrite(task_t *ct, stream_t *s)
 }
 
 
-void TaskWaitAny(task_t *ct, streamset_iter_t *iter)
+void TaskWaitAny(task_t *ct, streamtbe_iter_t *iter)
 {
   assert( ct->state == TASK_RUNNING );
   assert( BIT_IS_SET(ct->attr, TASK_ATTR_WAITANY) );
 
   /* WAIT upon any input stream setting root flag */
-  ct->event_ptr = &ct->flagtree->buf[0];
+  ct->event_ptr = &ct->flagtree.buf[0];
   ct->state = TASK_WAITING;
   ct->wait_on = WAIT_ON_ANY;
   

@@ -4,7 +4,7 @@
 #include <stdarg.h>
 #include <assert.h>
 
-#include "streamtable.h"
+#include "streamset.h"
 
 #include "monitoring.h"
 #include "timing.h"
@@ -50,8 +50,10 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
     TimingToMSec(&t->time_lastrun), TimingToMSec(&t->time_totalrun), TimingToMSec(&t->time_expavg)
     );
   
-  StreamtablePrint(&t->streamtab, mon->outfile);
-  StreamtableClean(&t->streamtab);
+  fprintf(mon->outfile, " W");
+  StreamsetPrint(t->streams_write, mon->outfile);
+  fprintf(mon->outfile, " R");
+  StreamsetPrint(t->streams_read, mon->outfile);
 
   fprintf(mon->outfile, "\n");
   ret = fflush(mon->outfile);

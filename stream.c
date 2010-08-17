@@ -177,8 +177,9 @@ void *StreamRead(task_t *ct, stream_t *s)
   assert( s->cons.task == ct );
 
   /* wait if buffer is empty */
-  if ( s->buf[s->pread] != NULL ) {
+  if ( s->buf[s->pread] == NULL ) {
     TaskWaitOnWrite(ct, s);
+    assert( s->buf[s->pread] != NULL );
   }
 
   /* READ FROM BUFFER */
@@ -236,8 +237,9 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   assert( item != NULL );
 
   /* wait while buffer is full */
-  if ( s->buf[s->pwrite] == NULL ) {
+  if ( s->buf[s->pwrite] != NULL ) {
     TaskWaitOnRead(ct, s);
+    assert( s->buf[s->pwrite] == NULL );
   }
 
   /* WRITE TO BUFFER */
@@ -254,9 +256,8 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
                (1-STREAM_BUFFER_SIZE) : 1;
 
   /* for monitoring */
-  StreamsetEvent( ct->streams_read, s->cons.tbe );
+  if (ct!=NULL) StreamsetEvent( ct->streams_read, s->cons.tbe );
 
-/* signal the consumer a write event */
   spinlock_lock(&s->cons.lock);
   /* TODO if flagtree registered, use flagtree mark */
   spinlock_unlock(&s->cons.lock);
