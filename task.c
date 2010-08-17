@@ -12,7 +12,6 @@
 #include "debug.h"
 
 
-#define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )
 
 /**
  * 2 to the power of following constant
@@ -60,16 +59,19 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
   /* create streamset to write */
   t->streams_write = StreamsetCreate(0);
 
+  /* create streamset to read */
+  t->streams_read = StreamsetCreate(
+      (TASK_IS_WAITANY(t)) ?
+      TASK_WAITANY_GRPS_INIT : 0
+      );
 
-  /* stuff that is special for WAIT_ANY tasks */
-  if (BIT_IS_SET(t->attr, TASK_ATTR_WAITANY)) {
-    t->streams_read = StreamsetCreate(TASK_WAITANY_GRPS_INIT);
+
+  /* other stuff that is special for WAIT_ANY tasks */
+  if ( TASK_IS_WAITANY(t) ) {
     rwlock_init( &t->rwlock, LpelNumWorkers() );
     FlagtreeAlloc( &t->flagtree, TASK_WAITANY_GRPS_INIT, &t->rwlock );
     /* max_grp_idx = 2^x - 1 */
     t->max_grp_idx = (1<<TASK_WAITANY_GRPS_INIT)-1;
-  } else {
-    t->streams_read = StreamsetCreate(0);
   }
 
   t->code = func;
@@ -93,7 +95,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
  */
 void TaskDestroy(task_t *t)
 {
-  /* only if no stream points to the flags anymore */
+  /* only if nothing references the task anymore */
   if ( fetch_and_dec(&t->refcnt) == 1) {
     /* capture end of task lifetime */
     TimingEnd(&t->time_alive);
@@ -107,7 +109,7 @@ void TaskDestroy(task_t *t)
 
 
     /* waitany-specific cleanup */
-    if (BIT_IS_SET(t->attr, TASK_ATTR_WAITANY)) {
+    if ( TASK_IS_WAITANY(t) ) {
       rwlock_cleanup( &t->rwlock );
       FlagtreeFree( &t->flagtree );
     }
@@ -177,10 +179,10 @@ void TaskWaitOnWrite(task_t *ct, stream_t *s)
 }
 
 
-void TaskWaitAny(task_t *ct, streamtbe_iter_t *iter)
+void TaskWaitAny(task_t *ct)
 {
   assert( ct->state == TASK_RUNNING );
-  assert( BIT_IS_SET(ct->attr, TASK_ATTR_WAITANY) );
+  assert( TASK_IS_WAITANY(ct) );
 
   /* WAIT upon any input stream setting root flag */
   ct->event_ptr = &ct->flagtree.buf[0];
@@ -189,9 +191,6 @@ void TaskWaitAny(task_t *ct, streamtbe_iter_t *iter)
   
   /* context switch */
   co_resume();
-
-  /* provide iter */
-  StreamsetIterateStart(ct->streams_read, iter);
 }
 
 

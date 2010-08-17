@@ -19,6 +19,16 @@
 #define TASK_ATTR_DEFAULT      (0)
 #define TASK_ATTR_WAITANY   (1<<0)
 
+
+#define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )
+
+/**
+ * Check if a task is a waitany-task
+ * @param t   pointer to task_t
+ */
+#define TASK_IS_WAITANY(t)  (BIT_IS_SET((t)->attr, TASK_ATTR_WAITANY))
+
+
 typedef enum {
   TASK_INIT,
   TASK_RUNNING,

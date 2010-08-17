@@ -63,6 +63,7 @@ extern void StreamsetReplace(streamset_t *set, streamtbe_t *tbe,
 
 extern void StreamsetChainStart(streamset_t *set);
 extern void StreamsetChainAdd(streamset_t *set, int grp_idx);
+extern int StreamsetChainNotEmpty(streamset_t *set);
 
 extern void StreamsetIterateStart(streamset_t *set, streamtbe_iter_t *iter);
 extern int  StreamsetIterateHasNext(streamset_t *set, streamtbe_iter_t *iter);

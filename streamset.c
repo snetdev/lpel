@@ -295,6 +295,13 @@ void StreamsetChainAdd(streamset_t *set, int grp_idx)
     ? set->idx_grp : STREAMSET_GRP_SIZE;
 }
 
+/**
+ * Check if chain of streamset is empty
+ */
+int StreamsetChainNotEmpty(streamset_t *set)
+{
+  return set->chain.count > 0;
+}
 
 
 /**

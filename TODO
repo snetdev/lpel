@@ -2,11 +2,7 @@
 TODO
 ====
 
- * write tasks with attribute WAKEUP_ON_WRITE_ANY
- * write streamtable structure with k streams sequentially in array
  * write an iterator
- * write signalling tree handling
- * implement the RW-Lock
  * aggregate modules into libraries with clear interface
  * doxygenify comments
 

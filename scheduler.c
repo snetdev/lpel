@@ -282,8 +282,18 @@ static bool WaitingTestOnWrite(task_t *wt, void *arg)
 
 static bool WaitingTestOnAny(task_t *wt, void *arg)
 {
+  assert( TASK_IS_WAITANY(wt) );
+
+  /* first of all, check root flag */
+  if (*wt->event_ptr != 0) {
+    /* if root flag is set, try to gather all set leafs */
+    StreamsetChainStart( wt->streams_read );
+    //TODO interface conflict!!!
+    //FlagtreeGather( wt->flagtree, StreamsetChainAdd);
+    return StreamsetChainNotEmpty(wt->streams_read);
+  }
   /* event_ptr points to the root of the flagtree */
-  return *wt->event_ptr != 0;
+  return false;
 }
 
 
