@@ -63,8 +63,9 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
   /* stuff that is special for WAIT_ANY tasks */
   if (BIT_IS_SET(t->attr, TASK_ATTR_WAITANY)) {
     t->streams_read = StreamsetCreate(TASK_WAITANY_GRPS_INIT);
-    FlagtreeAlloc( &t->flagtree, TASK_WAITANY_GRPS_INIT );
     rwlock_init( &t->rwlock, LpelNumWorkers() );
+    FlagtreeAlloc( &t->flagtree, TASK_WAITANY_GRPS_INIT, &t->rwlock );
+    /* max_grp_idx = 2^x - 1 */
     t->max_grp_idx = (1<<TASK_WAITANY_GRPS_INIT)-1;
   } else {
     t->streams_read = StreamsetCreate(0);

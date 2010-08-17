@@ -83,12 +83,12 @@ struct task {
 };
 
 
-
+struct stream;
 
 extern task_t *TaskCreate( taskfunc_t, void *inarg, unsigned int attr);
 extern void TaskDestroy(task_t *t);
-extern void TaskWaitOnRead(task_t *ct, stream_t *s);
-extern void TaskWaitOnWrite(task_t *ct, stream_t *s);
+extern void TaskWaitOnRead(task_t *ct, struct stream *s);
+extern void TaskWaitOnWrite(task_t *ct, struct stream *s);
 extern void TaskExit(task_t *ct, void *outarg);
 extern void TaskYield(task_t *ct);
 

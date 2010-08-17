@@ -35,14 +35,12 @@ stream_t *StreamCreate(void)
     /* clear all the buffer space */
     memset(&(s->buf), 0, STREAM_BUFFER_SIZE*sizeof(void *));
 
-    s->cntread = NULL;
-    s->cntwrite = NULL;
-    
     /* producer/consumer not assigned */
-    s->producer = NULL;
-    s->consumer = NULL;
-    spinlock_init(&s->lock_prod);
-    spinlock_init(&s->lock_cons);
+    s->prod.task = s->cons.task = NULL;
+    s->prod.tbe = s->cons.tbe = NULL;
+    spinlock_init(&s->prod.lock);
+    spinlock_init(&s->cons.lock);
+
     /* refcnt reflects the number of tasks
        + the stream itself opened this stream {1,2,3} */
     atomic_set(&s->refcnt, 1);
@@ -57,10 +55,6 @@ stream_t *StreamCreate(void)
 void StreamDestroy(stream_t *s)
 {
   if ( fetch_and_dec(&s->refcnt) == 1 ) {
-    /*
-    if (s->producer != NULL) TaskDestroy(s->producer);
-    if (s->consumer != NULL) TaskDestroy(s->consumer);
-    */
     free(s);
   }
 }
@@ -80,24 +74,27 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
 
   switch(mode) {
   case 'w':
-    spinlock_lock(&s->lock_prod);
-      assert( s->producer == NULL );
-      s->producer = ct;
-      
-      /*TODO add to tasks list of opened streams for writing */
-    spinlock_unlock(&s->lock_prod);
+    spinlock_lock(&s->prod.lock);
+    {
+      assert( s->prod.task == NULL );
+      s->prod.task = ct;
+      s->prod.tbe  = StreamsetAdd(ct->streams_write, s, NULL);
+    }
+    spinlock_unlock(&s->prod.lock);
     break;
 
   case 'r':
-    spinlock_lock(&s->lock_cons);
-      assert( s->consumer == NULL );
-      s->consumer = ct;
+    spinlock_lock(&s->cons.lock);
+    {
+      int grpidx;
+      assert( s->cons.task == NULL );
+      s->cons.task = ct;
+      s->cons.tbe  = StreamsetAdd(ct->streams_read, s, &grpidx);
 
       /*TODO if consumer task is a collector, register flagtree,
         set the flag if stream not empty? */
-
-      /*TODO add to tasks list of opened streams for reading */
-    spinlock_unlock(&s->lock_cons);
+    }
+    spinlock_unlock(&s->cons.lock);
     break;
 
   default:
@@ -114,25 +111,31 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
  */
 void StreamClose(task_t *ct, stream_t *s)
 {
-  char mode;
-  assert( ct == s->producer || ct == s->consumer );
+  if ( ct == s->prod.task ) {
+    spinlock_lock(&s->prod.lock);
+    {
+      StreamsetRemove( ct->streams_write, s->prod.tbe );
+      s->prod.task = NULL;
+      s->prod.tbe = NULL;
+    }
+    spinlock_unlock(&s->prod.lock);
 
-  //mode = StreamtableMark(&ct->streamtab, s);
-  switch(mode) {
-  case 'w':
-  spinlock_lock(&s->lock_prod);
-    s->producer = NULL;
-  spinlock_unlock(&s->lock_prod);
-  break;
-  case 'r':
-  spinlock_lock(&s->lock_cons);
-    /*TODO if consumer was collector, unregister flagtree */
-    s->consumer = NULL;
-  spinlock_unlock(&s->lock_cons);
-  break;
-  default:
+  } else if ( ct == s->cons.task ) {
+    spinlock_lock(&s->cons.lock);
+    {
+      StreamsetRemove( ct->streams_read, s->cons.tbe );
+      s->cons.task = NULL;
+      s->cons.tbe = NULL;
+      /*TODO if consumer was collector, unregister flagtree */
+    }
+    spinlock_unlock(&s->cons.lock);
+  
+  } else {
+    /* task is neither producer nor consumer:
+       something went wrong */
     assert(0);
   }
+  
   /* destroy request */
   StreamDestroy(s);
 }
@@ -149,9 +152,7 @@ void StreamClose(task_t *ct, stream_t *s)
 void *StreamPeek(task_t *ct, stream_t *s)
 { 
   /* check if opened for reading */
-  assert( s->consumer == ct );
-
-  /*TODO put stream in 'interesting' set for monitoring */
+  assert( s->cons.task == ct );
 
   /* if the buffer is empty, buf[pread]==NULL */
   return s->buf[s->pread];  
@@ -173,7 +174,7 @@ void *StreamRead(task_t *ct, stream_t *s)
   void *item;
 
   /* check if opened for reading */
-  assert( s->consumer == ct );
+  assert( s->cons.task == ct );
 
   /* wait if buffer is empty */
   if ( s->buf[s->pread] != NULL ) {
@@ -185,7 +186,9 @@ void *StreamRead(task_t *ct, stream_t *s)
   s->buf[s->pread]=NULL;
   s->pread += (s->pread+1 >= STREAM_BUFFER_SIZE) ?
               (1-STREAM_BUFFER_SIZE) : 1;
-  /*TODO put stream in 'interesting' set for monitoring */
+
+  /* for monitoring */
+  StreamsetEvent( ct->streams_read, s->cons.tbe );
 
   return item;
 }
@@ -204,7 +207,7 @@ void *StreamRead(task_t *ct, stream_t *s)
 bool StreamIsSpace(task_t *ct, stream_t *s)
 {
   /* check if opened for writing */
-  assert( ct == NULL ||  s->producer == ct );
+  assert( ct == NULL ||  s->prod.task == ct );
 
   /* if there is space in the buffer, the location at pwrite holds NULL */
   return ( s->buf[s->pwrite] == NULL );
@@ -228,7 +231,7 @@ bool StreamIsSpace(task_t *ct, stream_t *s)
 void StreamWrite(task_t *ct, stream_t *s, void *item)
 {
   /* check if opened for writing */
-  assert( ct == NULL ||  s->producer == ct );
+  assert( ct == NULL ||  s->prod.task == ct );
 
   assert( item != NULL );
 
@@ -249,16 +252,15 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   s->buf[s->pwrite] = item;
   s->pwrite += (s->pwrite+1 >= STREAM_BUFFER_SIZE) ?
                (1-STREAM_BUFFER_SIZE) : 1;
-  /*TODO put stream in 'interesting' set for monitoring */
 
-  /* signal the consumer a write event */
-  spinlock_lock(&s->lock_cons);
+  /* for monitoring */
+  StreamsetEvent( ct->streams_read, s->cons.tbe );
+
+/* signal the consumer a write event */
+  spinlock_lock(&s->cons.lock);
   /* TODO if flagtree registered, use flagtree mark */
-  spinlock_unlock(&s->lock_cons);
+  spinlock_unlock(&s->cons.lock);
 
   return;
 }
-
-
-
 

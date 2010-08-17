@@ -103,8 +103,8 @@ void StreamsetDestroy(streamset_t *set)
  *
  * @param set     set in which to add a stream
  * @param s       stream to add
- * @param grp_idx TODO OUT param
- *                group index will be written to the given location
+ * @param grp_idx OUT param; if grp_idx != NULL, group index
+ *                will be written to the given location
  * @return        pointer to the stream table entry
  */
 streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
@@ -191,7 +191,7 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
   /* ret_idx contains the group number of ste */
 
   /* set out parameter grp_idx */
-  *grp_idx = ret_idx;
+  if (grp_idx != NULL) *grp_idx = ret_idx;
   
   /* fill the entry */
   ste->s = s;

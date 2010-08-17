@@ -1,5 +1,5 @@
 #ifndef _STREAMSET_H_
-#define _STREAMSET_H
+#define _STREAMSET_H_
 
 #include <stdio.h>
 

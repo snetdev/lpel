@@ -5,9 +5,9 @@
 #define  STREAM_BUFFER_SIZE 32
 #endif
 
+#include "bool.h"
 #include "task.h"
 #include "spinlock.h"
-#include "rwlock.h"
 #include "streamset.h"
 #include "atomic.h"
 
@@ -17,18 +17,22 @@
 
 typedef struct stream stream_t;
 
+/* stream open descriptor */
+struct stream_odesc {
+  task_t *task;
+  streamtbe_t *tbe;
+  spinlock_t lock;
+};
+
 /* Padding is required to avoid false-sharing between core's private cache */
 struct stream {
   volatile unsigned long pread;
   long padding1[longxCacheLine-1];
   volatile unsigned long pwrite;
   long padding2[longxCacheLine-1];
-  spinlock_t lock_prod;
-  spinlock_t lock_cons;
   void *buf[STREAM_BUFFER_SIZE];
-  task_t *producer;
-  task_t *consumer;
-  // streamtbe prod/cons
+  /* producer / consumer  */
+  struct stream_odesc prod, cons;
   atomic_t refcnt;
 };
 
