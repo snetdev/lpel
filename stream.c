@@ -142,6 +142,59 @@ void StreamClose(task_t *ct, stream_t *s)
 
 
 /**
+ * Replace a stream opened for reading by another stream
+ *
+ * This is like calling StreamClose(s); StreamOpen(snew, 'r');
+ * sequentially, but with the difference that the "position"
+ * of the old stream is used for the new stream.
+ * This is used in collector tasks, i.e., tasks that can wait
+ * on input from any of its streams opened for reading.
+ *
+ * @param ct    current task
+ * @param s     stream which to replace
+ * @param snew  stream that replaces s
+ */
+void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
+{
+  /* only streams opened for reading can be replaced */
+  assert( ct == s->cons.task );
+  /* new stream must have been closed by previous consumer */
+  assert( snew->cons.task == NULL );
+
+  spinlock_lock(&snew->cons.lock);
+  {
+    /* Task has opened s, hence s contains a reference to the tbe.
+       In that tbe, the stream must be replaced. Then, the reference
+       to the tbe must be copied to the new stream */
+    StreamsetReplace( ct->streams_read, s->cons.tbe, snew );
+    snew->cons.tbe = s->cons.tbe;
+    /* also, set the task in the new stream */
+    snew->cons.task = ct; /* ct == s->cons.task */
+
+    /*TODO if consumer is collector, register flagtree for new stream */
+  }
+  spinlock_unlock(&snew->cons.lock);
+
+  /* clear references in old stream */
+  spinlock_lock(&s->cons.lock);
+  {
+    s->cons.task = NULL;
+    s->cons.tbe = NULL;
+  }
+  spinlock_unlock(&s->cons.lock);
+
+  /* destroy request for old stream */
+  StreamDestroy(s);
+}
+
+/*
+ * TODO stream_iter_t *StreamWaitAny(task_t *ct)
+ */
+
+
+
+
+/**
  * Non-blocking read from a stream
  *
  * @param ct  pointer to current task
