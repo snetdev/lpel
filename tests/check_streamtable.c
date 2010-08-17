@@ -7,6 +7,8 @@
 
 streamtable_t tab = NULL;
 
+typedef struct stream stream_t;
+
 static void testAdd(void)
 {
   unsigned long *cnt;
