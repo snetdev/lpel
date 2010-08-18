@@ -4,8 +4,6 @@
 
 #include <assert.h>
 
-void GatherLeaf(int i);
-#define FT_GATHER(i)  GatherLeaf(i)
 #include "../flagtree.h"
 
 
@@ -15,7 +13,7 @@ rwlock_t lock;
 static void header(const char *s);
 
 
-void GatherLeaf(int i)
+void GatherLeaf(int i, void *arg)
 {
   fprintf(stderr,"gather %d\n",i);
 }
@@ -90,7 +88,7 @@ static void testGather(void)
   FlagtreePrint(&H);
 
   fprintf(stderr,"Gather\n");
-  FlagtreeGather(&H);
+  FlagtreeGather(&H, GatherLeaf, NULL);
   FlagtreePrint(&H);
 
   FlagtreeFree(&H);

@@ -78,7 +78,7 @@ void FlagtreeGrow(flagtree_t *ft)
 /**
  * @pre idx is marked
  */
-static void Visit(flagtree_t *ft, int idx)
+static void Visit(flagtree_t *ft, int idx, void *arg)
 {
   /* preorder: clear current node */
   ft->buf[idx] = 0;
@@ -86,15 +86,15 @@ static void Visit(flagtree_t *ft, int idx)
     /* if inner node, descend: */
     /* left child */
     if (ft->buf[FT_LEFT_CHILD(idx)] != 0) {
-      Visit(ft, FT_LEFT_CHILD(idx));
+      Visit(ft, FT_LEFT_CHILD(idx), arg);
     }
     /* right child */
     if (ft->buf[FT_RIGHT_CHILD(idx)] != 0) {
-      Visit(ft, FT_RIGHT_CHILD(idx));
+      Visit(ft, FT_RIGHT_CHILD(idx), arg);
     }
   } else {
     /* gather leaf of idx */
-    FT_GATHER( FT_IDX_TO_LEAF(ft->height, idx) );
+    ft->gather( FT_IDX_TO_LEAF(ft->height, idx), arg );
   }
 }
 
@@ -102,11 +102,12 @@ static void Visit(flagtree_t *ft, int idx)
  * Gather marked leafs recursively,
  * clearing the marks in preorder
  */
-void FlagtreeGatherRec(flagtree_t *ft)
+void FlagtreeGatherRec(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg)
 {
   /* no locking necessary, as only the gatherer will grow the tree */
+  ft->gather = gather;
   /* start from root */
-  Visit(ft, 0);
+  Visit(ft, 0, arg);
 };
 
 

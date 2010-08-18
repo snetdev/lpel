@@ -280,6 +280,12 @@ static bool WaitingTestOnWrite(task_t *wt, void *arg)
   return *wt->event_ptr != 0;
 }
 
+static void WaitingTestGather(int i, void *arg)
+{
+  streamset_t *set = (streamset_t *) arg;
+  StreamsetChainAdd( set, i );
+}
+
 static bool WaitingTestOnAny(task_t *wt, void *arg)
 {
   assert( TASK_IS_WAITANY(wt) );
@@ -288,8 +294,7 @@ static bool WaitingTestOnAny(task_t *wt, void *arg)
   if (*wt->event_ptr != 0) {
     /* if root flag is set, try to gather all set leafs */
     StreamsetChainStart( wt->streams_read );
-    //TODO interface conflict!!!
-    //FlagtreeGather( wt->flagtree, StreamsetChainAdd);
+    FlagtreeGather( &wt->flagtree, WaitingTestGather, wt->streams_read);
     return StreamsetChainNotEmpty(wt->streams_read);
   }
   /* event_ptr points to the root of the flagtree */
