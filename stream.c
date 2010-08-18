@@ -99,6 +99,10 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
           ct->max_grp_idx *= 2;
         }
         s->wany_idx = grpidx;
+        /* if stream not empty, mark flagtree */
+        if (s->buf[s->pread] != NULL) {
+          FlagtreeMark(&ct->flagtree, s->wany_idx, -1);
+        }
       }
     }
     spinlock_unlock(&s->cons.lock);
@@ -184,6 +188,10 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
 
     /*if consumer is collector, register flagtree for new stream */
     snew->wany_idx = s->wany_idx;
+    /* if stream not empty, mark flagtree */
+    if (snew->wany_idx >= 0 && snew->buf[s->pread] != NULL) {
+      FlagtreeMark(&ct->flagtree, snew->wany_idx, -1);
+    }
   }
   spinlock_unlock(&snew->cons.lock);
 
@@ -326,7 +334,7 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
 
   spinlock_lock(&s->cons.lock);
   /*  if flagtree registered, use flagtree mark */
-  if (s->wany_idx != -1) {
+  if (s->wany_idx >= 0) {
     FlagtreeMark(
         &s->cons.task->flagtree,
         s->wany_idx,
