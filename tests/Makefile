@@ -38,3 +38,10 @@ lpel:
 	gcc -c ../*.c $(CFLAGS)
 	gcc -o check_lpel *.o $(LDFLAGS) -lcap -lpcl -lpthread -lrt
 	./check_lpel
+
+lpel2:
+	rm -f check_*.o
+	gcc -c check_lpel2.c $(CFLAGS)
+	gcc -c ../*.c $(CFLAGS)
+	gcc -o check_lpel2 *.o $(LDFLAGS) -lcap -lpcl -lpthread -lrt
+	./check_lpel2
