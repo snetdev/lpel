@@ -179,7 +179,7 @@ void TaskWaitOnWrite(task_t *ct, stream_t *s)
 }
 
 
-void TaskWaitAny(task_t *ct)
+void TaskWaitOnAny(task_t *ct)
 {
   assert( ct->state == TASK_RUNNING );
   assert( TASK_IS_WAITANY(ct) );

@@ -65,6 +65,7 @@ struct task {
   flagtree_t flagtree;
   rwlock_t rwlock;
   int max_grp_idx;
+  streamtbe_iter_t iter;
 
   /* reference counter */
   atomic_t refcnt;
@@ -99,6 +100,7 @@ extern task_t *TaskCreate( taskfunc_t, void *inarg, unsigned int attr);
 extern void TaskDestroy(task_t *t);
 extern void TaskWaitOnRead(task_t *ct, struct stream *s);
 extern void TaskWaitOnWrite(task_t *ct, struct stream *s);
+extern void TaskWaitOnAny(task_t *ct);
 extern void TaskExit(task_t *ct, void *outarg);
 extern void TaskYield(task_t *ct);
 

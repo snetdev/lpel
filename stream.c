@@ -208,12 +208,6 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
   StreamDestroy(s);
 }
 
-/*
- * TODO stream_iter_t *StreamWaitAny(task_t *ct)
- */
-
-
-
 
 /**
  * Non-blocking read from a stream
@@ -344,5 +338,37 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   spinlock_unlock(&s->cons.lock);
 
   return;
+}
+
+
+
+/**
+ *TODO
+ */
+void StreamWaitAny(task_t *ct)
+{
+  assert( TASK_IS_WAITANY(ct) );
+
+  TaskWaitOnAny(ct);
+  StreamsetIterateStart(ct->streams_read, &ct->iter);
+}
+
+/**
+ *TODO
+ */
+stream_t *StreamIterNext(task_t *ct)
+{
+  assert( TASK_IS_WAITANY(ct) );
+  streamtbe_t *ste = StreamsetIterateNext(ct->streams_read, &ct->iter);
+  return ste->s;
+}
+
+/**
+ *TODO
+ */
+bool StreamIterHasNext(task_t *ct)
+{
+  assert( TASK_IS_WAITANY(ct) );
+  return StreamsetIterateHasNext(ct->streams_read, &ct->iter) > 0;
 }
 

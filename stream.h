@@ -48,6 +48,9 @@ extern void *StreamRead(task_t *ct, stream_t *s);
 extern bool StreamIsSpace(task_t *ct, stream_t *s);
 extern void StreamWrite(task_t *ct, stream_t *s, void *item);
 
+extern void StreamWaitAny(task_t *ct);
+extern stream_t *StreamIterNext(task_t *ct);
+extern bool StreamIterHasNext(task_t *ct);
 
 
 #endif /* _STREAM_H_ */
