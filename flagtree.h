@@ -38,6 +38,11 @@
 /* right child index of index i: 2i+2 = 2(i+1)*/
 #define FT_RIGHT_CHILD(i)     ( 2*((i)+1) )
 
+
+#ifndef FT_GATHER
+#define FT_GATHER(i)  /*NOP*/
+#endif
+
 #include "rwlock.h"
 
 /**
@@ -81,7 +86,7 @@ static inline void FlagtreeMark(flagtree_t *ft, int idx, int reader)
  * Gather marked leafs iteratively,
  * clearing the marks in preorder
  */
-static inline void FlagtreeGatherNoGoto(flagtree_t *ft, void (*gather)(int) )
+static inline void FlagtreeGatherNoGoto(flagtree_t *ft)
 {
   int prev, cur, next;
   /* start from root */
@@ -100,7 +105,7 @@ static inline void FlagtreeGatherNoGoto(flagtree_t *ft, void (*gather)(int) )
         else { next = FT_PARENT(cur); }
       } else {
         /* gather leaf of idx */
-        gather( FT_IDX_TO_LEAF(ft->height, cur) );
+        FT_GATHER( FT_IDX_TO_LEAF(ft->height, cur) );
         next = FT_PARENT(cur);
       }
 
@@ -123,11 +128,9 @@ static inline void FlagtreeGatherNoGoto(flagtree_t *ft, void (*gather)(int) )
  * Gather marked leafs iteratively,
  * clearing the marks in preorder
  * @param ft      the flagtree to gather from
- * @param gather  the callback function to call for each leaf;
- *                gather is called with the leaf idx as argument (if garther!=NULL)
  * @pre           FlagtreeGather and FlagtreeGrow must not be executed concurrently
  */
-static inline void FlagtreeGather(flagtree_t *ft, void (*gather)(int) )
+static inline void FlagtreeGather(flagtree_t *ft)
 {
   int prev, cur, next;
   /* start from root */
@@ -142,7 +145,7 @@ static inline void FlagtreeGather(flagtree_t *ft, void (*gather)(int) )
       ft->buf[cur] = 0;
       if ( cur >= FT_LEAF_START_IDX(ft->height) ) {
         /* gather leaf of idx */
-        if (gather!=NULL) gather( FT_IDX_TO_LEAF(ft->height, cur) );
+        FT_GATHER( FT_IDX_TO_LEAF(ft->height, cur) );
         goto lab_parent;
       }
     } else if (prev == FT_LEFT_CHILD(cur)) {
@@ -176,7 +179,7 @@ lab_out:
 extern void FlagtreeAlloc(flagtree_t *ft, int height, rwlock_t *lock);
 extern void FlagtreeFree(flagtree_t *ft);
 extern void FlagtreeGrow(flagtree_t *ft);
-extern void FlagtreeGatherRec(flagtree_t *ft, void (*gather)(int) );
+extern void FlagtreeGatherRec(flagtree_t *ft);
 
 #ifndef NDEBUG
 extern void FlagtreePrint(flagtree_t *ft);

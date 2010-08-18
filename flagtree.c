@@ -17,7 +17,6 @@
 #include "flagtree.h"
 
 
-static void (*callback_gather)(int);
 
 /**
  * Allocate the ft for a given height
@@ -95,7 +94,7 @@ static void Visit(flagtree_t *ft, int idx)
     }
   } else {
     /* gather leaf of idx */
-    callback_gather( FT_IDX_TO_LEAF(ft->height, idx) );
+    FT_GATHER( FT_IDX_TO_LEAF(ft->height, idx) );
   }
 }
 
@@ -103,10 +102,9 @@ static void Visit(flagtree_t *ft, int idx)
  * Gather marked leafs recursively,
  * clearing the marks in preorder
  */
-void FlagtreeGatherRec(flagtree_t *ft, void (*gather)(int) )
+void FlagtreeGatherRec(flagtree_t *ft)
 {
   /* no locking necessary, as only the gatherer will grow the tree */
-  callback_gather = gather;
   /* start from root */
   Visit(ft, 0);
 };

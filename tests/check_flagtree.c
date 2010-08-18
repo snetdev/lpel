@@ -3,6 +3,9 @@
 #include <string.h>
 
 #include <assert.h>
+
+void GatherLeaf(int i);
+#define FT_GATHER(i)  GatherLeaf(i)
 #include "../flagtree.h"
 
 
@@ -87,7 +90,7 @@ static void testGather(void)
   FlagtreePrint(&H);
 
   fprintf(stderr,"Gather\n");
-  FlagtreeGather(&H, GatherLeaf);
+  FlagtreeGather(&H);
   FlagtreePrint(&H);
 
   FlagtreeFree(&H);
