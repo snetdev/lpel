@@ -33,6 +33,7 @@ struct stream {
   void *buf[STREAM_BUFFER_SIZE];
   /* producer / consumer  */
   struct stream_odesc prod, cons;
+  int wany_idx;
   atomic_t refcnt;
 };
 

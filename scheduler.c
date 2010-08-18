@@ -295,6 +295,7 @@ static bool WaitingTestOnAny(task_t *wt, void *arg)
     /* if root flag is set, try to gather all set leafs */
     StreamsetChainStart( wt->streams_read );
     FlagtreeGather( &wt->flagtree, WaitingTestGather, wt->streams_read);
+    /* only return true, if at least on leaf could be gathered */
     return StreamsetChainNotEmpty(wt->streams_read);
   }
   /* event_ptr points to the root of the flagtree */

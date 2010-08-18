@@ -20,6 +20,7 @@
 
 #include "lpel.h"
 #include "task.h"
+#include "flagtree.h"
 #include "sysdep.h"
 
 
@@ -40,7 +41,7 @@ stream_t *StreamCreate(void)
     s->prod.tbe = s->cons.tbe = NULL;
     spinlock_init(&s->prod.lock);
     spinlock_init(&s->cons.lock);
-
+    s->wany_idx = -1;
     /* refcnt reflects the number of tasks
        + the stream itself opened this stream {1,2,3} */
     atomic_set(&s->refcnt, 1);
@@ -90,9 +91,15 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
       assert( s->cons.task == NULL );
       s->cons.task = ct;
       s->cons.tbe  = StreamsetAdd(ct->streams_read, s, &grpidx);
-
-      /*TODO if consumer task is a collector, register flagtree,
-        set the flag if stream not empty? */
+      
+      /*if consumer task is a collector, register flagtree */
+      if ( TASK_IS_WAITANY(ct) ) {
+        if (grpidx > ct->max_grp_idx) {
+          FlagtreeGrow(&ct->flagtree);
+          ct->max_grp_idx *= 2;
+        }
+        s->wany_idx = grpidx;
+      }
     }
     spinlock_unlock(&s->cons.lock);
     break;
@@ -126,7 +133,11 @@ void StreamClose(task_t *ct, stream_t *s)
       StreamsetRemove( ct->streams_read, s->cons.tbe );
       s->cons.task = NULL;
       s->cons.tbe = NULL;
-      /*TODO if consumer was collector, unregister flagtree */
+      
+      /* if consumer was collector, unregister flagtree */
+      if ( TASK_IS_WAITANY(ct) ) {
+        s->wany_idx = -1;
+      }
     }
     spinlock_unlock(&s->cons.lock);
   
@@ -171,7 +182,8 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
     /* also, set the task in the new stream */
     snew->cons.task = ct; /* ct == s->cons.task */
 
-    /*TODO if consumer is collector, register flagtree for new stream */
+    /*if consumer is collector, register flagtree for new stream */
+    snew->wany_idx = s->wany_idx;
   }
   spinlock_unlock(&snew->cons.lock);
 
@@ -180,6 +192,7 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
   {
     s->cons.task = NULL;
     s->cons.tbe = NULL;
+    s->wany_idx = -1;
   }
   spinlock_unlock(&s->cons.lock);
 
@@ -312,7 +325,14 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   if (ct!=NULL) StreamsetEvent( ct->streams_read, s->cons.tbe );
 
   spinlock_lock(&s->cons.lock);
-  /* TODO if flagtree registered, use flagtree mark */
+  /*  if flagtree registered, use flagtree mark */
+  if (s->wany_idx != -1) {
+    FlagtreeMark(
+        &s->cons.task->flagtree,
+        s->wany_idx,
+        s->cons.task->owner
+        );
+  }
   spinlock_unlock(&s->cons.lock);
 
   return;
