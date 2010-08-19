@@ -62,7 +62,7 @@ static void *LpelWorker(void *arg)
   unsigned int loop;
   int id = *((int *)arg);
   schedctx_t *sc = SchedGetContext( id );
-  monitoring_t *mon_info;
+  monitoring_t mon_info;
 
   /* Init libPCL */
   co_thread_init();
@@ -71,12 +71,12 @@ static void *LpelWorker(void *arg)
   /* initialise monitoring */
   MonitoringInit(&mon_info, id);
 
-  MonitoringDebug(mon_info, "worker %d started\n", id);
+  MonitoringDebug(&mon_info, "worker %d started\n", id);
 
   /* set affinity to id=CPU */
   if (b_assigncore) {
     if ( CpuAssignToCore(id) ) {
-      MonitoringDebug(mon_info, "worker %d assigned to core\n", id);
+      MonitoringDebug(&mon_info, "worker %d assigned to core\n", id);
     }
   }
   
@@ -116,8 +116,8 @@ static void *LpelWorker(void *arg)
       CpuAssignSetPreemptable(true);
 
       /* output accounting info (mon) */
-      MonitoringPrint(mon_info, t);
-      MonitoringDebug(mon_info, "worker %d, loop %u\n", id, loop);
+      MonitoringPrint(&mon_info, t);
+      MonitoringDebug(&mon_info, "worker %d, loop %u\n", id, loop);
 
       SchedReschedule(sc, t);
     } /* end if executed ready task */
@@ -128,7 +128,7 @@ static void *LpelWorker(void *arg)
   /* stop only if there are no more tasks in the system */
   /* MAIN SCHEDULER LOOP END */
     
-  MonitoringCleanup(mon_info);
+  MonitoringCleanup(&mon_info);
 
   /* Cleanup libPCL */
   co_thread_cleanup();

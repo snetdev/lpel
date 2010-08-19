@@ -328,7 +328,7 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
                (1-STREAM_BUFFER_SIZE) : 1;
 
   /* for monitoring */
-  if (ct!=NULL) StreamsetEvent( &ct->streams_read, s->cons.tbe );
+  if (ct!=NULL) StreamsetEvent( &ct->streams_write, s->prod.tbe );
 
   spinlock_lock(&s->cons.lock);
   /*  if flagtree registered, use flagtree mark */

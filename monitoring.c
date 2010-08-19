@@ -9,21 +9,16 @@
 #include "monitoring.h"
 #include "timing.h"
 
-struct monitoring {
-  FILE *outfile;
-};
 
-
-void MonitoringInit(monitoring_t **mon, int worker_id)
+void MonitoringInit(monitoring_t *mon, int worker_id)
 {
   char fname[11];
   int cnt_written;
   cnt_written = snprintf(fname, 11, "out%03d.log", worker_id);
   assert(cnt_written==10);
 
-  *mon = (monitoring_t *) malloc( sizeof(monitoring_t) );
-  (*mon)->outfile = fopen(fname, "w");
-  assert((*mon)->outfile != NULL);
+  mon->outfile = fopen(fname, "w");
+  assert( mon->outfile != NULL);
 }
 
 void MonitoringCleanup(monitoring_t *mon)
@@ -31,8 +26,6 @@ void MonitoringCleanup(monitoring_t *mon)
   int ret;
   ret = fclose(mon->outfile);
   assert(ret == 0);
-
-  free(mon);
 }
 
 void MonitoringPrint(monitoring_t *mon, task_t *t)
