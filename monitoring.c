@@ -64,8 +64,15 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
       buf, t->owner, t->uid, t->cnt_dispatch, t->state
       );
 
-  if ( t->state == TASK_WAITING ) {
-    fprintf( mon->outfile, "on %c:%p ", t->wait_on, t->wait_s );
+  switch (t->state) {
+    case TASK_WAITING:
+      fprintf( mon->outfile, "on %c:%p ", t->wait_on, t->wait_s );
+      break;
+    case TASK_ZOMBIE:
+      PRINT_TS(&t->times.creat, buf);
+      fprintf( mon->outfile, "creat %s ", buf );
+      break;
+    default: /*NOP*/;
   }
 
   if ( IS_FLAG( MONITORING_TIMES ) ) {
