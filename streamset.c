@@ -383,7 +383,7 @@ void StreamsetPrint(streamset_t *set, FILE *file)
     tbe = next;
   }
   if (file!=NULL) {
-    fprintf( file,"]" );
+    fprintf( file,"] " );
   }
   /* dirty_list is now empty again */
   set->dirty_list = DIRTY_END;

@@ -68,7 +68,7 @@ static void *LpelWorker(void *arg)
   
 
   /* initialise monitoring */
-  MonitoringInit(&mon_info, id);
+  MonitoringInit(&mon_info, id, MONITORING_ALL);
 
   MonitoringDebug(&mon_info, "worker %d started\n", id);
 
