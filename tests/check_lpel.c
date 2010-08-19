@@ -5,7 +5,6 @@
 #include <pthread.h>
 
 #include <assert.h>
-#include "../debug.h"
 #include "../cpuassign.h"
 #include "../lpel.h"
 #include "../task.h"

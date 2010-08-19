@@ -2,7 +2,6 @@
 #include <stdio.h>
 
 #include <assert.h>
-#include "../debug.h"
 #include "../lpel.h"
 #include "../task.h"
 #include "../stream.h"

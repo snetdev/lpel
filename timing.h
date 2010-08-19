@@ -9,7 +9,6 @@
  */
 #include <time.h>
 
-#include "debug.h"
 
 typedef struct timespec timing_t;
 

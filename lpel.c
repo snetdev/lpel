@@ -21,7 +21,6 @@
 
 #include "task.h"
 #include "stream.h"
-#include "debug.h"
 #include "scheduler.h"
 
 /* used (imported) modules of LPEL */
