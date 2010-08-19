@@ -41,18 +41,16 @@ static inline void MarkDirty(streamset_t *set, streamtbe_t *tbe)
 
 
 /**
- * Create a streamset
+ * Initialise a streamset
  *
+ * @param set         streamset to initialise
  * @param init_cap2   initial capacity of the streamset.
  *                    streamset will fit 2^init_cap2 groups.
  * @pre               init_cap2 >= 0
- * @return            pointer to the created streamset
  */
-streamset_t *StreamsetCreate(int init_cap2)
+void StreamsetInit(streamset_t *set, int init_cap2)
 {
-  streamset_t *set;
 
-  set = (streamset_t *) malloc( sizeof(streamset_t) );
   set->grp_capacity = (1<<init_cap2);
   /* allocate lookup table, initialized to NULL values */
   set->lookup = (struct streamgrp **) calloc(
@@ -67,17 +65,17 @@ streamset_t *StreamsetCreate(int init_cap2)
   set->dirty_list = DIRTY_END;
 
   /* group chain is uninitialized */
-  
-  return set;
 }
 
 
 /**
- * Destroy a streamset
+ * Cleanup a streamset
  *
- * @param set   streamset to destroy
+ * Frees all the allocated memory for the streamset internal structures.
+ *
+ * @param set   streamset to cleanup
  */
-void StreamsetDestroy(streamset_t *set)
+void StreamsetCleanup(streamset_t *set)
 {
   int i;
   struct streamgrp *grp;
@@ -89,9 +87,6 @@ void StreamsetDestroy(streamset_t *set)
   }
   /* free the lookup table itself */
   free(set->lookup);
-
-  /* free the set itself */
-  free(set);
 }
 
 
@@ -292,7 +287,7 @@ void StreamsetChainAdd(streamset_t *set, int grp_idx)
   }
   
   set->chain.count += ( set->idx_grp==grp_idx && set->idx_tab!=0 )
-    ? set->idx_grp : STREAMSET_GRP_SIZE;
+    ? set->idx_tab : STREAMSET_GRP_SIZE;
 }
 
 /**

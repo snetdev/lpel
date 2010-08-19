@@ -7,7 +7,7 @@
 
 #define NUM_STREAMS 40
 
-streamset_t *set = NULL;
+streamset_t set;
   
 long streams[NUM_STREAMS]; 
 
@@ -27,19 +27,19 @@ static void testAdd(void)
   header("Adding to the streamset");
 
   /* create the streamset */
-  set = StreamsetCreate(2);
+  StreamsetInit(&set, 2);
 
   for (i=0; i<add_num; i++) {
-    tbe[i] = StreamsetAdd( set, (stream_t *)streams[i], &idx );
+    tbe[i] = StreamsetAdd( &set, (stream_t *)streams[i], &idx );
     assert( idx == i/STREAMSET_GRP_SIZE );
-    StreamsetDebug(set);
+    StreamsetDebug(&set);
   }
   fprintf(stderr, "\n... CLEAN DIRTY ...\n");
-  StreamsetPrint(set, NULL);
-  StreamsetDebug(set);
+  StreamsetPrint(&set, NULL);
+  StreamsetDebug(&set);
    
   /* destroy the streamset */
-  StreamsetDestroy(set);
+  StreamsetCleanup(&set);
 }
 
 
@@ -52,35 +52,35 @@ static void testEvent(void)
   header("Events in the streamset");
   
   /* create the streamset */
-  set = StreamsetCreate(2);
+  StreamsetInit(&set, 2);
 
   for (i=0; i<add_num; i++) {
-    tbe[i] = StreamsetAdd( set, (stream_t *)streams[i], &idx );
+    tbe[i] = StreamsetAdd( &set, (stream_t *)streams[i], &idx );
     assert( idx == i/STREAMSET_GRP_SIZE );
   }
-  StreamsetPrint(set, NULL);
-  StreamsetDebug(set);
+  StreamsetPrint(&set, NULL);
+  StreamsetDebug(&set);
   
 
   fprintf(stderr, "\nEvents\n");
 
-  StreamsetEvent(set, tbe[2]);
-  StreamsetEvent(set, tbe[2]);
-  StreamsetEvent(set, tbe[0]);
-  StreamsetEvent(set, tbe[1]);
-  StreamsetRemove(set, tbe[1]);
-  StreamsetReplace(set, tbe[4], (stream_t *)0x201);
-  StreamsetDebug(set);
-  StreamsetPrint(set, stderr);
-  StreamsetDebug(set);
+  StreamsetEvent(&set, tbe[2]);
+  StreamsetEvent(&set, tbe[2]);
+  StreamsetEvent(&set, tbe[0]);
+  StreamsetEvent(&set, tbe[1]);
+  StreamsetRemove(&set, tbe[1]);
+  StreamsetReplace(&set, tbe[4], (stream_t *)0x201);
+  StreamsetDebug(&set);
+  StreamsetPrint(&set, stderr);
+  StreamsetDebug(&set);
 
 
-  tbe[add_num] = StreamsetAdd( set, (stream_t *)streams[add_num], &idx );
+  tbe[add_num] = StreamsetAdd( &set, (stream_t *)streams[add_num], &idx );
   assert( idx == 0 );
-  StreamsetDebug(set);
+  StreamsetDebug(&set);
 
   /* destroy the streamset */
-  StreamsetDestroy(set);
+  StreamsetCleanup(&set);
 }
 
 
@@ -96,33 +96,33 @@ static void testIterate(void)
   header("Iterator");
   
   /* create the streamset */
-  set = StreamsetCreate(2);
+  StreamsetInit(&set, 2);
 
   for (i=0; i<add_num; i++) {
-    tbe[i] = StreamsetAdd( set, (stream_t *)streams[i], &idx );
+    tbe[i] = StreamsetAdd( &set, (stream_t *)streams[i], &idx );
     assert( idx == i/STREAMSET_GRP_SIZE );
   }
-  StreamsetPrint(set, NULL);
-  StreamsetDebug(set);
+  StreamsetPrint(&set, NULL);
+  StreamsetDebug(&set);
 
   /* chain up */
-  StreamsetChainStart(set);
-  StreamsetChainAdd(set, 0);
-  StreamsetChainAdd(set, 1);
-  StreamsetChainAdd(set, 3);
-  StreamsetChainAdd(set, 5);
+  StreamsetChainStart(&set);
+  StreamsetChainAdd(&set, 0);
+  StreamsetChainAdd(&set, 1);
+  StreamsetChainAdd(&set, 3);
+  StreamsetChainAdd(&set, 5);
 
   /* iterate */
   fprintf(stderr, "Iterator start:\n");
-  StreamsetIterateStart(set, &iter);
-  while( StreamsetIterateHasNext(set, &iter) > 0 ) {
-    it_cur = StreamsetIterateNext(set, &iter);
+  StreamsetIterateStart(&set, &iter);
+  while( StreamsetIterateHasNext(&set, &iter) > 0 ) {
+    it_cur = StreamsetIterateNext(&set, &iter);
     assert( it_cur != NULL );
     fprintf(stderr, "[%p]\n", it_cur->s);
   }
 
   /* destroy the streamset */
-  StreamsetDestroy(set);
+  StreamsetCleanup(&set);
 }
 
 
@@ -136,8 +136,8 @@ int main(void)
   }
   
   /* tests */
-  //testAdd();
-  //testEvent();
+  testAdd();
+  testEvent();
   testIterate();
 
   return 0;

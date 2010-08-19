@@ -56,11 +56,11 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
 
   t->cnt_dispatch = 0;
 
-  /* create streamset to write */
-  t->streams_write = StreamsetCreate(0);
+  /* init streamset to write */
+  StreamsetInit( &t->streams_write, 0);
 
-  /* create streamset to read */
-  t->streams_read = StreamsetCreate(
+  /* init streamset to read */
+  StreamsetInit( &t->streams_read,
       (TASK_IS_WAITANY(t)) ?
       TASK_WAITANY_GRPS_INIT : 0
       );
@@ -104,8 +104,8 @@ void TaskDestroy(task_t *t)
     LpelTaskRemove(t);
 
     /* free the streamsets */
-    StreamsetDestroy(t->streams_write);
-    StreamsetDestroy(t->streams_read);
+    StreamsetCleanup(&t->streams_write);
+    StreamsetCleanup(&t->streams_read);
 
 
     /* waitany-specific cleanup */

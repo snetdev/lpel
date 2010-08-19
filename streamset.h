@@ -51,8 +51,8 @@ typedef struct {
 } streamtbe_iter_t;
 
 
-extern streamset_t *StreamsetCreate(int init_cap2);
-extern void StreamsetDestroy(streamset_t *set);
+extern void StreamsetInit(streamset_t *set, int init_cap2);
+extern void StreamsetCleanup(streamset_t *set);
 extern streamtbe_t *StreamsetAdd(streamset_t *set,
     struct stream *s, int *grp_idx);
 

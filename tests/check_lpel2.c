@@ -47,7 +47,7 @@ void Consumer(task_t *t, void *inarg)
         if (0 == strcmp( msg, "T\n" )) term=1;
       }
     }
-    //sleep(1);
+    //sleep(5);
   } while (0 == term) ;
 
   /* close streams */ 

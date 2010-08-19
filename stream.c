@@ -79,7 +79,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
     {
       assert( s->prod.task == NULL );
       s->prod.task = ct;
-      s->prod.tbe  = StreamsetAdd(ct->streams_write, s, NULL);
+      s->prod.tbe  = StreamsetAdd(&ct->streams_write, s, NULL);
     }
     spinlock_unlock(&s->prod.lock);
     break;
@@ -90,7 +90,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
       int grpidx;
       assert( s->cons.task == NULL );
       s->cons.task = ct;
-      s->cons.tbe  = StreamsetAdd(ct->streams_read, s, &grpidx);
+      s->cons.tbe  = StreamsetAdd(&ct->streams_read, s, &grpidx);
       
       /*if consumer task is a collector, register flagtree */
       if ( TASK_IS_WAITANY(ct) ) {
@@ -125,7 +125,7 @@ void StreamClose(task_t *ct, stream_t *s)
   if ( ct == s->prod.task ) {
     spinlock_lock(&s->prod.lock);
     {
-      StreamsetRemove( ct->streams_write, s->prod.tbe );
+      StreamsetRemove( &ct->streams_write, s->prod.tbe );
       s->prod.task = NULL;
       s->prod.tbe = NULL;
     }
@@ -134,7 +134,7 @@ void StreamClose(task_t *ct, stream_t *s)
   } else if ( ct == s->cons.task ) {
     spinlock_lock(&s->cons.lock);
     {
-      StreamsetRemove( ct->streams_read, s->cons.tbe );
+      StreamsetRemove( &ct->streams_read, s->cons.tbe );
       s->cons.task = NULL;
       s->cons.tbe = NULL;
       
@@ -181,7 +181,7 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
     /* Task has opened s, hence s contains a reference to the tbe.
        In that tbe, the stream must be replaced. Then, the reference
        to the tbe must be copied to the new stream */
-    StreamsetReplace( ct->streams_read, s->cons.tbe, snew );
+    StreamsetReplace( &ct->streams_read, s->cons.tbe, snew );
     snew->cons.tbe = s->cons.tbe;
     /* also, set the task in the new stream */
     snew->cons.task = ct; /* ct == s->cons.task */
@@ -194,6 +194,10 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
     }
   }
   spinlock_unlock(&snew->cons.lock);
+
+  /* NOTE: both producers of s and snew do possibly mark the flagtree now,
+   *  until the following CS is executed - has this to be considered harmful?
+   */
 
   /* clear references in old stream */
   spinlock_lock(&s->cons.lock);
@@ -257,7 +261,7 @@ void *StreamRead(task_t *ct, stream_t *s)
               (1-STREAM_BUFFER_SIZE) : 1;
 
   /* for monitoring */
-  StreamsetEvent( ct->streams_read, s->cons.tbe );
+  StreamsetEvent( &ct->streams_read, s->cons.tbe );
 
   return item;
 }
@@ -324,7 +328,7 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
                (1-STREAM_BUFFER_SIZE) : 1;
 
   /* for monitoring */
-  if (ct!=NULL) StreamsetEvent( ct->streams_read, s->cons.tbe );
+  if (ct!=NULL) StreamsetEvent( &ct->streams_read, s->cons.tbe );
 
   spinlock_lock(&s->cons.lock);
   /*  if flagtree registered, use flagtree mark */
@@ -350,7 +354,7 @@ void StreamWaitAny(task_t *ct)
   assert( TASK_IS_WAITANY(ct) );
 
   TaskWaitOnAny(ct);
-  StreamsetIterateStart(ct->streams_read, &ct->iter);
+  StreamsetIterateStart( &ct->streams_read, &ct->iter );
 }
 
 /**
@@ -359,7 +363,7 @@ void StreamWaitAny(task_t *ct)
 stream_t *StreamIterNext(task_t *ct)
 {
   assert( TASK_IS_WAITANY(ct) );
-  streamtbe_t *ste = StreamsetIterateNext(ct->streams_read, &ct->iter);
+  streamtbe_t *ste = StreamsetIterateNext( &ct->streams_read, &ct->iter );
   return ste->s;
 }
 
@@ -369,6 +373,6 @@ stream_t *StreamIterNext(task_t *ct)
 bool StreamIterHasNext(task_t *ct)
 {
   assert( TASK_IS_WAITANY(ct) );
-  return StreamsetIterateHasNext(ct->streams_read, &ct->iter) > 0;
+  return StreamsetIterateHasNext( &ct->streams_read, &ct->iter ) > 0;
 }
 

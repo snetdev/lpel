@@ -51,9 +51,9 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
     );
   
   fprintf(mon->outfile, " W");
-  StreamsetPrint(t->streams_write, mon->outfile);
+  StreamsetPrint( &t->streams_write, mon->outfile);
   fprintf(mon->outfile, " R");
-  StreamsetPrint(t->streams_read, mon->outfile);
+  StreamsetPrint( &t->streams_read, mon->outfile);
 
   fprintf(mon->outfile, "\n");
   ret = fflush(mon->outfile);

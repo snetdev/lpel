@@ -84,7 +84,7 @@ struct task {
   unsigned long cnt_dispatch; /* dispatch counter */
 
   /* array of streams opened for writing/reading */
-  streamset_t *streams_read, *streams_write;
+  streamset_t streams_read, streams_write;
 
   /* CODE */
   coroutine_t ctx;
