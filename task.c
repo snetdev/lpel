@@ -64,10 +64,17 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
 
   /* other stuff that is special for WAIT_ANY tasks */
   if ( TASK_IS_WAITANY(t) ) {
-    rwlock_init( &t->rwlock, LpelNumWorkers() );
-    FlagtreeAlloc( &t->flagtree, TASK_WAITANY_GRPS_INIT, &t->rwlock );
+    /* allocate specific info struct */
+    t->waitany_info = (struct waitany *) malloc( sizeof(struct waitany) );
+
+    rwlock_init( &t->waitany_info->rwlock, LpelNumWorkers() );
+    FlagtreeAlloc(
+        &t->waitany_info->flagtree,
+        TASK_WAITANY_GRPS_INIT,
+        &t->waitany_info->rwlock
+        );
     /* max_grp_idx = 2^x - 1 */
-    t->max_grp_idx = (1<<TASK_WAITANY_GRPS_INIT)-1;
+    t->waitany_info->max_grp_idx = (1<<TASK_WAITANY_GRPS_INIT)-1;
   }
 
   t->code = func;
@@ -103,8 +110,10 @@ void TaskDestroy(task_t *t)
 
     /* waitany-specific cleanup */
     if ( TASK_IS_WAITANY(t) ) {
-      rwlock_cleanup( &t->rwlock );
-      FlagtreeFree( &t->flagtree );
+      rwlock_cleanup( &t->waitany_info->rwlock );
+      FlagtreeFree( &t->waitany_info->flagtree );
+      /* free waitany struct */
+      free( t->waitany_info );
     }
 
     /* delete the coroutine */
@@ -180,7 +189,7 @@ void TaskWaitOnAny(task_t *ct)
   assert( TASK_IS_WAITANY(ct) );
 
   /* WAIT upon any input stream setting root flag */
-  ct->event_ptr = &ct->flagtree.buf[0];
+  ct->event_ptr = &ct->waitany_info->flagtree.buf[0];
   ct->state = TASK_WAITING;
   ct->wait_on = WAIT_ON_ANY;
   ct->wait_s = NULL;

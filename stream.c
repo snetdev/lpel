@@ -94,14 +94,14 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
       
       /*if consumer task is a collector, register flagtree */
       if ( TASK_IS_WAITANY(ct) ) {
-        if (grpidx > ct->max_grp_idx) {
-          FlagtreeGrow(&ct->flagtree);
-          ct->max_grp_idx *= 2;
+        if (grpidx > ct->waitany_info->max_grp_idx) {
+          FlagtreeGrow(&ct->waitany_info->flagtree);
+          ct->waitany_info->max_grp_idx *= 2;
         }
         s->wany_idx = grpidx;
         /* if stream not empty, mark flagtree */
         if (s->buf[s->pread] != NULL) {
-          FlagtreeMark(&ct->flagtree, s->wany_idx, -1);
+          FlagtreeMark(&ct->waitany_info->flagtree, s->wany_idx, -1);
         }
       }
     }
@@ -190,7 +190,7 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
     snew->wany_idx = s->wany_idx;
     /* if stream not empty, mark flagtree */
     if (snew->wany_idx >= 0 && snew->buf[s->pread] != NULL) {
-      FlagtreeMark(&ct->flagtree, snew->wany_idx, -1);
+      FlagtreeMark(&ct->waitany_info->flagtree, snew->wany_idx, -1);
     }
   }
   spinlock_unlock(&snew->cons.lock);
@@ -334,7 +334,7 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   /*  if flagtree registered, use flagtree mark */
   if (s->wany_idx >= 0) {
     FlagtreeMark(
-        &s->cons.task->flagtree,
+        &s->cons.task->waitany_info->flagtree,
         s->wany_idx,
         s->cons.task->owner
         );
@@ -352,9 +352,11 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
 void StreamWaitAny(task_t *ct)
 {
   assert( TASK_IS_WAITANY(ct) );
-
   TaskWaitOnAny(ct);
-  StreamsetIterateStart( &ct->streams_read, &ct->iter );
+  StreamsetIterateStart(
+      &ct->streams_read,
+      &ct->waitany_info->iter
+      );
 }
 
 /**
@@ -363,7 +365,10 @@ void StreamWaitAny(task_t *ct)
 stream_t *StreamIterNext(task_t *ct)
 {
   assert( TASK_IS_WAITANY(ct) );
-  streamtbe_t *ste = StreamsetIterateNext( &ct->streams_read, &ct->iter );
+  streamtbe_t *ste = StreamsetIterateNext(
+      &ct->streams_read,
+      &ct->waitany_info->iter
+      );
   return ste->s;
 }
 
@@ -373,6 +378,9 @@ stream_t *StreamIterNext(task_t *ct)
 bool StreamIterHasNext(task_t *ct)
 {
   assert( TASK_IS_WAITANY(ct) );
-  return StreamsetIterateHasNext( &ct->streams_read, &ct->iter ) > 0;
+  return StreamsetIterateHasNext(
+      &ct->streams_read,
+      &ct->waitany_info->iter
+      ) > 0;
 }
 

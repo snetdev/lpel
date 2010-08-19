@@ -46,6 +46,14 @@ typedef enum {
   WAIT_ON_ANY   = 'a'
 } taskstate_wait_t;
 
+
+struct waitany {
+  flagtree_t flagtree;
+  rwlock_t rwlock;
+  int max_grp_idx;
+  streamtbe_iter_t iter;
+};
+
 typedef struct task task_t;
 
 typedef void (*taskfunc_t)(task_t *t, void *inarg);
@@ -66,11 +74,8 @@ struct task {
   taskstate_wait_t wait_on;
   struct stream *wait_s;
 
-/* waitany-task specific stuff */
-  flagtree_t flagtree;
-  rwlock_t rwlock;
-  int max_grp_idx;
-  streamtbe_iter_t iter;
+  /* waitany-task specific stuff */
+  struct waitany *waitany_info;
 
   /* reference counter */
   atomic_t refcnt;
