@@ -29,18 +29,21 @@
 #define TASK_IS_WAITANY(t)  (BIT_IS_SET((t)->attr, TASK_ATTR_WAITANY))
 
 
+struct stream;
+
+
 typedef enum {
-  TASK_INIT,
-  TASK_RUNNING,
-  TASK_READY,
-  TASK_WAITING,
-  TASK_ZOMBIE
+  TASK_INIT    = 'I',
+  TASK_RUNNING = 'U',
+  TASK_READY   = 'R',
+  TASK_WAITING = 'W',
+  TASK_ZOMBIE  = 'Z'
 } taskstate_t;
 
 typedef enum {
-  WAIT_ON_READ,
-  WAIT_ON_WRITE,
-  WAIT_ON_ANY
+  WAIT_ON_READ  = 'r',
+  WAIT_ON_WRITE = 'w',
+  WAIT_ON_ANY   = 'a'
 } taskstate_wait_t;
 
 typedef struct task task_t;
@@ -51,7 +54,6 @@ typedef void (*taskfunc_t)(task_t *t, void *inarg);
  * TASK CONTROL BLOCK
  */
 struct task {
-  /*TODO  type: IO or normal */
   unsigned long uid;
   taskstate_t state;
   task_t *prev, *next;  /* queue handling: prev, next */
@@ -62,6 +64,9 @@ struct task {
   /* pointer to signalling flag */
   volatile int *event_ptr;
   taskstate_wait_t wait_on;
+  struct stream *wait_s;
+
+/* waitany-task specific stuff */
   flagtree_t flagtree;
   rwlock_t rwlock;
   int max_grp_idx;
@@ -73,17 +78,14 @@ struct task {
   int owner;         /* owning worker thread TODO as place_t */
   void *sched_info;  /* scheduling information  */
 
-  /* Accounting information */
-  /* processing time: */
-  timing_t time_created;  /*XXX time of creation */
-  timing_t time_exited;   /*XXX time of exiting */
-  timing_t time_alive;    /* time alive */
-  timing_t time_lastrun;  /* last running time */
-  timing_t time_totalrun; /* total running time */
-  timing_t time_expavg;   /* exponential average running time */
-  unsigned long cnt_dispatch; /* dispatch counter */
-
-  /* array of streams opened for writing/reading */
+  /* ACCOUNTING INFORMATION */
+  /* timestamps for creation, start/stop of last dispatch */
+  struct {
+    timing_t creat, start, stop;
+  } times;
+  /* dispatch counter */
+  unsigned long cnt_dispatch;
+  /* streamtables: streams opened for writing/reading */
   streamset_t streams_read, streams_write;
 
   /* CODE */

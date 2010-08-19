@@ -307,7 +307,8 @@ static void WaitingRemove(task_t *wt, void *arg)
 {
   schedctx_t *sc = (schedctx_t *)arg;
 
-  wt->state = TASK_READY;
+  wt->state  = TASK_READY;
+  wt->wait_s = NULL;
   /*wt->event_ptr = NULL;*/
   
   /* waiting queue contains only own tasks */

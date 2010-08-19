@@ -11,6 +11,22 @@
 
 #define IS_FLAG(v)  ( (mon->flags & (v)) == (v) )
 
+#define PRINT_TS_BUFLEN 20
+
+/**
+ * Print a timestamp into a char[] buffer
+ *
+ * @param ts   pointer to timing_t
+ * @param buf  pointer to char[]
+ * @pre        buf has at least PRINT_TS_BUFLEN chars space
+ */
+#define PRINT_TS(ts, buf) do {\
+  (void) snprintf((buf), PRINT_TS_BUFLEN, "%lu%09lu", \
+      (unsigned long) (ts)->tv_sec, (ts)->tv_nsec \
+      ); \
+} while (0)
+
+
 
 void MonitoringInit(monitoring_t *mon, int worker_id, int flags)
 {
@@ -37,24 +53,27 @@ void MonitoringCleanup(monitoring_t *mon)
 void MonitoringPrint(monitoring_t *mon, task_t *t)
 {
   int ret;
-  timing_t ts;
+  char buf[PRINT_TS_BUFLEN];
 
   if ( mon->flags == MONITORING_NONE ) return;
 
-  TimingStart(&ts);
+  PRINT_TS(&t->times.stop, buf);
 
   fprintf( mon->outfile,
-      "%lu%09lu "
-      "wid %d tid %lu st %d disp %lu ",
-      (unsigned long) ts.tv_sec, ts.tv_nsec,
-      t->owner, t->uid, t->state, t->cnt_dispatch
+      "%s wid %d tid %lu disp %lu st %c ",
+      buf, t->owner, t->uid, t->cnt_dispatch, t->state
       );
 
-  if ( IS_FLAG( MONITORING_EXECTIMES ) ) {
-    fprintf( mon->outfile,
-        "last %f total %f eavg %f ",
-        TimingToMSec(&t->time_lastrun), TimingToMSec(&t->time_totalrun), TimingToMSec(&t->time_expavg)
-        );
+  if ( t->state == TASK_WAITING ) {
+    fprintf( mon->outfile, "on %c:%p ", t->wait_on, t->wait_s );
+  }
+
+  if ( IS_FLAG( MONITORING_TIMES ) ) {
+    /* stop time was used for timestamp output */
+    /* fprintf( mon->outfile, "stop %s ", buf ); */
+    /* start time */
+    PRINT_TS(&t->times.start, buf);
+    fprintf( mon->outfile, "start %s ", buf );
   }
  
   if ( IS_FLAG( MONITORING_STREAMINFO ) ) {
@@ -72,10 +91,13 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
 void MonitoringDebug(monitoring_t *mon, const char *fmt, ...)
 {
   timing_t ts;
+  char buf[PRINT_TS_BUFLEN];
   va_list ap;
 
-  TimingStart(&ts);
-  fprintf(mon->outfile, "%lu%09lu ", (unsigned long) ts.tv_sec, ts.tv_nsec);
+  /* print current timestamp */
+  TIMESTAMP(&ts);
+  PRINT_TS(&ts,buf);
+  fprintf(mon->outfile, "%s ", buf);
 
   va_start(ap, fmt);
   vfprintf(mon->outfile, fmt, ap);

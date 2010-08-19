@@ -2,7 +2,6 @@
 #define _TIMING_H_
 
 
-#define BILLION 1000000000L
 /*
  * Link with librt:
  *   -lrt
@@ -13,6 +12,15 @@
 typedef struct timespec timing_t;
 
 
+/**
+ * Current timestamp
+ * @param t   pointer to timing_t
+ */
+#define TIMESTAMP(t) do { \
+  (void) clock_gettime(CLOCK_MONOTONIC, (t) ); \
+} while (0)
+
+#define TIMING_BILLION 1000000000L
 
 /**
  * Start timing
@@ -28,7 +36,7 @@ static inline void TimingStart(timing_t *t)
 /**
  * End timing, store the elapsed time in t
  *
- * Precond: TimingStart() was called on t
+ * @pre   TimingStart() was called on t
  */
 static inline void TimingEnd(timing_t *t)
 {
@@ -40,10 +48,10 @@ static inline void TimingEnd(timing_t *t)
   start = *t;
 
   /* calculate elapsed time to t,
-   * assuming end > start and *.tv_nsec < BILLION
+   * assuming end > start and *.tv_nsec < TIMING_BILLION
    */
   if (end.tv_nsec < start.tv_nsec) {
-    start.tv_nsec -= BILLION;
+    start.tv_nsec -= TIMING_BILLION;
     start.tv_sec  += 1L;
   }
   t->tv_nsec = end.tv_nsec - start.tv_nsec;
@@ -60,8 +68,8 @@ static inline void TimingAdd(timing_t *t, const timing_t *val)
   t->tv_sec  += val->tv_sec;
   t->tv_nsec += val->tv_nsec;
   /* normalize */
-  if (t->tv_nsec > BILLION) {
-    t->tv_nsec -= BILLION;
+  if (t->tv_nsec > TIMING_BILLION) {
+    t->tv_nsec -= TIMING_BILLION;
     t->tv_sec  += 1L;
   }
 }

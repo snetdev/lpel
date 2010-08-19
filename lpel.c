@@ -85,42 +85,30 @@ static void *LpelWorker(void *arg)
   loop=0;
   do {
     task_t *t;
-    timing_t ts;
   
     assert( sc != NULL );
 
+    CpuAssignSetPreemptable(false);
+
     /* select a task from the ready queue (sched) */
     t = SchedFetchNextReady( sc );
-
     if (t != NULL) {
-
-      CpuAssignSetPreemptable(false);
-
-      /* start timing (mon) */
-      TimingStart(&ts);
-
       /* EXECUTE TASK (context switch) */
       t->cnt_dispatch++;
+      TIMESTAMP(&t->times.start);
       t->state = TASK_RUNNING;
       co_call(t->ctx);
+      TIMESTAMP(&t->times.stop);
       /* task returns in every case with a different state than RUNNING */
-      
 
-      /* end timing (mon) */
-      TimingEnd(&ts);
-      TimingSet(&t->time_lastrun, &ts);
-      TimingAdd(&t->time_totalrun, &ts);
-      TimingExpAvg(&t->time_expavg, &ts, EXPAVG_ALPHA);
-
-      CpuAssignSetPreemptable(true);
-
-      /* output accounting info (mon) */
+      /* output accounting info */
       MonitoringPrint(&mon_info, t);
       MonitoringDebug(&mon_info, "worker %d, loop %u\n", id, loop);
 
       SchedReschedule(sc, t);
     } /* end if executed ready task */
 
+    CpuAssignSetPreemptable(true);
 
     loop++;
   } while ( atomic_read(&task_count_global) > 0 );

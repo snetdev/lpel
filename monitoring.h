@@ -7,7 +7,7 @@
 #include "task.h"
 
 
-#define MONITORING_EXECTIMES    (1<<0)
+#define MONITORING_TIMES        (1<<0)
 #define MONITORING_STREAMINFO   (1<<1)
 
 #define MONITORING_NONE           ( 0)

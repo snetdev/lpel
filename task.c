@@ -48,10 +48,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
   //t->owner = -1;
   t->sched_info = NULL;
 
-  TimingStart(&t->time_alive);
-  /* zero all timings */
-  TimingZero(&t->time_totalrun);
-  t->time_lastrun = t->time_expavg = t->time_totalrun;
+  TIMESTAMP(&t->times.creat);
 
   t->cnt_dispatch = 0;
 
@@ -96,8 +93,6 @@ void TaskDestroy(task_t *t)
 {
   /* only if nothing references the task anymore */
   if ( fetch_and_dec(&t->refcnt) == 1) {
-    /* capture end of task lifetime */
-    TimingEnd(&t->time_alive);
 
     /* Notify LPEL first */
     LpelTaskRemove(t);
@@ -105,7 +100,6 @@ void TaskDestroy(task_t *t)
     /* free the streamsets */
     StreamsetCleanup(&t->streams_write);
     StreamsetCleanup(&t->streams_read);
-
 
     /* waitany-specific cleanup */
     if ( TASK_IS_WAITANY(t) ) {
@@ -154,6 +148,7 @@ void TaskWaitOnRead(task_t *ct, stream_t *s)
   ct->event_ptr = (int *) &s->buf[s->pwrite];
   ct->state = TASK_WAITING;
   ct->wait_on = WAIT_ON_READ;
+  ct->wait_s = s;
   
   /* context switch */
   co_resume();
@@ -172,6 +167,7 @@ void TaskWaitOnWrite(task_t *ct, stream_t *s)
   ct->event_ptr = (int *) &s->buf[s->pread];
   ct->state = TASK_WAITING;
   ct->wait_on = WAIT_ON_WRITE;
+  ct->wait_s = s;
   
   /* context switch */
   co_resume();
@@ -187,6 +183,7 @@ void TaskWaitOnAny(task_t *ct)
   ct->event_ptr = &ct->flagtree.buf[0];
   ct->state = TASK_WAITING;
   ct->wait_on = WAIT_ON_ANY;
+  ct->wait_s = NULL;
   
   /* context switch */
   co_resume();
