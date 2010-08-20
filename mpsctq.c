@@ -38,20 +38,22 @@ task_t *MpscTqDequeue(mpsctq_t *q)
   tail = q->tail;
   next = tail->next;
   
-  /* skip stub, if it is not the only element in list */
-  if ( tail == &q->stub && next != NULL ) {
-    q->tail = next;
-    tail = next;
-    next = next->next;
-    /* unlink skipped stub */
-    q->stub.next = NULL;
-  }
-
-  /* tail and head point to single 'useful' element: insert stub */
-  if ( tail != &q->stub && tail == q->head ) {
-    assert( q->stub.next == NULL );
-    MpscTqEnqueue( q, &q->stub );
-    next = tail->next;
+  if ( tail == &q->stub ) {
+    /* if stub is not the only element in list, skip it */
+    if ( next != NULL ) {
+      q->tail = next;
+      tail = next;
+      next = next->next;
+      /* unlink skipped stub */
+      q->stub.next = NULL;
+    }
+  } else {
+    /* if tail and head point to single 'useful' element: insert stub */
+    if ( tail == q->head ) {
+      assert( q->stub.next == NULL );
+      MpscTqEnqueue( q, &q->stub );
+      next = tail->next;
+    }
   }
 
   /* return and advance tail */
