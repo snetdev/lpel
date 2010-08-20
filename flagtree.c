@@ -19,9 +19,16 @@
 
 
 /**
- * Allocate the ft for a given height
+ * Initialise the flagtree
+ * 
+ * Allocates memory for a given height.
+ *
+ * @param ft      ptr to flagtree
+ * @param height  allocated space will fit a complete binary
+ *                tree of the given height 
+ * @param lock    RW-Lock for concurrent access
  */
-void FlagtreeAlloc(flagtree_t *ft, int height, rwlock_t *lock)
+void FlagtreeInit(flagtree_t *ft, int height, rwlock_t *lock)
 {
   ft->height = height;
   ft->buf = (int *) calloc( FT_NODES(height), sizeof(int) );
@@ -29,9 +36,11 @@ void FlagtreeAlloc(flagtree_t *ft, int height, rwlock_t *lock)
 }
 
 /**
- * Free the ft
+ * Cleanup the flagtee: free allocated memory.
+ *
+ * @param ft  ptr to flagtree
  */
-void FlagtreeFree(flagtree_t *ft)
+void FlagtreeCleanup(flagtree_t *ft)
 {
   ft->height = -1;
   free(ft->buf);
@@ -39,6 +48,8 @@ void FlagtreeFree(flagtree_t *ft)
 
 /**
  * Grow the ft by one level
+ *
+ * @param ft  ptr to flagtree
  */
 void FlagtreeGrow(flagtree_t *ft)
 {
@@ -54,13 +65,13 @@ void FlagtreeGrow(flagtree_t *ft)
   new_buf = (int *) calloc( FT_NODES(old_height+1), sizeof(int) );
 
   /* lock for writing */
-  rwlock_writer_lock( ft->lock );
+  RwlockWriterLock( ft->lock );
   { /*CS ENTER*/
     ft->height += 1;
     ft->buf = new_buf;
   } /*CS LEAVE*/
   /* unlock for writing */
-  rwlock_writer_unlock( ft->lock );
+  RwlockWriterUnlock( ft->lock );
   
   /* set the appropriate flags */
   for (i=0; i<FT_LEAFS(old_height); i++) {
@@ -101,19 +112,25 @@ static void Visit(flagtree_t *ft, int idx, void *arg)
 /**
  * Gather marked leafs recursively,
  * clearing the marks in preorder
+ *
+ * @param ft  ptr to flagtree
+ * @see note of FlagtreeGather
  */
 void FlagtreeGatherRec(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg)
 {
-  /* no locking necessary, as only the gatherer will grow the tree */
+  /*TODO LOCK_WRITE */
   ft->gather = gather;
   /* start from root */
   Visit(ft, 0, arg);
+  /*TODO UNLOCK_WRITE */
 };
 
 
 #ifndef NDEBUG
 /**
  * Print a flagtree to stderr
+ *
+ * @param ft  ptr to flagtree
  */
 void FlagtreePrint(flagtree_t *ft)
 {

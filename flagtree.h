@@ -39,9 +39,10 @@
 #define FT_RIGHT_CHILD(i)     ( 2*((i)+1) )
 
 
+/* include a Readers/Writer lock for concurrent access */
 #include "rwlock.h"
 
-
+/** the callback function for gathering */
 typedef void (*flagtree_gather_cb_t)(int i, void *arg);
 
 typedef struct {
@@ -65,7 +66,7 @@ typedef struct {
 static inline void FlagtreeMark(flagtree_t *ft, int idx, int reader)
 {
   /* lock for reading */
-  if (reader>=0) rwlock_reader_lock( ft->lock, reader );
+  if (reader>=0) RwlockReaderLock( ft->lock, reader );
 
   int j = FT_LEAF_TO_IDX(ft->height, idx);
   ft->buf[j] = 1;
@@ -74,14 +75,11 @@ static inline void FlagtreeMark(flagtree_t *ft, int idx, int reader)
     ft->buf[j] = 1;
   }
   /* unlock for reading */
-  if (reader>=0) rwlock_reader_unlock( ft->lock, reader );
+  if (reader>=0) RwlockReaderUnlock( ft->lock, reader );
 }
 
 #if 0
-/**
- * Gather marked leafs iteratively,
- * clearing the marks in preorder
- */
+/** Gathering procedure without GOTOs */
 static inline void FlagtreeGatherNoGoto(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg)
 {
   int prev, cur, next;
@@ -125,8 +123,10 @@ static inline void FlagtreeGatherNoGoto(flagtree_t *ft, flagtree_gather_cb_t gat
 /**
  * Gather marked leafs iteratively,
  * clearing the marks in preorder
- * @param ft      the flagtree to gather from
- * @pre           FlagtreeGather and FlagtreeGrow must not be executed concurrently
+ * @param ft    the flagtree to gather from
+ * @pre         FlagtreeGather and FlagtreeGrow must not be executed concurrently
+ * @note  TODO  This works for now only in sequentially consistent memory models (without fences).
+ *              As a workaround, for the procedure of gathering, the RW-Lock must be aquired for writing.
  */
 static inline void FlagtreeGather(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg)
 {
@@ -135,6 +135,8 @@ static inline void FlagtreeGather(flagtree_t *ft, flagtree_gather_cb_t gather, v
   ft->gather = gather;
   /* start from root */
   prev = cur = 0;
+
+  /*TODO LOCK_WRITE */
   do {
 #ifndef NDEBUG
     /* for stepwise debugging: */
@@ -171,13 +173,14 @@ lab_parent:
 lab_out:
     prev = cur;
     cur = next;
-  } while (cur != prev);
-  /* cur == prev only at root */
+  } while (cur != prev); /* cur == prev only at root */
+  
+  /*TODO UNLOCK_WRITE */
 }
 
 
-extern void FlagtreeAlloc(flagtree_t *ft, int height, rwlock_t *lock);
-extern void FlagtreeFree(flagtree_t *ft);
+extern void FlagtreeInit(flagtree_t *ft, int height, rwlock_t *lock);
+extern void FlagtreeCleanup(flagtree_t *ft);
 extern void FlagtreeGrow(flagtree_t *ft);
 extern void FlagtreeGatherRec(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg);
 

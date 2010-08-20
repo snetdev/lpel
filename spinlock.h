@@ -20,12 +20,15 @@ typedef struct {
   int padding[intxCacheline-1];
 } spinlock_t;
 
-static inline void spinlock_init(spinlock_t *v)
+static inline void SpinlockInit(spinlock_t *v)
 {
   v->l = 0;
 }
 
-static inline void spinlock_lock(spinlock_t *v)
+static inline void SpinlockCleanup(spinlock_t *v)
+{ /*NOP*/ }
+
+static inline void SpinlockLock(spinlock_t *v)
 {
   while (SWAP( (int *)&v->l, 1) != 0) {
     /* spin locally (only reads) - reduces bus traffic */
@@ -33,7 +36,7 @@ static inline void spinlock_lock(spinlock_t *v)
   }
 }
 
-static inline void spinlock_unlock(spinlock_t *v)
+static inline void SpinlockUnlock(spinlock_t *v)
 {
   WMB();
   v->l = 0;

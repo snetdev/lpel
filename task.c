@@ -67,8 +67,8 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
     /* allocate specific info struct */
     t->waitany_info = (struct waitany *) malloc( sizeof(struct waitany) );
 
-    rwlock_init( &t->waitany_info->rwlock, LpelNumWorkers() );
-    FlagtreeAlloc(
+    RwlockInit( &t->waitany_info->rwlock, LpelNumWorkers() );
+    FlagtreeInit(
         &t->waitany_info->flagtree,
         TASK_WAITANY_GRPS_INIT,
         &t->waitany_info->rwlock
@@ -110,8 +110,8 @@ void TaskDestroy(task_t *t)
 
     /* waitany-specific cleanup */
     if ( TASK_IS_WAITANY(t) ) {
-      rwlock_cleanup( &t->waitany_info->rwlock );
-      FlagtreeFree( &t->waitany_info->flagtree );
+      RwlockCleanup( &t->waitany_info->rwlock );
+      FlagtreeCleanup( &t->waitany_info->flagtree );
       /* free waitany struct */
       free( t->waitany_info );
     }

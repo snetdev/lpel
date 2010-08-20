@@ -39,8 +39,8 @@ stream_t *StreamCreate(void)
     /* producer/consumer not assigned */
     s->prod.task = s->cons.task = NULL;
     s->prod.tbe = s->cons.tbe = NULL;
-    spinlock_init(&s->prod.lock);
-    spinlock_init(&s->cons.lock);
+    SpinlockInit(&s->prod.lock);
+    SpinlockInit(&s->cons.lock);
     s->wany_idx = -1;
     /* refcnt reflects the number of tasks
        + the stream itself opened this stream {1,2,3} */
@@ -56,6 +56,8 @@ stream_t *StreamCreate(void)
 void StreamDestroy(stream_t *s)
 {
   if ( fetch_and_dec(&s->refcnt) == 1 ) {
+    SpinlockCleanup(&s->prod.lock);
+    SpinlockCleanup(&s->cons.lock);
     free(s);
   }
 }
@@ -75,17 +77,17 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
 
   switch(mode) {
   case 'w':
-    spinlock_lock(&s->prod.lock);
+    SpinlockLock(&s->prod.lock);
     {
       assert( s->prod.task == NULL );
       s->prod.task = ct;
       s->prod.tbe  = StreamsetAdd(&ct->streams_write, s, NULL);
     }
-    spinlock_unlock(&s->prod.lock);
+    SpinlockUnlock(&s->prod.lock);
     break;
 
   case 'r':
-    spinlock_lock(&s->cons.lock);
+    SpinlockLock(&s->cons.lock);
     {
       int grpidx;
       assert( s->cons.task == NULL );
@@ -105,7 +107,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
         }
       }
     }
-    spinlock_unlock(&s->cons.lock);
+    SpinlockUnlock(&s->cons.lock);
     break;
 
   default:
@@ -123,16 +125,16 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
 void StreamClose(task_t *ct, stream_t *s)
 {
   if ( ct == s->prod.task ) {
-    spinlock_lock(&s->prod.lock);
+    SpinlockLock(&s->prod.lock);
     {
       StreamsetRemove( &ct->streams_write, s->prod.tbe );
       s->prod.task = NULL;
       s->prod.tbe = NULL;
     }
-    spinlock_unlock(&s->prod.lock);
+    SpinlockUnlock(&s->prod.lock);
 
   } else if ( ct == s->cons.task ) {
-    spinlock_lock(&s->cons.lock);
+    SpinlockLock(&s->cons.lock);
     {
       StreamsetRemove( &ct->streams_read, s->cons.tbe );
       s->cons.task = NULL;
@@ -143,7 +145,7 @@ void StreamClose(task_t *ct, stream_t *s)
         s->wany_idx = -1;
       }
     }
-    spinlock_unlock(&s->cons.lock);
+    SpinlockUnlock(&s->cons.lock);
   
   } else {
     /* task is neither producer nor consumer:
@@ -176,7 +178,7 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
   /* new stream must have been closed by previous consumer */
   assert( snew->cons.task == NULL );
 
-  spinlock_lock(&snew->cons.lock);
+  SpinlockLock(&snew->cons.lock);
   {
     /* Task has opened s, hence s contains a reference to the tbe.
        In that tbe, the stream must be replaced. Then, the reference
@@ -193,20 +195,20 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
       FlagtreeMark(&ct->waitany_info->flagtree, snew->wany_idx, -1);
     }
   }
-  spinlock_unlock(&snew->cons.lock);
+  SpinlockUnlock(&snew->cons.lock);
 
   /* NOTE: both producers of s and snew do possibly mark the flagtree now,
    *  until the following CS is executed - has this to be considered harmful?
    */
 
   /* clear references in old stream */
-  spinlock_lock(&s->cons.lock);
+  SpinlockLock(&s->cons.lock);
   {
     s->cons.task = NULL;
     s->cons.tbe = NULL;
     s->wany_idx = -1;
   }
-  spinlock_unlock(&s->cons.lock);
+  SpinlockUnlock(&s->cons.lock);
 
   /* destroy request for old stream */
   StreamDestroy(s);
@@ -330,7 +332,7 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   /* for monitoring */
   if (ct!=NULL) StreamsetEvent( &ct->streams_write, s->prod.tbe );
 
-  spinlock_lock(&s->cons.lock);
+  SpinlockLock(&s->cons.lock);
   /*  if flagtree registered, use flagtree mark */
   if (s->wany_idx >= 0) {
     FlagtreeMark(
@@ -339,7 +341,7 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
         s->cons.task->owner
         );
   }
-  spinlock_unlock(&s->cons.lock);
+  SpinlockUnlock(&s->cons.lock);
 
   return;
 }

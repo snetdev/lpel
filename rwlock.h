@@ -9,9 +9,12 @@
 #define SWAP xchg
 
 /**
- * A Readers/Writer Lock, for a single writer and NUM_READER readers
+ * A Readers/Writer Lock, for a single writer and a
+ * fixed number of readers (specified upon initialisation)
+ * - using local spinning
  *
- * using local spinning
+ * @note TODO This RWLock does only work for sequential consistent
+ *            memory models, as the placement of fences is not verified yet!
  */
 
 #define intxCacheline (64/sizeof(int))
@@ -27,19 +30,19 @@ typedef struct {
   struct rwlock_flag *readers;
 } rwlock_t;
 
-static inline void rwlock_init( rwlock_t *v, int num_readers )
+static inline void RwlockInit( rwlock_t *v, int num_readers )
 {
   v->writer.l = 0;
   v->num_readers = num_readers;
   v->readers = (struct rwlock_flag *) calloc(num_readers, sizeof(struct rwlock_flag));
 }
 
-static inline void rwlock_cleanup( rwlock_t *v )
+static inline void RwlockCleanup( rwlock_t *v )
 {
   free(v->readers);
 }
 
-static inline void rwlock_reader_lock( rwlock_t *v, int ridx )
+static inline void RwlockReaderLock( rwlock_t *v, int ridx )
 {
   while(1) {
     WMB();
@@ -59,14 +62,14 @@ static inline void rwlock_reader_lock( rwlock_t *v, int ridx )
   }
 }
 
-static inline void rwlock_reader_unlock( rwlock_t *v, int ridx )
+static inline void RwlockReaderUnlock( rwlock_t *v, int ridx )
 {
   WMB();
   v->readers[ridx].l = 0;
 }
 
 
-static inline void rwlock_writer_lock( rwlock_t *v )
+static inline void RwlockWriterLock( rwlock_t *v )
 {
   int i;
   /* assume no competing writer and a sane lock/unlock usage */
@@ -83,7 +86,7 @@ static inline void rwlock_writer_lock( rwlock_t *v )
   }
 }
 
-static inline void rwlock_writer_unlock( rwlock_t *v )
+static inline void RwlockWriterUnlock( rwlock_t *v )
 {
   WMB();
   v->writer.l = 0;

@@ -18,16 +18,16 @@ void GatherLeaf(int i, void *arg)
   fprintf(stderr,"gather %d\n",i);
 }
 
-static void testAlloc(void)
+static void testInit(void)
 {
   int i;
 
   header("Allocate"); 
   for (i=0; i<=4; i++) {
-    FlagtreeAlloc(&H, i, &lock);
+    FlagtreeInit(&H, i, &lock);
     fprintf(stderr,"height %d nodes %d\n", H.height, FT_NODES(H.height));
     FlagtreePrint(&H);
-    FlagtreeFree(&H);
+    FlagtreeCleanup(&H);
   }
 }
 
@@ -39,14 +39,14 @@ static void testMark(void)
   int marks[] = { 3,0,5 };
 
   header("Mark");
-  FlagtreeAlloc(&H, 3, &lock);
+  FlagtreeInit(&H, 3, &lock);
   for (i=0; i<num_marks; i++) {
     leaf=marks[i];
     fprintf(stderr,"marking leaf %d (=idx %d)\n", leaf, FT_LEAF_TO_IDX(H.height,leaf));
     FlagtreeMark(&H, leaf, 0);
     FlagtreePrint(&H);
   }
-  FlagtreeFree(&H);
+  FlagtreeCleanup(&H);
 }
 
 static void testGrow(void)
@@ -56,7 +56,7 @@ static void testGrow(void)
   int marks[] = { 3,0,5 };
 
   header("Grow");
-  FlagtreeAlloc(&H, 3, &lock);
+  FlagtreeInit(&H, 3, &lock);
 
   for (i=0; i<num_marks; i++) {
     leaf=marks[i];
@@ -69,7 +69,7 @@ static void testGrow(void)
   FlagtreeMark(&H, 14, 0);
   FlagtreePrint(&H);
 
-  FlagtreeFree(&H);
+  FlagtreeCleanup(&H);
 }
 
 static void testGather(void)
@@ -79,7 +79,7 @@ static void testGather(void)
   int marks[] = { 3,0,5,14,1 };
 
   header("Gather");
-  FlagtreeAlloc(&H, 4, &lock);
+  FlagtreeInit(&H, 4, &lock);
 
   for (i=0; i<num_marks; i++) {
     leaf=marks[i];
@@ -91,20 +91,20 @@ static void testGather(void)
   FlagtreeGather(&H, GatherLeaf, NULL);
   FlagtreePrint(&H);
 
-  FlagtreeFree(&H);
+  FlagtreeCleanup(&H);
 }
 
 int main(void)
 {
 
-  rwlock_init( &lock, 1 );
+  RwlockInit( &lock, 1 );
 
-  testAlloc();
+  testInit();
   testMark();
   testGrow();
   testGather();
 
-  rwlock_cleanup( &lock );
+  RwlockCleanup( &lock );
   return 0;
 }
 
