@@ -19,7 +19,7 @@
 
 
 /**
- * Create a new taskqueue
+ * Initialise a taskqueue
  */
 void TaskqueueInit(taskqueue_t *tq)
 {
@@ -30,14 +30,10 @@ void TaskqueueInit(taskqueue_t *tq)
 
 
 /**
- * Enqueue a task into a taskqueue (at tail)
- * Preconditions:
- *   (tq != NULL) AND (t != NULL) AND
- *   (t->next == t->prev == NULL)
+ * Enqueue a task at the tail
  *
- * which means, that t must not be part of another taskqueue
  */
-void TaskqueueEnqueue(taskqueue_t *tq, task_t *t)
+void TaskqueuePushBack(taskqueue_t *tq, task_t *t)
 {
   assert( t->prev==NULL && t->next==NULL );
 
@@ -56,15 +52,43 @@ void TaskqueueEnqueue(taskqueue_t *tq, task_t *t)
 }
 
 
+
 /**
- * Removes the head from a taskqueue and returns it
+ * Enqueue a task at the head
  *
- * Preconditions:
- * - tq->head != NULL (i.e., taskqueue not empty)
  */
-static task_t *TaskqueueRemoveHead(taskqueue_t *tq)
+void TaskqueuePushFront(taskqueue_t *tq, task_t *t)
 {
-  task_t *t = tq->head;
+  assert( t->prev==NULL && t->next==NULL );
+
+  if ( tq->tail == NULL ) {
+    tq->tail = t;
+    /* t->next = NULL; is precond */
+  } else {
+    tq->head->prev = t;
+    t->next = tq->head;
+  }
+  tq->head = t;
+  /* t->prev = NULL; is precond */
+
+  /* increment task count */
+  tq->count++;
+}
+
+
+
+/**
+ * Dequeue a task from the head
+ *
+ * @return NULL if taskqueue is empty
+ */
+task_t *TaskqueuePopFront(taskqueue_t *tq)
+{
+  task_t *t;
+
+  if ( tq->head == NULL ) return NULL;
+  
+  t = tq->head;
   /* t->prev == NULL by invariant */
   if ( t->next == NULL ) {
     /* t is the single element in the list */
@@ -81,22 +105,61 @@ static task_t *TaskqueueRemoveHead(taskqueue_t *tq)
   return t;
 }
 
+
 /**
- * Dequeue a task from a taskqueue (from head)
- * - if no task is in queue, simply returns NULL
+ * Dequeue a task from the tail
+ *
+ * @return NULL if taskqueue is empty
  */
-task_t *TaskqueueDequeue(taskqueue_t *tq)
+task_t *TaskqueuePopBack(taskqueue_t *tq)
 {
-  task_t *t = NULL;
+  task_t *t;
 
-  if ( tq->head != NULL ) {
-    t = TaskqueueRemoveHead(tq);
+  if ( tq->tail == NULL ) return NULL;
+  
+  t = tq->tail;
+  /* t->next == NULL by invariant */
+  if ( t->prev == NULL ) {
+    /* t is the single element in the list */
+    /* t->next == t->prev == NULL by invariant */
+    tq->tail = NULL;
+    tq->head = NULL;
+  } else {
+    tq->tail = t->prev;
+    tq->tail->next = NULL;
+    t->prev = NULL;
   }
-
+  /* decrement task count */
+  tq->count--;
   return t;
 }
 
 
+/** for convenience */
+void TaskqueueEnqueue(taskqueue_t *tq, task_t *t)
+{
+  TaskqueuePushBack(tq, t);
+}
+
+
+/** for convenience */
+task_t *TaskqueueDequeue(taskqueue_t *tq) {
+  return TaskqueuePopFront(tq);
+}
+
+
+/**
+ * Iterates once through the taskqueue (starting at head),
+ * for each task:
+ *
+ *  - if a condition is satisfied, unlink the task
+ *  - perform an action on the task
+ *
+ * @param tq      taskqueue
+ * @param cond    callback for querying the condition
+ * @param action  callback for the action after unlinking
+ * @param arg     argument (context) for the callback functions
+ */
 void TaskqueueIterateRemove(taskqueue_t *tq, 
   bool (*cond)(task_t*, void*), void (*action)(task_t*, void*), void *arg )
 {
