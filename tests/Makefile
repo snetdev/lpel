@@ -21,6 +21,12 @@ rwlock:
 	gcc -o check_rwlock check_rwlock.o $(LDFLAGS) -lpthread
 	./check_rwlock > /dev/null
 
+mpsctq:
+	gcc -c -g check_mpsctq.c
+	gcc -c -g ../mpsctq.c
+	gcc -o check_mpsctq check_mpsctq.o mpsctq.o $(LDFLAGS) -lpthread
+	./check_mpsctq
+
 timing:
 	gcc -c check_timing.c
 	gcc -o check_timing check_timing.o $(LDFLAGS) -lrt

@@ -64,7 +64,9 @@ typedef void (*taskfunc_t)(task_t *t, void *inarg);
 struct task {
   unsigned long uid;
   taskstate_t state;
-  task_t *prev, *next;  /* queue handling: prev, next */
+  /* queue handling: prev, next */
+  task_t *volatile prev;
+  task_t *volatile next;
 
   /* attributes */
   unsigned int attr;
