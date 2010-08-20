@@ -3,12 +3,12 @@
  */
 
 #include <stdlib.h>
+#include <pthread.h>
 #include <assert.h>
 
 #include "scheduler.h"
 
 #include "taskqueue.h"
-#include "mpscqueue.h"
 
 
 struct schedcfg {
@@ -17,13 +17,14 @@ struct schedcfg {
 
 struct schedctx {
   int wid;
+  taskqueue_t init_queue;
+  pthread_mutex_t lock_iq;
   taskqueue_t ready_queue;
   struct {
     taskqueue_t on_read;
     taskqueue_t on_write;
     taskqueue_t on_any;
   } waiting_queue;
-  mpscqueue_t *init_queue;
   int cnt_tasks;
 };
 
@@ -67,13 +68,16 @@ void SchedInitialise(int size, schedcfg_t *cfg)
       /* select from the previously allocated schedarray */
       sc = &schedarray[i];
       sc->wid = i;
+
+      TaskqueueInit(&sc->init_queue);
+      pthread_mutex_init( &sc->lock_iq, NULL );
+      
       TaskqueueInit(&sc->ready_queue);
       
       TaskqueueInit(&sc->waiting_queue.on_read);
       TaskqueueInit(&sc->waiting_queue.on_write);
       TaskqueueInit(&sc->waiting_queue.on_any);
       
-      sc->init_queue = MPSCQueueCreate();
       sc->cnt_tasks = 0;
   }
 }
@@ -106,8 +110,8 @@ void SchedCleanup(void)
     sc = &schedarray[i];
     /* nothing to be done for taskqueue_t */
 
-    /* destroy initqueue */
-    MPSCQueueDestroy(sc->init_queue);
+    /* destroy locks */
+    pthread_mutex_destroy(&sc->lock_iq);
   }
 
   /* free memory for scheduler data */
@@ -124,12 +128,14 @@ void SchedPutReady(schedctx_t *sc, task_t *t)
   /* handle depending on the tasks assigned owner */
   if ( t->owner != sc->wid ) {
     /* place into the foreign init queue */
-    MPSCQueueEnqueue( schedarray[t->owner].init_queue, (void *) t );
+    pthread_mutex_lock( &schedarray[t->owner].lock_iq );
+    TaskqueueEnqueue( &schedarray[t->owner].init_queue, t );
+    pthread_mutex_unlock( &schedarray[t->owner].lock_iq );
     return;
   }
 
   /* t is owned by sdt */
-  TaskqueueAppend( &sc->ready_queue, t );
+  TaskqueueEnqueue( &sc->ready_queue, t );
 }
 
 
@@ -171,7 +177,7 @@ task_t *SchedFetchNextReady(schedctx_t *sc)
   }
 
   /* fetch a task from the ready queue */
-  return TaskqueueRemove( &sc->ready_queue );
+  return TaskqueueDequeue( &sc->ready_queue );
 }
 
 
@@ -203,13 +209,13 @@ void SchedReschedule(schedctx_t *sc, task_t *t)
           default: assert(0);
         }
         /* put into appropriate waiting queue */
-        TaskqueueAppend( wq, t );
+        TaskqueueEnqueue( wq, t );
       }
       break;
 
     case TASK_READY: /* task yielded execution  */
       /* put into ready queue */
-      TaskqueueAppend( &sc->ready_queue, t );
+      TaskqueueEnqueue( &sc->ready_queue, t );
       break;
 
     default:
@@ -250,18 +256,22 @@ static int CollectFromInit(schedctx_t *sc)
   task_t *t;
 
   cnt = 0;
-  t = (task_t *) MPSCQueueDequeue( sc->init_queue );
+
+
+  pthread_mutex_lock( &sc->lock_iq );
+  t = TaskqueueDequeue( &sc->init_queue );
   while (t != NULL) {
     //assert( t->state == TASK_INIT );
     assert( t->owner == sc->wid );
     cnt++;
     /* set state to ready and place into the ready queue */
     t->state = TASK_READY;
-    TaskqueueAppend( &sc->ready_queue, t );
+    TaskqueueEnqueue( &sc->ready_queue, t );
     
     /* for next iteration: */
-    t = (task_t *) MPSCQueueDequeue( sc->init_queue );
+    t = TaskqueueDequeue( &sc->init_queue );
   }
+  pthread_mutex_unlock( &sc->lock_iq );
   return cnt;
 }
 
@@ -316,6 +326,6 @@ static void WaitingRemove(task_t *wt, void *arg)
   /*wt->event_ptr = NULL;*/
   
   /* waiting queue contains only own tasks */
-  TaskqueueAppend( &sc->ready_queue, wt );
+  TaskqueueEnqueue( &sc->ready_queue, wt );
 }
 

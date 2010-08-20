@@ -8,7 +8,7 @@
 
 /**
  * A simple doubly linked list for task queues
- * - append at tail, remove from head (FIFO)
+ * - enqueue at tail, dequeue from head (FIFO)
  *
  * Invariants:
  *   (head != NULL)   =>  (head->prev == NULL) AND
@@ -30,14 +30,14 @@ void TaskqueueInit(taskqueue_t *tq)
 
 
 /**
- * Append a task into a taskqueue (at tail)
+ * Enqueue a task into a taskqueue (at tail)
  * Preconditions:
  *   (tq != NULL) AND (t != NULL) AND
  *   (t->next == t->prev == NULL)
  *
  * which means, that t must not be part of another taskqueue
  */
-void TaskqueueAppend(taskqueue_t *tq, task_t *t)
+void TaskqueueEnqueue(taskqueue_t *tq, task_t *t)
 {
   assert( t->prev==NULL && t->next==NULL );
 
@@ -82,10 +82,10 @@ static task_t *TaskqueueRemoveHead(taskqueue_t *tq)
 }
 
 /**
- * Remove a task from a taskqueue (from head)
+ * Dequeue a task from a taskqueue (from head)
  * - if no task is in queue, simply returns NULL
  */
-task_t *TaskqueueRemove(taskqueue_t *tq)
+task_t *TaskqueueDequeue(taskqueue_t *tq)
 {
   task_t *t = NULL;
 

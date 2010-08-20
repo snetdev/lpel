@@ -14,8 +14,8 @@ typedef struct {
 } taskqueue_t;
 
 extern void TaskqueueInit(taskqueue_t *tq);
-extern void TaskqueueAppend(taskqueue_t *tq, task_t *t);
-extern task_t *TaskqueueRemove(taskqueue_t *tq);
+extern void TaskqueueEnqueue(taskqueue_t *tq, task_t *t);
+extern task_t *TaskqueueDequeue(taskqueue_t *tq);
 extern void TaskqueueIterateRemove(taskqueue_t *tq, 
     bool (*cond)(task_t*,void*), void (*action)(task_t*,void*), void *arg );
 
