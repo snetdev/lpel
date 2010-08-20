@@ -24,6 +24,7 @@ struct schedctx {
     taskqueue_t on_read;
     taskqueue_t on_write;
     taskqueue_t on_any;
+    int cnt;
   } waiting_queue;
   int cnt_tasks;
 };
@@ -52,7 +53,7 @@ static void WaitingRemove(task_t *wt, void *arg);
  * @param size  size of the worker set, i.e., the total number of workers
  * @param cfg   additional configuration
  */
-void SchedInitialise(int size, schedcfg_t *cfg)
+void SchedInit(int size, schedcfg_t *cfg)
 {
   int i;
   schedctx_t *sc;
@@ -77,7 +78,8 @@ void SchedInitialise(int size, schedcfg_t *cfg)
       TaskqueueInit(&sc->waiting_queue.on_read);
       TaskqueueInit(&sc->waiting_queue.on_write);
       TaskqueueInit(&sc->waiting_queue.on_any);
-      
+      sc->waiting_queue.cnt = 0;
+
       sc->cnt_tasks = 0;
   }
 }
@@ -87,7 +89,7 @@ void SchedInitialise(int size, schedcfg_t *cfg)
 /**
  * Get scheduler context for a certain worker
  *
- * @pre       0 <= id < size (on SchedInitialise)
+ * @pre       0 <= id < size (on SchedInit)
  * @return    pointer to scheduler data
  */
 schedctx_t *SchedGetContext(int id)
@@ -152,7 +154,7 @@ task_t *SchedFetchNextReady(schedctx_t *sc)
   sc->cnt_tasks += cnt;
 
   /* wakeup waiting tasks */
-  {
+  if (sc->waiting_queue.cnt > 0) {
     if (sc->waiting_queue.on_read.count > 0) {
       TaskqueueIterateRemove(
           &sc->waiting_queue.on_read,
@@ -210,6 +212,7 @@ void SchedReschedule(schedctx_t *sc, task_t *t)
         }
         /* put into appropriate waiting queue */
         TaskqueueEnqueue( wq, t );
+        sc->waiting_queue.cnt++;
       }
       break;
 
@@ -324,6 +327,7 @@ static void WaitingRemove(task_t *wt, void *arg)
   wt->state  = TASK_READY;
   wt->wait_s = NULL;
   /*wt->event_ptr = NULL;*/
+  sc->waiting_queue.cnt--;
   
   /* waiting queue contains only own tasks */
   TaskqueueEnqueue( &sc->ready_queue, wt );

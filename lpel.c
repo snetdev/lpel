@@ -165,7 +165,7 @@ void LpelInit(lpelconfig_t *cfg)
   }
 
   /* initialise scheduler */
-  SchedInitialise(num_workers, NULL);
+  SchedInit(num_workers, NULL);
 
   /* Init libPCL */
   co_thread_init();

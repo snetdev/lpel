@@ -8,7 +8,7 @@ typedef struct schedctx schedctx_t;
 typedef struct schedcfg schedcfg_t;
 
 
-extern void SchedInitialise(int size, schedcfg_t *cfg);
+extern void SchedInit(int size, schedcfg_t *cfg);
 extern schedctx_t *SchedGetContext(int id);
 extern void SchedCleanup(void);
 
