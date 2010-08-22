@@ -6,7 +6,6 @@
 #include <assert.h>
 #include "sysdep.h"
 
-#define SWAP xchg
 
 /**
  * A Readers/Writer Lock, for a single writer and a

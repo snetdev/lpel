@@ -4,10 +4,6 @@
 
 #include "mpsctq.h"
 
-#include "sysdep.h"
-
-
-#define SWAP xchg
 
 
 void MpscTqInit(mpsctq_t *q)
@@ -26,7 +22,14 @@ void MpscTqEnqueue(mpsctq_t *q, task_t *t)
   task_t *prev;
   
   assert( t->next == NULL );
-  prev = SWAP( (int *) &q->head, (int) t);
+
+  /*
+   *  TODO currently using atomic builtins
+   *  prev = SWAP( &q->head, t);
+   */
+  __sync_synchronize();
+  prev = (task_t *) __sync_lock_test_and_set(&q->head,t);
+
   /* (point where list is disconnected) */
   prev->next = t;
 }
