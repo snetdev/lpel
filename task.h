@@ -17,7 +17,8 @@
 #define longxCacheLine  (64/sizeof(long))
 
 #define TASK_ATTR_DEFAULT      (0)
-#define TASK_ATTR_WAITANY   (1<<0)
+#define TASK_ATTR_MONITOR   (1<<0)
+#define TASK_ATTR_WAITANY   (1<<1)
 
 
 #define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )

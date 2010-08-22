@@ -57,42 +57,47 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
 
   if ( mon->flags == MONITORING_NONE ) return;
 
-  PRINT_TS(&t->times.stop, buf);
+  /* determine of task is to be monitored */
+  if ( BIT_IS_SET(t->attr, TASK_ATTR_MONITOR) ||
+      IS_FLAG( MONITORING_ALLTASKS ) ) {
 
-  fprintf( mon->outfile,
-      "%s wid %d tid %lu disp %lu st %c ",
-      buf, t->owner, t->uid, t->cnt_dispatch, t->state
-      );
+    PRINT_TS(&t->times.stop, buf);
 
-  switch (t->state) {
-    case TASK_WAITING:
-      fprintf( mon->outfile, "on %c:%p ", t->wait_on, t->wait_s );
-      break;
-    case TASK_ZOMBIE:
-      PRINT_TS(&t->times.creat, buf);
-      fprintf( mon->outfile, "creat %s ", buf );
-      break;
-    default: /*NOP*/;
-  }
+    fprintf( mon->outfile,
+        "%s wid %d tid %lu disp %lu st %c ",
+        buf, t->owner, t->uid, t->cnt_dispatch, t->state
+        );
 
-  if ( IS_FLAG( MONITORING_TIMES ) ) {
-    /* stop time was used for timestamp output */
-    /* fprintf( mon->outfile, "stop %s ", buf ); */
-    /* start time */
-    PRINT_TS(&t->times.start, buf);
-    fprintf( mon->outfile, "start %s ", buf );
-  }
- 
-  if ( IS_FLAG( MONITORING_STREAMINFO ) ) {
-    fprintf(mon->outfile, "W");
-    StreamsetPrint( &t->streams_write, mon->outfile);
-    fprintf(mon->outfile, "R");
-    StreamsetPrint( &t->streams_read, mon->outfile);
-  }
+    switch (t->state) {
+      case TASK_WAITING:
+        fprintf( mon->outfile, "on %c:%p ", t->wait_on, t->wait_s );
+        break;
+      case TASK_ZOMBIE:
+        PRINT_TS(&t->times.creat, buf);
+        fprintf( mon->outfile, "creat %s ", buf );
+        break;
+      default: /*NOP*/;
+    }
 
-  fprintf(mon->outfile, "\n");
-  ret = fflush(mon->outfile);
-  assert(ret == 0);
+    if ( IS_FLAG( MONITORING_TIMES ) ) {
+      /* stop time was used for timestamp output */
+      /* fprintf( mon->outfile, "stop %s ", buf ); */
+      /* start time */
+      PRINT_TS(&t->times.start, buf);
+      fprintf( mon->outfile, "start %s ", buf );
+    }
+
+    if ( IS_FLAG( MONITORING_STREAMINFO ) ) {
+      fprintf(mon->outfile, "W");
+      StreamsetPrint( &t->streams_write, mon->outfile);
+      fprintf(mon->outfile, "R");
+      StreamsetPrint( &t->streams_read, mon->outfile);
+    }
+
+    fprintf(mon->outfile, "\n");
+    ret = fflush(mon->outfile);
+    assert(ret == 0);
+  } /* end if */
 }
 
 void MonitoringDebug(monitoring_t *mon, const char *fmt, ...)
