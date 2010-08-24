@@ -41,9 +41,7 @@ static atomic_t task_count_global = ATOMIC_INIT(0);
 static int num_workers = -1;
 static bool b_assigncore = false;
 
-
-#define EXPAVG_ALPHA  0.1f
-
+static pthread_barrier_t bar_worker_init;
 
 #define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )
 
@@ -79,7 +77,9 @@ static void *LpelWorker(void *arg)
     }
   }
   
-
+  /* barrier for all worker threads, assures that the workers
+    are assigned to their CPUs */
+  pthread_barrier_wait( &bar_worker_init );
 
   /* MAIN SCHEDULER LOOP */
   loop=0;
@@ -181,6 +181,16 @@ void LpelRun(void)
   int i, res;
   int wid[num_workers];
 
+  /* initialise barrier */
+  res = pthread_barrier_init(
+      &bar_worker_init,
+      NULL,
+      num_workers
+      );
+  if (res !=0 ) {
+    /*TODO error */
+      assert(0);
+  }
 
   // launch worker threads
   thids = (pthread_t *) malloc(num_workers * sizeof(pthread_t));
@@ -188,6 +198,7 @@ void LpelRun(void)
     wid[i] = i;
     res = pthread_create(&thids[i], NULL, LpelWorker, &wid[i]);
     if (res != 0) {
+      assert(0);
       /*TODO error
       perror("creating worker threads");
       exit(-1);
@@ -200,6 +211,8 @@ void LpelRun(void)
     pthread_join(thids[i], NULL);
   }
 
+  res = pthread_barrier_destroy(&bar_worker_init);
+  assert( res == 0 );
 }
 
 
