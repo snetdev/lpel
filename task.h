@@ -9,8 +9,11 @@
 #include "timing.h"
 #include "atomic.h"
 
-
-#define TASK_STACKSIZE  8192  /* 8k stacksize*/
+/**
+ * If a stacksize attribute <= 0 is specified,
+ * use the default stacksize
+ */
+#define TASK_STACKSIZE_DEFAULT  8192  /* 8k stacksize*/
 
 
 /* 64bytes is the common size of a cache line */
@@ -27,7 +30,7 @@
  * Check if a task is a waitany-task
  * @param t   pointer to task_t
  */
-#define TASK_IS_WAITANY(t)  (BIT_IS_SET((t)->attr, TASK_ATTR_WAITANY))
+#define TASK_IS_WAITANY(t)  (BIT_IS_SET((t)->attr.flags, TASK_ATTR_WAITANY))
 
 
 struct stream;
@@ -59,6 +62,11 @@ typedef struct task task_t;
 
 typedef void (*taskfunc_t)(task_t *t, void *inarg);
 
+typedef struct {
+  int flags;
+  int stacksize;
+} taskattr_t;
+
 /*
  * TASK CONTROL BLOCK
  */
@@ -70,7 +78,7 @@ struct task {
   task_t *volatile next;
 
   /* attributes */
-  unsigned int attr;
+  taskattr_t attr;
 
   /* pointer to signalling flag */
   volatile int *event_ptr;
@@ -106,7 +114,7 @@ struct task {
 
 struct stream;
 
-extern task_t *TaskCreate( taskfunc_t, void *inarg, unsigned int attr);
+extern task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t attr);
 extern void TaskDestroy(task_t *t);
 extern void TaskWaitOnRead(task_t *ct, struct stream *s);
 extern void TaskWaitOnWrite(task_t *ct, struct stream *s);

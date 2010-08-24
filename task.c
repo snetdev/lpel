@@ -32,13 +32,19 @@ static void TaskStartup(void *data);
 /**
  * Create a task
  */
-task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
+task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
 {
   task_t *t = (task_t *)malloc( sizeof(task_t) );
   t->uid = ticket(&taskseq);
   t->state = TASK_INIT;
   t->prev = t->next = NULL;
+  
+  /* task attributes */
   t->attr = attr;
+  /* fix attributes */
+  if (t->attr.stacksize <= 0) {
+    t->attr.stacksize = TASK_STACKSIZE_DEFAULT;
+  }
 
   /* initialize reference counter to 1*/
   atomic_set(&t->refcnt, 1);
@@ -79,7 +85,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, unsigned int attr)
 
   t->code = func;
   /* function, argument (data), stack base address, stacksize */
-  t->ctx = co_create(TaskStartup, (void *)t, NULL, TASK_STACKSIZE);
+  t->ctx = co_create(TaskStartup, (void *)t, NULL, t->attr.stacksize);
   if (t->ctx == NULL) {
     /*TODO throw error!*/
   }

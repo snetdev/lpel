@@ -40,10 +40,12 @@ void Relay(task_t *t, void *inarg)
   stream_t *to, *from;
   to = StreamCreate();
   from = (stream_t *)inarg;
+  taskattr_t tattr = {0};
+
 
   StreamOpen(t, to, 'w');
   StreamOpen(t, from, 'r');
-  TaskCreate(Consumer, (void *)to, 0);
+  TaskCreate(Consumer, (void *)to, tattr);
   do {
     item = StreamRead(t, from);
     assert( item != NULL );
@@ -67,10 +69,11 @@ void *InputReader(void *arg)
   char *buf;
   stream_t *instream = StreamCreate();
   inport_t *in = InportCreate(instream);
+  taskattr_t tattr = {0};
 
   CpuAssignToCore(1);
 
-  TaskCreate( Relay, (void *)instream, 0);
+  TaskCreate( Relay, (void *)instream, tattr);
   do {
     buf = (char *) malloc( 120 * sizeof(char) );
     (void) fgets( buf, 119, stdin  );

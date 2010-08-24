@@ -116,6 +116,7 @@ static void testBasic(void)
 {
   lpelconfig_t cfg;
   pthread_t th;
+  taskattr_t tattr = {0};
   int i;
 
   cfg.num_workers = 2;
@@ -130,8 +131,11 @@ static void testBasic(void)
   }
 
   /* create tasks */
-  TaskCreate( Relay, NULL, 0);
-  TaskCreate( Consumer, NULL, TASK_ATTR_WAITANY );
+  TaskCreate( Relay, NULL, tattr);
+
+  tattr.flags |= TASK_ATTR_WAITANY;
+  TaskCreate( Consumer, NULL, tattr);
+ 
   pthread_create(&th, NULL, InputReader, NULL);
 
   LpelRun();

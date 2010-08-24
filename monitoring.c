@@ -58,7 +58,7 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
   if ( mon->flags == MONITORING_NONE ) return;
 
   /* determine of task is to be monitored */
-  if ( BIT_IS_SET(t->attr, TASK_ATTR_MONITOR) ||
+  if ( BIT_IS_SET(t->attr.flags, TASK_ATTR_MONITOR) ||
       IS_FLAG( MONITORING_ALLTASKS ) ) {
 
     PRINT_TS(&t->times.stop, buf);

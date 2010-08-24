@@ -4,10 +4,6 @@
  * - startup and shutdown routines
  * - worker thread code
  *
- * TODO: adopt Michael & Scott's two lock queue, s.t.
- * worker reading init queue does not need a lock,
- * only concurrent enqueuers need to lock
- *
  */
 
 #include <malloc.h>
