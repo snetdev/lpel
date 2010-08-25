@@ -245,5 +245,5 @@ void TaskYield(task_t *ct)
 /**
  * Join with a task
  */
-/*TODO place in special queue which is notified each time a task dies */
+/*TODO place in waiting queue with event_ptr pointing to task's outarg */
 

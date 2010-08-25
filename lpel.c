@@ -27,6 +27,8 @@
 
 
 
+/* Keep pointer to the configuration provided at LpelInit() */
+static lpelconfig_t *config;
 
 /*
  * Global task count, i.e. number of tasks in the LPEL.
@@ -34,12 +36,9 @@
  */
 static atomic_t task_count_global = ATOMIC_INIT(0);
 
-static int num_workers = -1;
-static bool b_assigncore = false;
 
 static pthread_barrier_t bar_worker_init;
 
-#define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )
 
 int LpelNumWorkers(void)
 {
@@ -66,7 +65,7 @@ static void *LpelWorker(void *arg)
 
   MonitoringDebug(&mon_info, "worker %d started\n", id);
 
-  /* set affinity to id=CPU */
+  /* set affinity to id % config->proc_workers */
   if (b_assigncore) {
     if ( CpuAssignToCore(id) ) {
       MonitoringDebug(&mon_info, "worker %d assigned to core\n", id);
@@ -77,6 +76,9 @@ static void *LpelWorker(void *arg)
     are assigned to their CPUs */
   pthread_barrier_wait( &bar_worker_init );
 
+  /**
+   * Start the worker here
+   */
   /* MAIN SCHEDULER LOOP */
   loop=0;
   do {
@@ -123,42 +125,93 @@ static void *LpelWorker(void *arg)
 
 
 
+/* test only for a single flag in LpelInit! */
+#define LPEL_ICFG(f)   (( cfg->flags & (f) ) != 0 )
 
 
 /**
  * Initialise the LPEL
- * - if num_workers==-1, determine the number of worker threads automatically
+ *
+ * If FLAG_AUTO is set, values set for num_workers, proc_workers and
+ * proc_others are ignored and set for default as follows:
+ *
+ * AUTO: if #proc_avail > 1:
+ *         num_workers = proc_workers = #proc_avail - 1
+ *         proc_others = 1
+ *       else
+ *         proc_workers = num_workers = 1,
+ *         proc_others = 0
+ *
+ * otherwise, followin sanity checks are performed:
+ *
+ *  num_workers, proc_workers > 0
+ *  proc_others >= 0
+ *  num_workers = i*proc_workers, i>0
+ *
+ * If the realtime flag is invalid or the process has not
+ * the appropriate privileges, it is ignored and a warning
+ * will be displayed
+ *
+ * REALTIME: only valid, if
+ *       #proc_avail >= proc_workers + proc_others &&
+ *       proc_others != 0 &&
+ *       num_workers == proc_workers 
+ *
  */
 void LpelInit(lpelconfig_t *cfg)
 {
-  int cpus;
+  int proc_avail;
 
-  cpus = CpuAssignQueryNumCpus();
-  if (cfg->num_workers == -1) {
-    /* one available core has to be reserved for IO tasks
-       and other system threads */
-    num_workers = cpus - 1;
-  } else {
-    num_workers = cfg->num_workers;
-  }
-  if (num_workers < 1) num_workers = 1;
-  
-  /* Exclusive assignment possible? */
-  if ( BIT_IS_SET(cfg->flags, LPEL_ATTR_ASSIGNCORE) ) {
-    if ( !CpuAssignCanExclusively() ) {
-      ;/*TODO emit warning*/
-      b_assigncore = false;
+  /* determine number of cpus */
+  proc_avail = CpuAssignQueryNumCpus();
+
+  if ( LPEL_ICFG( LPEL_FLAG_AUTO ) ) {
+
+    /* default values */
+    if (proc_avail > 1) {
+      /* multiprocessor */
+      cfg->num_workers = cfg->proc_workers = (proc_avail-1);
+      cfg->proc_others = 1;
     } else {
-      if (num_workers > (cpus-1)) {
-        ;/*TODO emit warning*/
-        b_assigncore = false;
-      } else {
-        b_assigncore = true;
-      }
+      /* uniprocessor */
+      cfg->num_workers = cfg->proc_workers = 1;
+      cfg->proc_others = 0;
     }
-    // TODO remove next line
-    b_assigncore = true;
+  } else {
+
+    /* sanity checks */
+    if ( cfg->num_workers <= 0 ||  cfg->proc_workers <= 0 ) {
+      /* TODO error */
+      assert(0);
+    }
+    if ( cfg->proc_others < 0 ) {
+      /* TODO error */
+      assert(0);
+    }
+    if ( (cfg->num_workers % cfg->proc_workers) != 0 ) {
+      /* TODO error */
+      assert(0);
+    }
   }
+
+
+  /* check realtime flag sanity */
+  if ( LPEL_ICFG( LPEL_FLAG_REALTIME ) ) {
+    /* check for validity */
+    if (
+        (proc_avail < cfg->proc_workers + cfg->proc_others) ||
+        ( cfg->proc_others == 0 ) ||
+        ( cfg->num_workers != cfg->proc_workers )
+       ) {
+      /*TODO warning */
+      /* clear flag */
+      cfg->flags &= ~(LPEL_FLAG_REALTIME);
+    }
+  }
+
+  
+  /* store a reference to the cfg */
+  config = cfg;
 
   /* initialise scheduler */
   SchedInit(num_workers, NULL);
@@ -183,12 +236,9 @@ void LpelRun(void)
       NULL,
       num_workers
       );
-  if (res !=0 ) {
-    /*TODO error */
-      assert(0);
-  }
+  assert(res == 0 );
 
-  // launch worker threads
+  /* launch worker threads */
   thids = (pthread_t *) malloc(num_workers * sizeof(pthread_t));
   for (i = 0; i < num_workers; i++) {
     wid[i] = i;
@@ -202,11 +252,12 @@ void LpelRun(void)
     }
   }
 
-  // join on finish
+  /* join on finish */
   for (i = 0; i < num_workers; i++) {
     pthread_join(thids[i], NULL);
   }
 
+  /* destroy barrier */
   res = pthread_barrier_destroy(&bar_worker_init);
   assert( res == 0 );
 }
@@ -224,7 +275,12 @@ void LpelCleanup(void)
   co_thread_cleanup();
 }
 
-
+/**
+ * This function is currently called from TaskCreate
+ * (this might change)
+ *
+ * Has to be thread-safe.
+ */
 void LpelTaskAdd(task_t *t)
 {
   int to_worker;
@@ -236,7 +292,7 @@ void LpelTaskAdd(task_t *t)
   to_worker = t->uid % num_workers;
   t->owner = to_worker;
 
-  /* place in init queue */
+  /* assign to appropriate sched context */
   SchedAddTaskGlobal( t );
 }
 

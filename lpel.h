@@ -7,10 +7,13 @@
 
 typedef struct {
   int num_workers;
+  int proc_workers;
+  int proc_others;
   int flags;
 } lpelconfig_t;
 
-#define LPEL_ATTR_ASSIGNCORE (1<<0)
+#define LPEL_FLAG_AUTO     (1<<0)
+#define LPEL_FLAG_REALTIME (1<<1)
 
 
 extern void LpelInit(lpelconfig_t *cfg);
