@@ -63,14 +63,14 @@ bool CpuAssignToCore(int coreid)
 }
 
 
-bool CpuAssignSetPreemptable(bool preempt)
+bool CpuAssignSetRealtime(int rt)
 {
   int res;
   pid_t tid;
   struct sched_param param;
 
   tid = gettid();
-  if (preempt) {
+  if ( rt == 0 ) {
     param.sched_priority = 0; /* default nice value */
     res = sched_setscheduler(tid, SCHED_OTHER, &param);
   } else {

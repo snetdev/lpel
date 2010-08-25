@@ -120,7 +120,9 @@ static void testBasic(void)
   int i;
 
   cfg.num_workers = 2;
-  cfg.flags = LPEL_ATTR_ASSIGNCORE;
+  cfg.proc_workers = 2;
+  cfg.proc_others = 2;
+  cfg.flags = 0;
 
   LpelInit(&cfg);
 

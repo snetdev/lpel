@@ -1,13 +1,14 @@
 /**
  * Main LPEL module
- * contains:
- * - startup and shutdown routines
- * - worker thread code
  *
  */
 
+#define _GNU_SOURCE
+
 #include <malloc.h>
 #include <assert.h>
+
+#include <sched.h>
 
 #include <pthread.h> /* worker threads are pthreads (linux has 1-1 mapping) */
 #include <pcl.h>     /* tasks are executed in user-space with help of
@@ -29,47 +30,53 @@
 
 /* Keep pointer to the configuration provided at LpelInit() */
 static lpelconfig_t *config;
+/* cpuset for others-threads */
+cpu_set_t cpuset_others;
 
 /*
  * Global task count, i.e. number of tasks in the LPEL.
  * Implemented as atomic unsigned long type.
  */
-static atomic_t task_count_global = ATOMIC_INIT(0);
+atomic_t lpel_task_count = ATOMIC_INIT(0);
 
 
 static pthread_barrier_t bar_worker_init;
 
 
+static void LpelWorker(int id, monitoring_t *mon);
+
+
 int LpelNumWorkers(void)
 {
-  return num_workers;
+  return config->num_workers;
 }
 
 
 /**
  * Worker thread code
  */
-static void *LpelWorker(void *arg)
+static void *LpelWorkerStartup(void *arg)
 {
-  unsigned int loop;
   int id = *((int *)arg);
-  schedctx_t *sc = SchedGetContext( id );
   monitoring_t mon_info;
 
   /* Init libPCL */
   co_thread_init();
-  
 
   /* initialise monitoring */
   MonitoringInit(&mon_info, id, MONITORING_ALL);
 
   MonitoringDebug(&mon_info, "worker %d started\n", id);
 
+
   /* set affinity to id % config->proc_workers */
-  if (b_assigncore) {
-    if ( CpuAssignToCore(id) ) {
-      MonitoringDebug(&mon_info, "worker %d assigned to core\n", id);
-    }
+  if ( CpuAssignToCore(id % config->proc_workers) ) {
+    MonitoringDebug(&mon_info, "worker %d assigned to core\n", id);
+  }
+  
+  /* set worker as realtime thread */
+  if ( (config->flags & LPEL_FLAG_REALTIME) != 0 ) {
+    CpuAssignSetRealtime( 1 );
   }
   
   /* barrier for all worker threads, assures that the workers
@@ -79,47 +86,16 @@ static void *LpelWorker(void *arg)
   /**
    * Start the worker here
    */
-  /* MAIN SCHEDULER LOOP */
-  loop=0;
-  do {
-    task_t *t;
-  
-    assert( sc != NULL );
+  LpelWorker( id, &mon_info );
 
-    CpuAssignSetPreemptable(false);
-
-    /* select a task from the ready queue (sched) */
-    t = SchedFetchNextReady( sc );
-    if (t != NULL) {
-      /* EXECUTE TASK (context switch) */
-      t->cnt_dispatch++;
-      TIMESTAMP(&t->times.start);
-      t->state = TASK_RUNNING;
-      co_call(t->ctx);
-      TIMESTAMP(&t->times.stop);
-      /* task returns in every case with a different state than RUNNING */
-
-      /* output accounting info */
-      MonitoringPrint(&mon_info, t);
-      MonitoringDebug(&mon_info, "worker %d, loop %u\n", id, loop);
-
-      SchedReschedule(sc, t);
-    } /* end if executed ready task */
-
-    CpuAssignSetPreemptable(true);
-
-    loop++;
-  } while ( atomic_read(&task_count_global) > 0 );
-  /* stop only if there are no more tasks in the system */
-  /* MAIN SCHEDULER LOOP END */
-    
+  /* cleanup monitoring */ 
   MonitoringCleanup(&mon_info);
 
   /* Cleanup libPCL */
   co_thread_cleanup();
   
   /* exit thread */
-  pthread_exit(NULL);
+  return NULL;
 }
 
 
@@ -209,12 +185,32 @@ void LpelInit(lpelconfig_t *cfg)
     }
   }
 
-  
+  /* create the cpu_set for other threads */
+  {
+    int  i;
+
+
+    CPU_ZERO( &cpuset_others );
+    if (cfg->proc_others == 0) {
+      /* distribute on the workers */
+      for (i=0; i<cfg->proc_workers; i++) {
+        CPU_SET(i, &cpuset_others);
+      }
+    } else {
+      /* set to proc_others */
+      for( i=cfg->proc_workers;
+          i<cfg->proc_workers+cfg->proc_others;
+          i++ ) {
+        CPU_SET(i, &cpuset_others);
+      }
+    }
+  }
+
   /* store a reference to the cfg */
   config = cfg;
 
   /* initialise scheduler */
-  SchedInit(num_workers, NULL);
+  SchedInit(config->num_workers, NULL);
 
   /* Init libPCL */
   co_thread_init();
@@ -228,21 +224,22 @@ void LpelRun(void)
 {
   pthread_t *thids;
   int i, res;
-  int wid[num_workers];
+  int nw = config->num_workers;
+  int wid[nw];
 
   /* initialise barrier */
   res = pthread_barrier_init(
       &bar_worker_init,
       NULL,
-      num_workers
+      nw
       );
   assert(res == 0 );
 
   /* launch worker threads */
-  thids = (pthread_t *) malloc(num_workers * sizeof(pthread_t));
-  for (i = 0; i < num_workers; i++) {
+  thids = (pthread_t *) malloc(nw * sizeof(pthread_t));
+  for (i = 0; i < nw; i++) {
     wid[i] = i;
-    res = pthread_create(&thids[i], NULL, LpelWorker, &wid[i]);
+    res = pthread_create(&thids[i], NULL, LpelWorkerStartup, &wid[i]);
     if (res != 0) {
       assert(0);
       /*TODO error
@@ -253,7 +250,7 @@ void LpelRun(void)
   }
 
   /* join on finish */
-  for (i = 0; i < num_workers; i++) {
+  for (i = 0; i < nw; i++) {
     pthread_join(thids[i], NULL);
   }
 
@@ -275,6 +272,74 @@ void LpelCleanup(void)
   co_thread_cleanup();
 }
 
+
+
+
+
+static void LpelWorker(int id, monitoring_t *mon)
+{
+  unsigned int loop;
+  schedctx_t *sc = SchedGetContext( id );
+  
+  /* MAIN SCHEDULER LOOP */
+  loop=0;
+  do {
+    task_t *t;
+  
+    assert( sc != NULL );
+
+
+    /* select a task from the ready queue (sched) */
+    t = SchedFetchNextReady( sc );
+    if (t != NULL) {
+      /* EXECUTE TASK (context switch) */
+      t->cnt_dispatch++;
+      TIMESTAMP(&t->times.start);
+      t->state = TASK_RUNNING;
+      co_call(t->ctx);
+      TIMESTAMP(&t->times.stop);
+      /* task returns in every case with a different state */
+      assert( t->state != TASK_RUNNING);
+
+      /* output accounting info */
+      MonitoringPrint(mon, t);
+      MonitoringDebug(mon, "worker %d, loop %u\n", id, loop);
+
+      SchedReschedule(sc, t);
+    } /* end if executed ready task */
+
+
+    loop++;
+  } while ( atomic_read(&lpel_task_count) > 0 );
+  /* stop only if there are no more tasks in the system */
+  /* MAIN SCHEDULER LOOP END */
+}
+
+
+
+void LpelThreadCreate( pthread_t *pt, void *(*start_routine)(void *), void *arg)
+{
+  int res;
+
+  /* create thread with default attributes */
+  res = pthread_create(pt, NULL, start_routine, arg);
+  assert( res==0 );
+
+  /* set the affinity mask */
+  res = pthread_getaffinity_np( *pt, sizeof(cpu_set_t), &cpuset_others);
+  assert( res==0 );
+}
+
+
+
+void LpelThreadJoin( pthread_t pt, void **joinarg)
+{
+  int res;
+  res = pthread_join(pt, joinarg);
+  assert( res==0 );
+}
+
+
 /**
  * This function is currently called from TaskCreate
  * (this might change)
@@ -286,10 +351,10 @@ void LpelTaskAdd(task_t *t)
   int to_worker;
 
   /* increase num of tasks in the lpel system*/
-  atomic_inc(&task_count_global);
+  atomic_inc(&lpel_task_count);
 
   /*TODO placement module */
-  to_worker = t->uid % num_workers;
+  to_worker = t->uid % config->num_workers;
   t->owner = to_worker;
 
   /* assign to appropriate sched context */
@@ -298,6 +363,6 @@ void LpelTaskAdd(task_t *t)
 
 void LpelTaskRemove(task_t *t)
 {
-  atomic_dec(&task_count_global);
+  atomic_dec(&lpel_task_count);
 }
 
