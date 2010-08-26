@@ -4,7 +4,6 @@
 
 #include <malloc.h>
 #include <assert.h>
-#include "sysdep.h"
 
 
 /**
@@ -12,7 +11,7 @@
  * fixed number of readers (specified upon initialisation)
  * - using local spinning
  *
- * @TODO maybe xchg can be replaced by simple stores and WMB()s?
+ * @TODO extrude atomics?
  */
 
 #define intxCacheline (64/sizeof(int))
@@ -33,7 +32,6 @@ static inline void RwlockInit( rwlock_t *v, int num_readers )
   v->writer.l = 0;
   v->num_readers = num_readers;
   v->readers = (struct rwlock_flag *) calloc(num_readers, sizeof(struct rwlock_flag));
-  WMB();
 }
 
 static inline void RwlockCleanup( rwlock_t *v )
@@ -47,7 +45,8 @@ static inline void RwlockReaderLock( rwlock_t *v, int ridx )
     while( v->writer.l != 0 ); /*spin*/
     
     /* set me as trying */
-    (void) xchg(&v->readers[ridx].l, 1);
+    v->readers[ridx].l = 1;
+    __sync_synchronize();
 
     if (v->writer.l == 0) {
       /* no writer: success! */
@@ -55,14 +54,13 @@ static inline void RwlockReaderLock( rwlock_t *v, int ridx )
     }
 
     /* backoff to let writer go through */
-    (void) xchg(&v->readers[ridx].l, 0);
+    __sync_lock_release(&v->readers[ridx].l);
   }
 }
 
 static inline void RwlockReaderUnlock( rwlock_t *v, int ridx )
 {
-  WMB();
-  v->readers[ridx].l = 0;
+  __sync_lock_release(&v->readers[ridx].l);
 }
 
 
@@ -72,11 +70,12 @@ static inline void RwlockWriterLock( rwlock_t *v )
   /* assume no competing writer and a sane lock/unlock usage */
   assert( v->writer.l == 0 );
 
-  (void) xchg(&v->writer.l, 1);
+  v->writer.l = 1;
   /*
    * now write lock is held, but we have to wait until current
    * readers have finished
    */
+  __sync_synchronize();
   for (i=0; i<v->num_readers; i++) {
     while( v->readers[i].l != 0 ); /*spin*/
   }
@@ -84,8 +83,7 @@ static inline void RwlockWriterLock( rwlock_t *v )
 
 static inline void RwlockWriterUnlock( rwlock_t *v )
 {
-  WMB();
-  v->writer.l = 0;
+  __sync_lock_release(&v->writer.l);
 }
 
 #endif /* _RWLOCK_H_ */

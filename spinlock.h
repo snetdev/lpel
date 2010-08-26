@@ -7,16 +7,12 @@
  * Test-and-test-and-set style spinlocks
  * using local spinning
  *
- * Assumes xchg has load-with-aquire semantics
- * (holds for the current implementations)
  *
- * TODO: Alternatively one could use pthread_spin_lock/-unlock
+ * @TODO: Alternatively one could use pthread_spin_lock/-unlock
  *       operations. Could be switched by defines.
- *
+ * @TODO: Alternative 2: extrude atomics
  */
 
-/** following file implements xchg and WMB */
-#include "sysdep.h"
 
 
 #define intxCacheline (64/sizeof(int))
@@ -28,7 +24,8 @@ typedef struct {
 
 static inline void SpinlockInit(spinlock_t *v)
 {
-  v->l = 0;
+  /*v->l = 0; with fence */
+  __sync_lock_release(&v->l);
 }
 
 static inline void SpinlockCleanup(spinlock_t *v)
@@ -36,7 +33,7 @@ static inline void SpinlockCleanup(spinlock_t *v)
 
 static inline void SpinlockLock(spinlock_t *v)
 {
-  while ( xchg( (int *)&v->l, 1) != 0) {
+  while ( __sync_lock_test_and_set( &v->l, 1) != 0) {
     /* spin locally (only reads) - reduces bus traffic */
     while (v->l);
   }
@@ -45,8 +42,7 @@ static inline void SpinlockLock(spinlock_t *v)
 static inline void SpinlockUnlock(spinlock_t *v)
 {
   /* flush store buffers */
-  WMB();
-  v->l = 0;
+  __sync_lock_release(&v->l);
 }
 
 #endif /* _SPINLOCK_H_ */
