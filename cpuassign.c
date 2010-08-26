@@ -85,7 +85,7 @@ bool CpuAssignSetRealtime(int rt)
   return true;
 }
 
-bool CpuAssignCanExclusively(void)
+bool CpuAssignCanRealtime(void)
 {
 #ifdef CPUASSIGN_USE_CAPABILITIES
   cap_t caps;

@@ -1,4 +1,5 @@
 /**
+ * Streamset to hold opened streams in the TCB.
  *
  */
 

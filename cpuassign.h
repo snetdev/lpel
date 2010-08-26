@@ -7,7 +7,7 @@
 #define CPUASSIGN_USE_CAPABILITIES
 
 
-extern bool CpuAssignCanExclusively(void);
+extern bool CpuAssignCanRealtime(void);
 extern int  CpuAssignQueryNumCpus(void);
 extern bool CpuAssignToCore(int coreid);
 extern bool CpuAssignSetRealtime(int rt);

@@ -12,8 +12,7 @@
  * fixed number of readers (specified upon initialisation)
  * - using local spinning
  *
- * @note TODO This RWLock does only work for sequential consistent
- *            memory models, as the placement of fences is not verified yet!
+ * @TODO maybe xchg can be replaced by simple stores and WMB()s?
  */
 
 #define intxCacheline (64/sizeof(int))
@@ -34,6 +33,7 @@ static inline void RwlockInit( rwlock_t *v, int num_readers )
   v->writer.l = 0;
   v->num_readers = num_readers;
   v->readers = (struct rwlock_flag *) calloc(num_readers, sizeof(struct rwlock_flag));
+  WMB();
 }
 
 static inline void RwlockCleanup( rwlock_t *v )
@@ -44,20 +44,18 @@ static inline void RwlockCleanup( rwlock_t *v )
 static inline void RwlockReaderLock( rwlock_t *v, int ridx )
 {
   while(1) {
-    WMB();
     while( v->writer.l != 0 ); /*spin*/
     
-    // set me as trying
-    v->readers[ridx].l = 1;
+    /* set me as trying */
+    (void) xchg(&v->readers[ridx].l, 1);
 
-    WMB();
     if (v->writer.l == 0) {
-      // no writer: success!
+      /* no writer: success! */
       break;
     }
 
     /* backoff to let writer go through */
-    v->readers[ridx].l = 0;
+    (void) xchg(&v->readers[ridx].l, 0);
   }
 }
 
@@ -74,12 +72,11 @@ static inline void RwlockWriterLock( rwlock_t *v )
   /* assume no competing writer and a sane lock/unlock usage */
   assert( v->writer.l == 0 );
 
-  v->writer.l = 1;
+  (void) xchg(&v->writer.l, 1);
   /*
    * now write lock is held, but we have to wait until current
    * readers have finished
    */
-  WMB();
   for (i=0; i<v->num_readers; i++) {
     while( v->readers[i].l != 0 ); /*spin*/
   }

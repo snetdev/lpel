@@ -118,7 +118,7 @@ static void *LpelWorkerStartup(void *arg)
  *         proc_workers = num_workers = 1,
  *         proc_others = 0
  *
- * otherwise, followin sanity checks are performed:
+ * otherwise, following sanity checks are performed:
  *
  *  num_workers, proc_workers > 0
  *  proc_others >= 0
@@ -179,6 +179,12 @@ void LpelInit(lpelconfig_t *cfg)
         ( cfg->proc_others == 0 ) ||
         ( cfg->num_workers != cfg->proc_workers )
        ) {
+      /*TODO warning */
+      /* clear flag */
+      cfg->flags &= ~(LPEL_FLAG_REALTIME);
+    }
+    /* check for privileges needed for setting realtime */
+    if ( !CpuAssignCanRealtime() ) {
       /*TODO warning */
       /* clear flag */
       cfg->flags &= ~(LPEL_FLAG_REALTIME);

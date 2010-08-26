@@ -42,6 +42,9 @@
 /* include a Readers/Writer lock for concurrent access */
 #include "rwlock.h"
 
+/* include to have memory barriers */
+#include "sysdep.h"
+
 /** the callback function for gathering */
 typedef void (*flagtree_gather_cb_t)(int i, void *arg);
 
@@ -71,6 +74,7 @@ static inline void FlagtreeMark(flagtree_t *ft, int idx, int reader)
   int j = FT_LEAF_TO_IDX(ft->height, idx);
   ft->buf[j] = 1;
   while (j != 0) {
+    WMB(); /* enforce ordering for marking upward the tree */
     j = FT_PARENT(j);
     ft->buf[j] = 1;
   }
@@ -145,6 +149,7 @@ static inline void FlagtreeGather(flagtree_t *ft, flagtree_gather_cb_t gather, v
     if (prev == FT_PARENT(cur)) {
       /* clear cur (preorder)*/
       ft->buf[cur] = 0;
+      /* no WMB(); clearing the flag can be delayed */
       if ( cur >= FT_LEAF_START_IDX(ft->height) ) {
         /* gather leaf of idx */
         ft->gather( FT_IDX_TO_LEAF(ft->height, cur), arg );

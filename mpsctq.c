@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include "sysdep.h"
 #include "mpsctq.h"
 
 
@@ -11,6 +12,7 @@ void MpscTqInit(mpsctq_t *q)
   q->head = &q->stub;
   q->tail = &q->stub;
   q->stub.next = NULL;
+  WMB();
 }
 
 void MpscTqCleanup(mpsctq_t *q)
@@ -26,6 +28,9 @@ void MpscTqEnqueue(mpsctq_t *q, task_t *t)
   /*
    *  TODO currently using atomic builtins
    *  prev = SWAP( &q->head, t);
+   *
+   * @TODO current implementation of xchg only permits ints
+   *       (e.g. xchgl in x86_64, but xchgq required for ptr)
    */
   __sync_synchronize();
   prev = (task_t *) __sync_lock_test_and_set(&q->head,t);

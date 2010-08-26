@@ -1,15 +1,37 @@
-/*
- * This file was based on the implementation of FastFlow.
- */
-
-
 /* 
- * Single-Writer Single-Reader circular buffer.
- * No lock is needed around pop and push methods.
+ * Stream, implemented as Single-Writer Single-Reader circular buffer.
  * 
- * A NULL value is used to indicate buffer full and 
- * buffer empty conditions.
+ * Locking the whole stream is not needed for the Read and Write methods,
+ * but Read synchronises with Open for writing (producer lock)
+ * and Write with Open for reading (consumer lock).
+ * As opening/closing happens seldom in most cases, there should be no
+ * competition for the lock most of the time.
  *
+ * It uses ideas from the FastForward queue implementation:
+ * Synchronisation takes place with the content of the buffer, i.e., NULL indicates that
+ * the location is empty. After reading a value, the consumer writes NULL back to the
+ * position it read the data from.
+ *
+ * A task attempting to read from an empty stream will context switch after setting
+ * its state to WAITING on write and pointing the event pointer to the location
+ * in the buffer it waits the producer to write something into.
+ *
+ * Same holds for a task attempting to write to a full stream, except it changes state
+ * to WAITING on read, it has to be woken up when the buffer position the event pointer
+ * points to will be NULL again.
+ *
+ * Upon writing, if the consumer is a WAITANY-task, the flagtree mechanism has to be used.
+ *
+ *
+ * @see http://www.cs.colorado.edu/department/publications/reports/docs/CU-CS-1023-07.pdf
+ *      accessed Aug 26, 2010
+ *      for more details on the FastForward queue.
+ *
+ * @TODO switch to an implementation, where Read/Write are locked, enabling
+ *      the Producer to place a waiting Consumer into the appropriate
+ *      worker ready queue directly (?)
+ * 
+ * 
  */
 
 #include <malloc.h>

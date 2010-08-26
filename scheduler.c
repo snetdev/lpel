@@ -302,6 +302,7 @@ static void WaitingTestGather(int i, void *arg)
 static bool WaitingTestOnAny(task_t *wt, void *arg)
 {
   assert( TASK_IS_WAITANY(wt) );
+  /* event_ptr points to the root of the flagtree */
 
   /* first of all, check root flag */
   if (*wt->event_ptr != 0) {
@@ -315,7 +316,6 @@ static bool WaitingTestOnAny(task_t *wt, void *arg)
     /* only return true, if at least on leaf could be gathered */
     return StreamsetChainNotEmpty( &wt->streams_read );
   }
-  /* event_ptr points to the root of the flagtree */
   return false;
 }
 
