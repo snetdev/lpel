@@ -21,14 +21,23 @@ static inline int fetch_and_dec(volatile int *cnt)
   return tmp;
 }
 
+static inline int fetch_and_inc(volatile int *cnt)
+{
+  int tmp = 1;
+  asm volatile("lock; xadd%z0 %0,%1"
+      : "=r" (tmp), "=m" (*cnt)
+      : "0" (tmp), "m" (*cnt)
+      : "memory", "cc");
+  return tmp;
+}
+
 static inline int atomic_dec(volatile int *cnt)
 {
   unsigned char prev = 0;
   asm volatile ("lock; decl %0; setnz %1"
       : "=m" (*cnt), "=qm" (prev)
       : "m" (*cnt)
-      : "memory");
-
+      : "memory", "cc");
   return (int)prev;
 }
 
@@ -38,7 +47,7 @@ static inline void atomic_inc(volatile int *cnt)
   asm volatile ("lock; incl %0"
       : /* no output */
       : "m" (*cnt)
-      : "memory");
+      : "memory", "cc");
 }
 
 void *thread_naive(void *arg)

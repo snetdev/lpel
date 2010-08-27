@@ -21,7 +21,7 @@
 
 
 
-static sequencer_t taskseq = SEQUENCER_INIT;
+static atomic_t taskseq = ATOMIC_INIT(0);
 
 
 
@@ -35,7 +35,7 @@ static void TaskStartup(void *data);
 task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
 {
   task_t *t = (task_t *)malloc( sizeof(task_t) );
-  t->uid = ticket(&taskseq);
+  t->uid = fetch_and_inc(&taskseq);
   t->state = TASK_INIT;
   t->prev = t->next = NULL;
   
@@ -105,7 +105,8 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
 void TaskDestroy(task_t *t)
 {
   /* only if nothing references the task anymore */
-  if ( fetch_and_dec(&t->refcnt) == 1) {
+  /* if ( fetch_and_dec(&t->refcnt) == 1) { */
+  if ( atomic_dec(&t->refcnt) == 0) {
 
     /* Notify LPEL first */
     LpelTaskRemove(t);

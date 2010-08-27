@@ -77,7 +77,8 @@ stream_t *StreamCreate(void)
  */
 void StreamDestroy(stream_t *s)
 {
-  if ( fetch_and_dec(&s->refcnt) == 1 ) {
+  /* if ( fetch_and_dec(&s->refcnt) == 1 ) { */
+  if ( atomic_dec(&s->refcnt) == 0 ) {
     SpinlockCleanup(&s->prod.lock);
     SpinlockCleanup(&s->cons.lock);
     free(s);

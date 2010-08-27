@@ -1,14 +1,10 @@
 #ifndef _ATOMIC_H_
 #define _ATOMIC_H_
 
-/*
- * NOTE:
+/**
+ * Atomic variables and
+ * TODO swap and membars
  *
- * This implementation relies on the GCC 4.1.2+ Atomic builtins.
- *
- * If you cannot link because of undefined references to the
- * __sync_* functions, try compiling with -march=i486.
- * i386 is not supported.
  */
 
 
@@ -35,6 +31,8 @@ typedef struct {
 #define atomic_set(v,i) (((v)->counter) = (i))
 
 
+#if defined(__x86_64) || defined(__i386__)
+
 /**
  * Increment atomic variable
  * @param v pointer of type atomic_t
@@ -43,18 +41,29 @@ typedef struct {
  */
 static inline void atomic_inc( atomic_t *v )
 {
-  (void)__sync_fetch_and_add(&v->counter, 1);
+  volatile int *cnt = &v->counter;
+  asm volatile ("lock; incl %0"
+      : /* no output */
+      : "m" (*cnt)
+      : "memory", "cc");
 }
 
 /**
  * Decrement atomic variable
  * @param v: pointer of type atomic_t
+ * @return 0 if the variable is 0 _after_ the decrement.
  *
  * Atomically decrements @v by 1
  */
-static inline void atomic_dec( atomic_t *v )
+static inline int atomic_dec( atomic_t *v )
 {
-  (void)__sync_fetch_and_sub(&v->counter, 1);
+  volatile int *cnt = &v->counter;
+  unsigned char prev = 0;
+  asm volatile ("lock; decl %0; setnz %1"
+      : "=m" (*cnt), "=qm" (prev)
+      : "m" (*cnt)
+      : "memory", "cc");
+  return (int)prev;
 }
 
 
@@ -65,7 +74,13 @@ static inline void atomic_dec( atomic_t *v )
  */
 static inline int fetch_and_inc( atomic_t *v )
 {
-  return __sync_fetch_and_add(&v->counter, 1);
+  volatile int *cnt = &v->counter;
+  int tmp = 1;
+  asm volatile("lock; xadd%z0 %0,%1"
+      : "=r" (tmp), "=m" (*cnt)
+      : "0" (tmp), "m" (*cnt)
+      : "memory", "cc");
+  return tmp;
 }
 
 
@@ -76,15 +91,19 @@ static inline int fetch_and_inc( atomic_t *v )
  */
 static inline int fetch_and_dec( atomic_t *v )
 {
-  return __sync_fetch_and_sub(&v->counter, 1);
+  volatile int *cnt = &v->counter;
+  int tmp = -1;
+  asm volatile("lock; xadd%z0 %0,%1"
+      : "=r" (tmp), "=m" (*cnt)
+      : "0" (tmp), "m" (*cnt)
+      : "memory", "cc");
+  return tmp;
 }
+#else
+#error "Atomics not implemented for this architecture!"
+#endif /* defined(__x86_64) || defined(__i386__) */
 
 
-typedef atomic_t sequencer_t;
-#define SEQUENCER_INIT  ATOMIC_INIT(0)
 
-static inline int ticket( sequencer_t *s ) {
-  return __sync_fetch_and_add(&s->counter, 1);
-}
 
 #endif /* _ATOMIC_H_ */
