@@ -7,10 +7,13 @@
  * Test-and-test-and-set style spinlocks
  * using local spinning
  *
- * Assumes xchg has load-with-aquire semantics
- * (holds for the current implementations)
+ * @TODO Assumes that XCHG has load-with-aquire semantics, i.e.,
+ *       memory accesses are not moved up across XCHG
+ *       (speculative load/buffered store) (#LoadLoad | #LoadStore)
+ *       This holds for x86's XCHG.
+ *       Note that on x86, a WMB() (#StoreStore) is a no-op
  *
- * TODO: Alternatively one could use pthread_spin_lock/-unlock
+ * @TODO Alternatively one could use pthread_spin_lock/-unlock
  *       operations. Could be switched by defines.
  *
  */

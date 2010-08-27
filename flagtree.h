@@ -74,7 +74,7 @@ static inline void FlagtreeMark(flagtree_t *ft, int idx, int reader)
   int j = FT_LEAF_TO_IDX(ft->height, idx);
   ft->buf[j] = 1;
   while (j != 0) {
-    WMB(); /* enforce ordering for marking upward the tree */
+    WMB(); /* enforce ordering for marking upward the tree, a no-op for x86 */
     j = FT_PARENT(j);
     ft->buf[j] = 1;
   }
@@ -129,7 +129,7 @@ static inline void FlagtreeGatherNoGoto(flagtree_t *ft, flagtree_gather_cb_t gat
  * clearing the marks in preorder
  * @param ft    the flagtree to gather from
  * @pre         FlagtreeGather and FlagtreeGrow must not be executed concurrently
- * @note  TODO  This works for now only in sequentially consistent memory models (without fences).
+ * @note  TODO  This works for now only in x86 (guaranteed, w/o fences).
  *              As a workaround, for the procedure of gathering, the RW-Lock must be aquired for writing.
  */
 static inline void FlagtreeGather(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg)
@@ -147,8 +147,8 @@ static inline void FlagtreeGather(flagtree_t *ft, flagtree_gather_cb_t gather, v
     /*FlagtreePrint(ft);*/
 #endif
     if (prev == FT_PARENT(cur)) {
-      /* clear cur (preorder)*/
-      ft->buf[cur] = 0;
+      /* clear cur (preorder), XCHG in x86 is not reordered w.r.t. earlier/later loads */
+      (void) xchg(&ft->buf[cur], 0);
       /* no WMB(); clearing the flag can be delayed */
       if ( cur >= FT_LEAF_START_IDX(ft->height) ) {
         /* gather leaf of idx */

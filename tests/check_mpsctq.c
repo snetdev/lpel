@@ -5,8 +5,8 @@
 #include "../mpsctq.h"
 
 
-#define NUM_PROD  20
-#define NUM_ITEMS_EACH  2000
+#define NUM_PROD  100
+#define NUM_ITEMS_EACH  20000
 
 static mpsctq_t queue;
 

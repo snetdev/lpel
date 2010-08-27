@@ -12,13 +12,18 @@ void MpscTqInit(mpsctq_t *q)
   q->head = &q->stub;
   q->tail = &q->stub;
   q->stub.next = NULL;
-  WMB();
 }
 
 void MpscTqCleanup(mpsctq_t *q)
 { /*NOP*/ }
 
 
+/**
+ * Enqueue a task, for multiple producers
+ *
+ * Concurrent enqueuers synchronize with atomic
+ * swap operation.
+ */
 void MpscTqEnqueue(mpsctq_t *q, task_t *t)
 {
   task_t *prev;
@@ -35,10 +40,19 @@ void MpscTqEnqueue(mpsctq_t *q, task_t *t)
   __sync_synchronize();
   prev = (task_t *) __sync_lock_test_and_set(&q->head,t);
 
-  /* (point where list is disconnected) */
+  /*** (point where list is disconnected)***/
+
+  /* link together again */
   prev->next = t;
 }
 
+
+/**
+ * Dequeue operation, for a single consumer
+ * (non-concurrent)
+ *
+ * @return NULL if no task in the queue
+ */
 task_t *MpscTqDequeue(mpsctq_t *q)
 {
   task_t *tail, *next;

@@ -12,7 +12,14 @@
  * fixed number of readers (specified upon initialisation)
  * - using local spinning
  *
- * @TODO maybe xchg can be replaced by simple stores and WMB()s?
+ * @TODO This implementation heavily relies on the properties of x86's
+ *       memory model and XCHG behaviour.
+ *       Adaptations are required to fit other architectures.
+ *
+ * @see Intel(R) 64 and IA-32 Architecures Software Developer's Manual,
+ *      Volume 3A, Chapter 8.2 [June 2010]
+ *      (esp. 8.2.3.9 "Loads and Stores Are Not Reordered with
+ *       Locked Instructions")
  */
 
 #define intxCacheline (64/sizeof(int))
@@ -33,7 +40,6 @@ static inline void RwlockInit( rwlock_t *v, int num_readers )
   v->writer.l = 0;
   v->num_readers = num_readers;
   v->readers = (struct rwlock_flag *) calloc(num_readers, sizeof(struct rwlock_flag));
-  WMB();
 }
 
 static inline void RwlockCleanup( rwlock_t *v )
@@ -61,7 +67,6 @@ static inline void RwlockReaderLock( rwlock_t *v, int ridx )
 
 static inline void RwlockReaderUnlock( rwlock_t *v, int ridx )
 {
-  WMB();
   v->readers[ridx].l = 0;
 }
 
@@ -84,7 +89,6 @@ static inline void RwlockWriterLock( rwlock_t *v )
 
 static inline void RwlockWriterUnlock( rwlock_t *v )
 {
-  WMB();
   v->writer.l = 0;
 }
 
