@@ -11,14 +11,34 @@
 
 static int counter;
 
-static inline int fetch_and_inc(volatile int *cnt)
+static inline int fetch_and_dec(volatile int *cnt)
 {
-  int tmp = 1;
-  asm volatile("lock\n\t" "xadd%z0 %0,%1"
-             : "=r" (tmp), "=m" (*cnt)
-             : "0" (tmp), "m" (*cnt)
-             : "memory", "cc");
+  int tmp = -1;
+  asm volatile("lock; xadd%z0 %0,%1"
+      : "=r" (tmp), "=m" (*cnt)
+      : "0" (tmp), "m" (*cnt)
+      : "memory", "cc");
   return tmp;
+}
+
+static inline int atomic_dec(volatile int *cnt)
+{
+  unsigned char prev = 0;
+  asm volatile ("lock; decl %0; setnz %1"
+      : "=m" (*cnt), "=qm" (prev)
+      : "m" (*cnt)
+      : "memory");
+
+  return (int)prev;
+}
+
+
+static inline void atomic_inc(volatile int *cnt)
+{
+  asm volatile ("lock; incl %0"
+      : /* no output */
+      : "m" (*cnt)
+      : "memory");
 }
 
 void *thread_naive(void *arg)
@@ -31,29 +51,23 @@ void *thread_naive(void *arg)
 
 void *thread_builtin(void *arg)
 {
-  int i, z;
-  for (i=0; i<MAX_INC; i++) z = __sync_fetch_and_add(&counter, 1);
+  int i;
+  for (i=0; i<MAX_INC; i++) (void) __sync_fetch_and_add(&counter, 1);
   pthread_exit(NULL);
 }
 
 
 void *thread_asm(void *arg)
 {
-  int i,z;
+  int i;
   for (i=0; i<MAX_INC; i++) {
-    z = fetch_and_inc(&counter);
-#if NUM_THREADS == 1
-    assert(z==i);
-#endif
+    atomic_inc(&counter);
   }
   pthread_exit(NULL);
 }
 
 
-
-
-
-int main(int argc, char **argv)
+void testIncToMax(void)
 {
   int n;
   pthread_t th[NUM_THREADS];
@@ -102,5 +116,41 @@ int main(int argc, char **argv)
   msec = TimingToMSec(&tt);
   printf("Result: %d, in %f msec.\n", counter, msec);
 
+}
+
+
+
+void testRefCnt(void)
+{
+  const int num = 10;
+  int i,z;
+
+  counter = 0;
+  printf("Testing RefCnt...\n");
+  for (i=0; i<num; i++) {
+    atomic_inc(&counter);
+  }
+  for (i=0; i<num-1; i++) {
+    z = atomic_dec(&counter);
+    printf("counter %d z %d\n", counter, z);
+    assert( z != 0);
+  }
+  /* reaching zero */
+  z = atomic_dec(&counter);
+  printf("counter %d z %d\n", counter, z);
+  assert( z == 0);
+  /* and one more */
+  z = atomic_dec(&counter);
+  printf("counter %d z %d\n", counter, z);
+  assert( z != 0);
+  printf("Success.\n");
+}
+
+
+
+
+int main(int argc, char **argv)
+{
+  testRefCnt();
   return 0;
 }
