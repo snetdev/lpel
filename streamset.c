@@ -193,6 +193,7 @@ streamtbe_t *StreamsetAdd(streamset_t *set, struct stream *s, int *grp_idx)
   ste->s = s;
   ste->state = STBE_OPEN;
   ste->cnt = 0;
+  ste->dirty = NULL;
 
   /* mark the entry as dirty */
   MarkDirty(set, ste);
