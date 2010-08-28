@@ -31,7 +31,9 @@ typedef struct {
 #define atomic_set(v,i) (((v)->counter) = (i))
 
 
-#if defined(__x86_64) || defined(__i386__)
+
+/*NOTE: XADD only available since 486 */
+#if defined(__x86_64__) || defined(__i386__)
 
 /**
  * Increment atomic variable
@@ -100,10 +102,28 @@ static inline int fetch_and_dec( atomic_t *v )
   return tmp;
 }
 #else
-#error "Atomics not implemented for this architecture!"
+#warning "Fallback to compiler builtin atomics (icc/gcc)!"
+
+static inline void atomic_inc( atomic_t *v )
+{
+  (void)__sync_fetch_and_add(&v->counter, 1);
+}
+
+static inline int atomic_dec( atomic_t *v )
+{
+  return ( __sync_sub_and_fetch(&v->counter, 1)==0 ) ? 0 : 1;
+}
+
+static inline int fetch_and_inc( atomic_t *v )
+{
+  return __sync_fetch_and_add(&v->counter, 1);
+}
+
+static inline int fetch_and_dec( atomic_t *v )
+{
+  return __sync_fetch_and_sub(&v->counter, 1);
+}
+
 #endif /* defined(__x86_64) || defined(__i386__) */
-
-
-
 
 #endif /* _ATOMIC_H_ */
