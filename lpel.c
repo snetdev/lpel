@@ -53,8 +53,6 @@ static cpu_set_t cpuset_others;
 
 static pthread_barrier_t bar_worker_init;
 
-static schedctx_t **schedcontexts;
-
 
 static int CanSetRealtime(void)
 {
@@ -148,7 +146,7 @@ static void *LpelWorkerStartup(void *arg)
 
   /**************************************************************************/
   /* Start the scheduler task */
-  SchedTask( schedcontexts[wid], &mon_info );
+  SchedTask( wid, &mon_info );
   /* scheduler task will return when there is no more work to do */
   /**************************************************************************/
 
@@ -275,18 +273,8 @@ void LpelInit(lpelconfig_t *cfg)
     }
   }
 
-
-  /* create scheduler contexts in order to be able to assign tasks 
-     before running the workers */
-  {
-    int i;
-    schedcontexts = (schedctx_t **) calloc(
-        cfg->num_workers, sizeof(schedctx_t *)
-        );
-    for (i=0; i<cfg->num_workers; i++) {
-      schedcontexts[i] = SchedCtxCreate(NULL); 
-    }
-  }
+  /* initialise scheduler */
+  SchedInit(cfg->num_workers, NULL);
 
   /* store a reference to the cfg */
   config = cfg;
@@ -342,11 +330,8 @@ void LpelRun(void)
  */
 void LpelCleanup(void)
 {
-  int i;
-  for (i=0; i<config->num_workers; i++) {
-    SchedCtxDestroy(schedcontexts[i]);
-  }
-  free(schedcontexts);
+  /* Cleanup scheduler */
+  SchedCleanup();
 
   /* Cleanup libPCL */
   co_thread_cleanup();
@@ -403,7 +388,7 @@ void LpelTaskToWorker(task_t *t)
   t->owner = to_worker;
 
   /* assign to appropriate sched context */
-  SchedAssignTask( schedcontexts[to_worker], t );
+  SchedAssignTask( to_worker, t );
 }
 
 void LpelTaskRemove(task_t *t)

@@ -15,11 +15,13 @@
 #include "taskqueue.h"
 
 struct schedcfg {
-  int wid;
+  int dummy;
 };
 
+typedef struct schedctx schedctx_t;
+
 struct schedctx {
-  //int wid;
+  int wid;
   taskqueue_t init_queue;
   pthread_mutex_t lock_iq;
   taskqueue_t ready_queue;
@@ -32,6 +34,8 @@ struct schedctx {
   int cnt_tasks;
 };
 
+static int num_workers = -1;
+static schedctx_t *schedarray;
 
 static void ActivatorTask(task_t *self, void *inarg);
 
@@ -49,55 +53,75 @@ static bool WaitingTestOnAny(task_t *wt, void *arg);
 static void WaitingRemove(task_t *wt, void *arg);
 
 
-
 /**
- * Create scheduler context
+ * Initialise scheduler globally
  *
+ * Call this function once before any other calls of the scheduler module
+ *
+ * @param size  size of the worker set, i.e., the total number of workers
  * @param cfg   additional configuration
  */
-schedctx_t *SchedCtxCreate(schedcfg_t *cfg)
+void SchedInit(int size, schedcfg_t *cfg)
 {
+  int i;
   schedctx_t *sc;
+
+  assert(0 <= size);
+
+  num_workers = size;
   
-  /* allocate context memory */
-  sc = (schedctx_t *) malloc( sizeof(schedctx_t) );
+  /* allocate the array of scheduler data */
+  schedarray = (schedctx_t *) calloc( size, sizeof(schedctx_t) );
 
-  //sc->wid = i;
+  for (i=0; i<size; i++) {
+      /* select from the previously allocated schedarray */
+      sc = &schedarray[i];
+      sc->wid = i;
 
-  TaskqueueInit(&sc->init_queue);
-  pthread_mutex_init( &sc->lock_iq, NULL );
+      TaskqueueInit(&sc->init_queue);
+      pthread_mutex_init( &sc->lock_iq, NULL );
+      
+      TaskqueueInit(&sc->ready_queue);
+      
+      TaskqueueInit(&sc->waiting_queue.on_read);
+      TaskqueueInit(&sc->waiting_queue.on_write);
+      TaskqueueInit(&sc->waiting_queue.on_any);
+      sc->waiting_queue.cnt = 0;
 
-  TaskqueueInit(&sc->ready_queue);
-
-  TaskqueueInit(&sc->waiting_queue.on_read);
-  TaskqueueInit(&sc->waiting_queue.on_write);
-  TaskqueueInit(&sc->waiting_queue.on_any);
-  sc->waiting_queue.cnt = 0;
-
-  sc->cnt_tasks = 0;
-
-  return sc;
+      sc->cnt_tasks = 0;
+  }
 }
 
 
 /**
- * Destroy scheduler context
+ * Cleanup scheduler data
+ *
  */
-void SchedCtxDestroy(schedctx_t *sc)
+void SchedCleanup(void)
 {
-  /* destroy locks */
-  pthread_mutex_destroy(&sc->lock_iq);
-  free(sc);
+  int i;
+  schedctx_t *sc;
+
+  for (i=0; i<num_workers; i++) {
+    sc = &schedarray[i];
+    /* nothing to be done for taskqueue_t */
+
+    /* destroy locks */
+    pthread_mutex_destroy(&sc->lock_iq);
+  }
+
+  /* free memory for scheduler data */
+  free(schedarray);
 }
-
-
 
 
 /**
  * Assign a task to the scheduler
  */
-void SchedAssignTask(schedctx_t *sc, task_t *t)
+void SchedAssignTask(int wid, task_t *t)
 {
+  schedctx_t *sc = &schedarray[wid];
+
   /* place into the foreign init queue */
   pthread_mutex_lock( &sc->lock_iq );
   TaskqueueEnqueue( &sc->init_queue, t );
@@ -111,13 +135,15 @@ void SchedAssignTask(schedctx_t *sc, task_t *t)
 /**
  * Main scheduler task
  *
- * @pre sc != NULL, mon != NULL
+ * @pre mon != NULL
  */
-void SchedTask(schedctx_t *sc, monitoring_t *mon)
+void SchedTask(int wid, monitoring_t *mon)
 {
+  schedctx_t *sc = &schedarray[wid];
   unsigned int loop;
   task_t *act;  
  
+
   /* create ActivatorTask */
   {
     taskattr_t tattr;
@@ -222,6 +248,8 @@ static void Reschedule(schedctx_t *sc, task_t *t)
     case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
       /*TODO handle joinable tasks */
       TaskDestroy(t);
+      /*TODO decrement lpel active entities (maybe return value with TaskDestroy()?)*/
+
       /* decrement count of managed tasks */
       sc->cnt_tasks--;
       break;
