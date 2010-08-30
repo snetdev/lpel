@@ -2,6 +2,7 @@
 #define _SCHEDULER_H_
 
 #include "task.h"
+#include "monitoring.h"
 
 typedef struct schedctx schedctx_t;
 
@@ -16,6 +17,7 @@ extern void SchedCleanup(void);
 extern void SchedPutReady(schedctx_t *sc, task_t *t);
 extern task_t *SchedFetchNextReady(schedctx_t *sc);
 extern void SchedReschedule(schedctx_t *sc, task_t *t);
+extern void SchedTask(int id, monitoring_t *mon);
 
 extern schedctx_t *SchedAddTaskGlobal(task_t *t);
 

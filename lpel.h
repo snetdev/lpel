@@ -2,6 +2,8 @@
 #ifndef _LPEL_H_
 #define _LPEL_H_
 
+#define LPEL_USE_CAPABILITIES
+
 #include "task.h"
 
 /**
@@ -28,12 +30,20 @@ typedef struct {
 #define LPEL_FLAG_REALTIME (1<<1)
 
 
+typedef struct lpelthread lpelthread_t;
+
 extern void LpelInit(lpelconfig_t *cfg);
 extern void LpelRun(void);
 extern void LpelCleanup(void);
 
 
 extern int LpelNumWorkers(void);
+extern int LpelWorkerTerminate(void);
+
+extern lpelthread_t *LpelThreadCreate(
+  void *(*start_routine)(void *), void *arg);
+
+extern void LpelThreadJoin( lpelthread_t *lt, void **joinarg);
 
 extern void LpelTaskAdd(task_t *t);
 extern void LpelTaskRemove(task_t *t);

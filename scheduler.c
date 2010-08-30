@@ -5,11 +5,16 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <assert.h>
+#include <pcl.h>     /* tasks are executed in user-space with help of
+                        GNU Portable Coroutine Library  */
 
+#include "lpel.h"
 #include "scheduler.h"
+#include "timing.h"
+#include "monitoring.h"
+#include "atomic.h"
 
 #include "taskqueue.h"
-
 
 struct schedcfg {
   int dummy;
@@ -244,6 +249,48 @@ schedctx_t *SchedAddTaskGlobal(task_t *t)
   SchedPutReady( sc, t );
   return sc;
 }
+
+
+
+void SchedTask(int id, monitoring_t *mon)
+{
+  unsigned int loop;
+  schedctx_t *sc = SchedGetContext( id );
+  
+  /* MAIN SCHEDULER LOOP */
+  loop=0;
+  do {
+    task_t *t;
+  
+    assert( sc != NULL );
+
+
+    /* select a task from the ready queue (sched) */
+    t = SchedFetchNextReady( sc );
+    if (t != NULL) {
+      /* EXECUTE TASK (context switch) */
+      t->cnt_dispatch++;
+      TIMESTAMP(&t->times.start);
+      t->state = TASK_RUNNING;
+      co_call(t->ctx);
+      TIMESTAMP(&t->times.stop);
+      /* task returns in every case with a different state */
+      assert( t->state != TASK_RUNNING);
+
+      /* output accounting info */
+      MonitoringPrint(mon, t);
+      MonitoringDebug(mon, "worker %d, loop %u\n", id, loop);
+
+      SchedReschedule(sc, t);
+    } /* end if executed ready task */
+
+
+    loop++;
+  } while ( LpelWorkerTerminate() == 0 );
+  /* stop only if there are no more tasks in the system */
+  /* MAIN SCHEDULER LOOP END */
+}
+
 
 /** PRIVATE FUNCTIONS *******************************************************/
 

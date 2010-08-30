@@ -2,10 +2,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include <pthread.h>
 
 #include <assert.h>
-#include "../cpuassign.h"
 #include "../lpel.h"
 #include "../task.h"
 #include "../inport.h"
@@ -71,8 +69,6 @@ void *InputReader(void *arg)
   inport_t *in = InportCreate(instream);
   taskattr_t tattr = {0};
 
-  CpuAssignToCore(1);
-
   TaskCreate( Relay, (void *)instream, tattr);
   do {
     buf = (char *) malloc( 120 * sizeof(char) );
@@ -88,7 +84,7 @@ void *InputReader(void *arg)
 static void testBasic(void)
 {
   lpelconfig_t cfg;
-  pthread_t th;
+  lpelthread_t *lt;
 
   cfg.num_workers = 2;
   cfg.proc_workers = 2;
@@ -97,12 +93,12 @@ static void testBasic(void)
 
   LpelInit(&cfg);
 
-  pthread_create(&th, NULL, InputReader, NULL);
+  lt = LpelThreadCreate(InputReader, NULL);
 
   LpelRun();
   
   LpelCleanup();
-  pthread_join(th, NULL);
+  LpelThreadJoin(lt, NULL);
 }
 
 
