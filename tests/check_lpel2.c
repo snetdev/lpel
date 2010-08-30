@@ -15,7 +15,7 @@ stream_t *scoll[NUM_COLL];
 
 
 
-void Consumer(task_t *t, void *inarg)
+void Consumer(task_t *self, void *inarg)
 {
   void *item;
   char *msg;
@@ -23,7 +23,7 @@ void Consumer(task_t *t, void *inarg)
 
   /* open streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamOpen(t, scoll[i], 'r');
+    StreamOpen(self, scoll[i], 'r');
   }
 
 
@@ -31,13 +31,13 @@ void Consumer(task_t *t, void *inarg)
   do {
     stream_t *snext;
     /* here we do wait */
-    StreamWaitAny(t);
+    StreamWaitAny(self);
 
     printf("Consumer iterates:\n");
-    while (StreamIterHasNext(t)) {
-      snext = StreamIterNext(t);
+    while (StreamIterHasNext(self)) {
+      snext = StreamIterNext(self);
 
-      item = StreamPeek( t, snext );
+      item = StreamPeek( self, snext );
       msg = (char *) item;
       if ( msg != NULL ) {
         printf("%s", msg );
@@ -49,14 +49,14 @@ void Consumer(task_t *t, void *inarg)
 
   /* close streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamClose(t, scoll[i]);
+    StreamClose(self, scoll[i]);
   }
   printf("exit Consumer\n" );
 }
 
 
 
-void Relay(task_t *t, void *inarg)
+void Relay(task_t *self, void *inarg)
 {
   void *item;
   char *msg;
@@ -64,27 +64,27 @@ void Relay(task_t *t, void *inarg)
 
   /* open streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamOpen(t, scoll[i], 'w');
+    StreamOpen(self, scoll[i], 'w');
   }
-  StreamOpen(t, sinp, 'r');
+  StreamOpen(self, sinp, 'r');
 
   /* main task: relay to consumer via defined stream */
   do {
-    item = StreamRead(t, sinp);
+    item = StreamRead(self, sinp);
     assert( item != NULL );
     msg = (char *)item;
     dest = atoi(msg);
     printf("Relay dest: %d\n", dest);
     if ( 0<=dest && dest<NUM_COLL) {
-      StreamWrite(t, scoll[dest], item);
+      StreamWrite(self, scoll[dest], item);
     }
   } while ( 0 != strcmp( msg, "T\n" ) );
 
   /* close streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamClose(t, scoll[i]);
+    StreamClose(self, scoll[i]);
   }
-  StreamClose(t, sinp);
+  StreamClose(self, sinp);
   printf("exit Relay\n" );
 }
 
@@ -114,6 +114,7 @@ static void testBasic(void)
   lpelthread_t *lt;
   taskattr_t tattr = {0};
   int i;
+  task_t *trelay, *tcons;
 
   cfg.num_workers = 2;
   cfg.proc_workers = 2;
@@ -129,10 +130,12 @@ static void testBasic(void)
   }
 
   /* create tasks */
-  TaskCreate( Relay, NULL, tattr);
+  trelay = TaskCreate( Relay, NULL, tattr);
+  LpelTaskToWorker(trelay);
 
   tattr.flags |= TASK_ATTR_WAITANY;
-  TaskCreate( Consumer, NULL, tattr);
+  tcons = TaskCreate( Consumer, NULL, tattr);
+  LpelTaskToWorker(tcons);
  
   lt = LpelThreadCreate(InputReader, NULL);
 

@@ -2,11 +2,11 @@
 #include <malloc.h>
 #include <assert.h>
 
+#include "lpel.h"
 #include "task.h"
 
 #include "atomic.h"
 #include "timing.h"
-#include "lpel.h"
 
 #include "stream.h"
 
@@ -92,9 +92,6 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
   t->inarg = inarg;
   t->outarg = NULL;
  
-  /* Notify LPEL */
-  LpelTaskAdd(t);
-
   return t;
 }
 
@@ -107,9 +104,6 @@ void TaskDestroy(task_t *t)
   /* only if nothing references the task anymore */
   /* if ( fetch_and_dec(&t->refcnt) == 1) { */
   if ( atomic_dec(&t->refcnt) == 0) {
-
-    /* Notify LPEL first */
-    LpelTaskRemove(t);
 
     /* free the streamsets */
     StreamsetCleanup(&t->streams_write);
@@ -128,9 +122,22 @@ void TaskDestroy(task_t *t)
 
     /* free the TCB itself*/
     free(t);
-    t = NULL;
   }
 }
+
+
+/**
+ * Call a task (context switch to a task)
+ *
+ * @pre t->state == TASK_READY
+ */
+void TaskCall(task_t *t)
+{
+  assert( t->state == TASK_READY );
+  t->state = TASK_RUNNING;
+  co_call(t->ctx);
+}
+
 
 
 /**
@@ -155,6 +162,7 @@ static void TaskStartup(void *data)
  * Set Task waiting for a read event
  *
  * @param ct  pointer to the current task
+ * @pre ct->state == TASK_RUNNING
  */
 void TaskWaitOnRead(task_t *ct, stream_t *s)
 {
@@ -174,6 +182,7 @@ void TaskWaitOnRead(task_t *ct, stream_t *s)
  * Set Task waiting for a read event
  *
  * @param ct  pointer to the current task
+ * @pre ct->state == TASK_RUNNING
  */
 void TaskWaitOnWrite(task_t *ct, stream_t *s)
 {
@@ -189,7 +198,9 @@ void TaskWaitOnWrite(task_t *ct, stream_t *s)
   co_resume();
 }
 
-
+/**
+ * @pre ct->state == TASK_RUNNING
+ */
 void TaskWaitOnAny(task_t *ct)
 {
   assert( ct->state == TASK_RUNNING );
@@ -211,6 +222,7 @@ void TaskWaitOnAny(task_t *ct)
  *
  * @param ct  pointer to the current task
  * @param outarg  join argument
+ * @pre ct->state == TASK_RUNNING
  */
 void TaskExit(task_t *ct, void *outarg)
 {
@@ -231,6 +243,7 @@ void TaskExit(task_t *ct, void *outarg)
  * Yield execution back to worker thread
  *
  * @param ct  pointer to the current task
+ * @pre ct->state == TASK_RUNNING
  */
 void TaskYield(task_t *ct)
 {

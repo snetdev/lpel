@@ -1,7 +1,8 @@
 #ifndef _TASK_H_
 #define _TASK_H_
 
-#include <pcl.h> /* coroutine_t */
+#include <pcl.h>     /* tasks are executed in user-space with help of
+                        GNU Portable Coroutine Library  */
 
 #include "streamset.h"
 #include "flagtree.h"
@@ -22,6 +23,7 @@
 #define TASK_ATTR_DEFAULT      (0)
 #define TASK_ATTR_MONITOR   (1<<0)
 #define TASK_ATTR_WAITANY   (1<<1)
+#define TASK_ATTR_SYSTEM    (1<<8)
 
 
 #define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )
@@ -60,7 +62,7 @@ struct waitany {
 
 typedef struct task task_t;
 
-typedef void (*taskfunc_t)(task_t *t, void *inarg);
+typedef void (*taskfunc_t)(task_t *self, void *inarg);
 
 typedef struct {
   int flags;
@@ -116,6 +118,8 @@ struct stream;
 
 extern task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t attr);
 extern void TaskDestroy(task_t *t);
+
+extern void TaskCall(task_t *ct);
 extern void TaskWaitOnRead(task_t *ct, struct stream *s);
 extern void TaskWaitOnWrite(task_t *ct, struct stream *s);
 extern void TaskWaitOnAny(task_t *ct);

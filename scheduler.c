@@ -5,8 +5,6 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <assert.h>
-#include <pcl.h>     /* tasks are executed in user-space with help of
-                        GNU Portable Coroutine Library  */
 
 #include "lpel.h"
 #include "scheduler.h"
@@ -17,11 +15,11 @@
 #include "taskqueue.h"
 
 struct schedcfg {
-  int dummy;
+  int wid;
 };
 
 struct schedctx {
-  int wid;
+  //int wid;
   taskqueue_t init_queue;
   pthread_mutex_t lock_iq;
   taskqueue_t ready_queue;
@@ -35,8 +33,10 @@ struct schedctx {
 };
 
 
-static int num_workers = -1;
-static schedctx_t *schedarray;
+static void ActivatorTask(task_t *self, void *inarg);
+
+static void Reschedule(schedctx_t *sc, task_t *t);
+
 
 /* prototypes for private functions */
 static int CollectFromInit(schedctx_t *sc);
@@ -51,143 +51,163 @@ static void WaitingRemove(task_t *wt, void *arg);
 
 
 /**
- * Initialise scheduler globally
+ * Create scheduler context
  *
- * Call this function once before any other calls of the scheduler module
- *
- * @param size  size of the worker set, i.e., the total number of workers
  * @param cfg   additional configuration
  */
-void SchedInit(int size, schedcfg_t *cfg)
+schedctx_t *SchedCtxCreate(schedcfg_t *cfg)
 {
-  int i;
   schedctx_t *sc;
-
-  assert(0 <= size);
-
-  num_workers = size;
   
-  /* allocate the array of scheduler data */
-  schedarray = (schedctx_t *) calloc( size, sizeof(schedctx_t) );
+  /* allocate context memory */
+  sc = (schedctx_t *) malloc( sizeof(schedctx_t) );
 
-  for (i=0; i<size; i++) {
-      /* select from the previously allocated schedarray */
-      sc = &schedarray[i];
-      sc->wid = i;
+  //sc->wid = i;
 
-      TaskqueueInit(&sc->init_queue);
-      pthread_mutex_init( &sc->lock_iq, NULL );
-      
-      TaskqueueInit(&sc->ready_queue);
-      
-      TaskqueueInit(&sc->waiting_queue.on_read);
-      TaskqueueInit(&sc->waiting_queue.on_write);
-      TaskqueueInit(&sc->waiting_queue.on_any);
-      sc->waiting_queue.cnt = 0;
+  TaskqueueInit(&sc->init_queue);
+  pthread_mutex_init( &sc->lock_iq, NULL );
 
-      sc->cnt_tasks = 0;
-  }
+  TaskqueueInit(&sc->ready_queue);
+
+  TaskqueueInit(&sc->waiting_queue.on_read);
+  TaskqueueInit(&sc->waiting_queue.on_write);
+  TaskqueueInit(&sc->waiting_queue.on_any);
+  sc->waiting_queue.cnt = 0;
+
+  sc->cnt_tasks = 0;
+
+  return sc;
+}
+
+
+/**
+ * Destroy scheduler context
+ */
+void SchedCtxDestroy(schedctx_t *sc)
+{
+  /* destroy locks */
+  pthread_mutex_destroy(&sc->lock_iq);
+  free(sc);
 }
 
 
 
+
 /**
- * Get scheduler context for a certain worker
+ * Assign a task to the scheduler
+ */
+void SchedAssignTask(schedctx_t *sc, task_t *t)
+{
+  /* place into the foreign init queue */
+  pthread_mutex_lock( &sc->lock_iq );
+  TaskqueueEnqueue( &sc->init_queue, t );
+  pthread_mutex_unlock( &sc->lock_iq );
+}
+
+
+
+
+
+/**
+ * Main scheduler task
  *
- * @pre       0 <= id < size (on SchedInit)
- * @return    pointer to scheduler data
+ * @pre sc != NULL, mon != NULL
  */
-schedctx_t *SchedGetContext(int id)
+void SchedTask(schedctx_t *sc, monitoring_t *mon)
 {
-  assert( 0 <= id && id < num_workers );
-  return &schedarray[id];
-}
-
-
-/**
- * Cleanup scheduler data
- *
- */
-void SchedCleanup(void)
-{
-  int i;
-  schedctx_t *sc;
-
-  for (i=0; i<num_workers; i++) {
-    sc = &schedarray[i];
-    /* nothing to be done for taskqueue_t */
-
-    /* destroy locks */
-    pthread_mutex_destroy(&sc->lock_iq);
+  unsigned int loop;
+  task_t *act;  
+ 
+  /* create ActivatorTask */
+  {
+    taskattr_t tattr;
+    tattr.flags = TASK_ATTR_SYSTEM;
+    act = TaskCreate( ActivatorTask, sc, tattr);
+    act->state = TASK_READY;
+    /* put into ready queue */
+    TaskqueueEnqueue( &sc->ready_queue, act );
   }
 
-  /* free memory for scheduler data */
-  free(schedarray);
+
+  /* MAIN SCHEDULER LOOP */
+  loop=0;
+  do {
+    task_t *t;  
+
+    /* fetch a task from the ready queue */
+    t = TaskqueueDequeue( &sc->ready_queue );
+    if (t != NULL) {
+      /* EXECUTE TASK (context switch) */
+      t->cnt_dispatch++;
+      TIMESTAMP(&t->times.start);
+      TaskCall(t);
+      TIMESTAMP(&t->times.stop);
+      /* task returns in every case with a different state */
+      assert( t->state != TASK_RUNNING);
+
+      /* output accounting info */
+      MonitoringPrint(mon, t);
+      MonitoringDebug(mon, "worker loop %u\n", loop);
+
+      Reschedule(sc, t);
+    } /* end if executed ready task */
+
+
+    loop++;
+  } while ( LpelWorkerTerminate() == 0 );
+  /* stop only if there are no more tasks in the system */
+  /* MAIN SCHEDULER LOOP END */
+
+  /* destroy ActivatorTask */
+  TaskDestroy(act);
 }
 
 
+/** PRIVATE FUNCTIONS *******************************************************/
 
 /**
- * Put a task into a ready state, fetchable for execution
+ * Activator task
  */
-void SchedPutReady(schedctx_t *sc, task_t *t)
+static void ActivatorTask(task_t *self, void *inarg)
 {
-  /* handle depending on the tasks assigned owner */
-  if ( t->owner != sc->wid ) {
-    /* place into the foreign init queue */
-    pthread_mutex_lock( &schedarray[t->owner].lock_iq );
-    TaskqueueEnqueue( &schedarray[t->owner].init_queue, t );
-    pthread_mutex_unlock( &schedarray[t->owner].lock_iq );
-    return;
-  }
-
-  /* t is owned by sdt */
-  TaskqueueEnqueue( &sc->ready_queue, t );
-}
-
-
-/**
- * Fetch the next task to execute
- */
-task_t *SchedFetchNextReady(schedctx_t *sc)
-{
+  schedctx_t *sc = (schedctx_t *) inarg;
   int cnt;
 
-  /* fetch all tasks from init queue and insert into the ready queue */
-  cnt = CollectFromInit(sc);
-  /* update total number of tasks */
-  sc->cnt_tasks += cnt;
+  while (1) {
+    /* fetch all tasks from init queue and insert into the ready queue */
+    cnt = CollectFromInit(sc);
+    /* update total number of tasks */
+    sc->cnt_tasks += cnt;
 
-  /* wakeup waiting tasks */
-  if (sc->waiting_queue.cnt > 0) {
-    if (sc->waiting_queue.on_read.count > 0) {
-      TaskqueueIterateRemove(
-          &sc->waiting_queue.on_read,
-          WaitingTestOnRead,  /* on read test */
-          WaitingRemove, (void*)sc
-          );
+    /* wakeup waiting tasks */
+    if (sc->waiting_queue.cnt > 0) {
+      if (sc->waiting_queue.on_read.count > 0) {
+        TaskqueueIterateRemove(
+            &sc->waiting_queue.on_read,
+            WaitingTestOnRead,  /* on read test */
+            WaitingRemove, (void*)sc
+            );
+      }
+      if (sc->waiting_queue.on_write.count > 0) {
+        TaskqueueIterateRemove(
+            &sc->waiting_queue.on_write,
+            WaitingTestOnWrite,  /* on write test */
+            WaitingRemove, (void*)sc
+            );
+      }
+      if (sc->waiting_queue.on_any.count > 0) {
+        TaskqueueIterateRemove(
+            &sc->waiting_queue.on_any,
+            WaitingTestOnAny,  /* on any test */
+            WaitingRemove, (void*)sc
+            );
+      }
     }
-    if (sc->waiting_queue.on_write.count > 0) {
-      TaskqueueIterateRemove(
-          &sc->waiting_queue.on_write,
-          WaitingTestOnWrite,  /* on write test */
-          WaitingRemove, (void*)sc
-          );
-    }
-    if (sc->waiting_queue.on_any.count > 0) {
-      TaskqueueIterateRemove(
-          &sc->waiting_queue.on_any,
-          WaitingTestOnAny,  /* on any test */
-          WaitingRemove, (void*)sc
-          );
-    }
-  }
 
-  /* fetch a task from the ready queue */
-  return TaskqueueDequeue( &sc->ready_queue );
+    /* give control back to scheduler */
+    TaskYield(self);
+  } /* end while */
 }
-
-
 
 /**
  * Reschedule a task after execution
@@ -195,7 +215,7 @@ task_t *SchedFetchNextReady(schedctx_t *sc)
  * @param sc   scheduler context
  * @param t    task returned from execution in a different state than READY
  */
-void SchedReschedule(schedctx_t *sc, task_t *t)
+static void Reschedule(schedctx_t *sc, task_t *t)
 {
   /* check state of task, place into appropriate queue */
   switch(t->state) {
@@ -229,70 +249,8 @@ void SchedReschedule(schedctx_t *sc, task_t *t)
     default:
       assert(0); /* should not be reached */
   }
-
 }
 
-
-/**
- * Add a task globally to the scheduler,
- * dependent on the tasks internal state
- *
- * @param t   task to add
- * @return    the scheduler context to which the task was assigned
- */
-schedctx_t *SchedAddTaskGlobal(task_t *t)
-{
-  schedctx_t *sc;
-  assert( 0 <= t->owner && t->owner < num_workers);
-
-  sc = &schedarray[t->owner];
-  SchedPutReady( sc, t );
-  return sc;
-}
-
-
-
-void SchedTask(int id, monitoring_t *mon)
-{
-  unsigned int loop;
-  schedctx_t *sc = SchedGetContext( id );
-  
-  /* MAIN SCHEDULER LOOP */
-  loop=0;
-  do {
-    task_t *t;
-  
-    assert( sc != NULL );
-
-
-    /* select a task from the ready queue (sched) */
-    t = SchedFetchNextReady( sc );
-    if (t != NULL) {
-      /* EXECUTE TASK (context switch) */
-      t->cnt_dispatch++;
-      TIMESTAMP(&t->times.start);
-      t->state = TASK_RUNNING;
-      co_call(t->ctx);
-      TIMESTAMP(&t->times.stop);
-      /* task returns in every case with a different state */
-      assert( t->state != TASK_RUNNING);
-
-      /* output accounting info */
-      MonitoringPrint(mon, t);
-      MonitoringDebug(mon, "worker %d, loop %u\n", id, loop);
-
-      SchedReschedule(sc, t);
-    } /* end if executed ready task */
-
-
-    loop++;
-  } while ( LpelWorkerTerminate() == 0 );
-  /* stop only if there are no more tasks in the system */
-  /* MAIN SCHEDULER LOOP END */
-}
-
-
-/** PRIVATE FUNCTIONS *******************************************************/
 
 
 /**
@@ -306,13 +264,11 @@ static int CollectFromInit(schedctx_t *sc)
   task_t *t;
 
   cnt = 0;
-
-
   pthread_mutex_lock( &sc->lock_iq );
   t = TaskqueueDequeue( &sc->init_queue );
   while (t != NULL) {
     //assert( t->state == TASK_INIT );
-    assert( t->owner == sc->wid );
+    //assert( t->owner == sc->wid );
     cnt++;
     /* set state to ready and place into the ready queue */
     t->state = TASK_READY;

@@ -30,12 +30,16 @@
 
 
 #include "task.h"
-#include "stream.h"
 #include "scheduler.h"
 
 /* used (imported) modules of LPEL */
 #include "monitoring.h"
 #include "atomic.h"
+
+/*
+ * Global active entities count.
+ */
+atomic_t lpel_active_entities = ATOMIC_INIT(0);
 
 
 struct lpelthread {
@@ -45,16 +49,11 @@ struct lpelthread {
 /* Keep pointer to the configuration provided at LpelInit() */
 static lpelconfig_t *config;
 /* cpuset for others-threads */
-cpu_set_t cpuset_others;
-
-/*
- * Global active entities count.
- */
-atomic_t lpel_active_entities = ATOMIC_INIT(0);
-
+static cpu_set_t cpuset_others;
 
 static pthread_barrier_t bar_worker_init;
 
+static schedctx_t **schedcontexts;
 
 
 static int CanSetRealtime(void)
@@ -69,12 +68,17 @@ static int CanSetRealtime(void)
     return 0;
   }
   cap_get_flag(caps, CAP_SYS_NICE, CAP_EFFECTIVE, &cap);
-  return (cap == CAP_SET) ? 1 : 0;
+  return (cap == CAP_SET);
 #else
   return 0;
 #endif
 }
 
+
+
+/**
+ * Get the number of workers
+ */
 int LpelNumWorkers(void)
 {
   return config->num_workers;
@@ -82,7 +86,17 @@ int LpelNumWorkers(void)
 
 
 /**
- * Worker thread code
+ * Poll the terminate condition for worker
+ */
+int LpelWorkerTerminate(void)
+{
+  return (atomic_read(&lpel_active_entities) <= 0);
+}
+
+
+
+/**
+ * Startup the worker
  */
 static void *LpelWorkerStartup(void *arg)
 {
@@ -133,10 +147,9 @@ static void *LpelWorkerStartup(void *arg)
   pthread_barrier_wait( &bar_worker_init );
 
   /**************************************************************************/
-  /**
-   * Start the scheduler task here
-   */
-  SchedTask( wid, &mon_info );
+  /* Start the scheduler task */
+  SchedTask( schedcontexts[wid], &mon_info );
+  /* scheduler task will return when there is no more work to do */
   /**************************************************************************/
 
   /* cleanup monitoring */ 
@@ -262,11 +275,21 @@ void LpelInit(lpelconfig_t *cfg)
     }
   }
 
+
+  /* create scheduler contexts in order to be able to assign tasks 
+     before running the workers */
+  {
+    int i;
+    schedcontexts = (schedctx_t **) calloc(
+        cfg->num_workers, sizeof(schedctx_t *)
+        );
+    for (i=0; i<cfg->num_workers; i++) {
+      schedcontexts[i] = SchedCtxCreate(NULL); 
+    }
+  }
+
   /* store a reference to the cfg */
   config = cfg;
-
-  /* initialise scheduler */
-  SchedInit(config->num_workers, NULL);
 
   /* Init libPCL */
   co_thread_init();
@@ -319,20 +342,17 @@ void LpelRun(void)
  */
 void LpelCleanup(void)
 {
-  SchedCleanup();
+  int i;
+  for (i=0; i<config->num_workers; i++) {
+    SchedCtxDestroy(schedcontexts[i]);
+  }
+  free(schedcontexts);
 
   /* Cleanup libPCL */
   co_thread_cleanup();
 }
 
 
-/**
- * Poll the terminate condition for worker
- */
-int LpelWorkerTerminate(void)
-{
-  return (atomic_read(&lpel_active_entities) > 0) ? 0 : 1;
-}
 
 
 
@@ -371,7 +391,7 @@ void LpelThreadJoin( lpelthread_t *lt, void **joinarg)
  *
  * Has to be thread-safe.
  */
-void LpelTaskAdd(task_t *t)
+void LpelTaskToWorker(task_t *t)
 {
   int to_worker;
 
@@ -383,7 +403,7 @@ void LpelTaskAdd(task_t *t)
   t->owner = to_worker;
 
   /* assign to appropriate sched context */
-  SchedAddTaskGlobal( t );
+  SchedAssignTask( schedcontexts[to_worker], t );
 }
 
 void LpelTaskRemove(task_t *t)

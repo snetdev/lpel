@@ -9,16 +9,11 @@ typedef struct schedctx schedctx_t;
 typedef struct schedcfg schedcfg_t;
 
 
-extern void SchedInit(int size, schedcfg_t *cfg);
-extern schedctx_t *SchedGetContext(int id);
-extern void SchedCleanup(void);
+extern schedctx_t *SchedCtxCreate(schedcfg_t *cfg);
+extern void SchedCtxDestroy(schedctx_t *sc);
 
+extern void SchedAssignTask(schedctx_t *sc, task_t *t);
+extern void SchedTask(schedctx_t *sc, monitoring_t *mon);
 
-extern void SchedPutReady(schedctx_t *sc, task_t *t);
-extern task_t *SchedFetchNextReady(schedctx_t *sc);
-extern void SchedReschedule(schedctx_t *sc, task_t *t);
-extern void SchedTask(int id, monitoring_t *mon);
-
-extern schedctx_t *SchedAddTaskGlobal(task_t *t);
 
 #endif /* _SCHEDULER_H_ */

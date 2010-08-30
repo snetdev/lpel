@@ -13,25 +13,25 @@
 
 
 
-void Consumer(task_t *t, void *inarg)
+void Consumer(task_t *self, void *inarg)
 {
   void *item;
   char *msg;
 
-  StreamOpen( t, (stream_t *)inarg, 'r');
+  StreamOpen( self, (stream_t *)inarg, 'r');
   do {
-    item = StreamRead( t, (stream_t *)inarg );
+    item = StreamRead( self, (stream_t *)inarg );
     msg = (char *) item;
     printf("read Consumer %s\n", msg );
   } while ( 0 != strcmp( msg, "T\n" ) );
-  StreamClose( t, (stream_t *)inarg);
+  StreamClose( self, (stream_t *)inarg);
   StreamDestroy( (stream_t *)inarg);
   printf("exit Consumer\n" );
 }
 
 
 
-void Relay(task_t *t, void *inarg)
+void Relay(task_t *self, void *inarg)
 {
   void *item;
   char *msg;
@@ -39,23 +39,24 @@ void Relay(task_t *t, void *inarg)
   to = StreamCreate();
   from = (stream_t *)inarg;
   taskattr_t tattr = {0};
+  task_t *tcons;
 
-
-  StreamOpen(t, to, 'w');
-  StreamOpen(t, from, 'r');
-  TaskCreate(Consumer, (void *)to, tattr);
+  StreamOpen(self, to, 'w');
+  StreamOpen(self, from, 'r');
+  tcons = TaskCreate(Consumer, (void *)to, tattr);
+  LpelTaskToWorker(tcons);
   do {
-    item = StreamRead(t, from);
+    item = StreamRead(self, from);
     assert( item != NULL );
     msg = (char *)item;
     printf("read Relay %s\n", msg );
-    StreamWrite(t, to, item);
+    StreamWrite(self, to, item);
   } while ( 0 != strcmp( msg, "T\n" ) );
   printf("exit Relay\n" );
-  StreamClose(t, from);
+  StreamClose(self, from);
   StreamDestroy(from);
   sleep(1);
-  StreamClose(t, to);
+  StreamClose(self, to);
 }
 
 
@@ -68,8 +69,11 @@ void *InputReader(void *arg)
   stream_t *instream = StreamCreate();
   inport_t *in = InportCreate(instream);
   taskattr_t tattr = {0};
+  task_t *t;
 
-  TaskCreate( Relay, (void *)instream, tattr);
+  t = TaskCreate( Relay, (void *)instream, tattr);
+  LpelTaskToWorker(t);
+
   do {
     buf = (char *) malloc( 120 * sizeof(char) );
     (void) fgets( buf, 119, stdin  );
