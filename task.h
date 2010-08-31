@@ -26,7 +26,7 @@
 #define TASK_ATTR_SYSTEM    (1<<8)
 
 
-#define BIT_IS_SET(vec,b)   (( (vec) & (b) ) == (b) )
+#define BIT_IS_SET(vec,b)   (( (vec) & (b) ) != 0 )
 
 /**
  * Check if a task is a waitany-task
@@ -117,7 +117,7 @@ struct task {
 struct stream;
 
 extern task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t attr);
-extern void TaskDestroy(task_t *t);
+extern int TaskDestroy(task_t *t);
 
 extern void TaskCall(task_t *ct);
 extern void TaskWaitOnRead(task_t *ct, struct stream *s);

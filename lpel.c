@@ -357,6 +357,9 @@ lpelthread_t *LpelThreadCreate(
   res = pthread_getaffinity_np( lt->pthread, sizeof(cpu_set_t), &cpuset_others);
   assert( res==0 );
 
+  /* increase num of active entities in the LPEL system */
+  atomic_inc(&lpel_active_entities);
+
   return lt;
 }
 
@@ -367,12 +370,13 @@ void LpelThreadJoin( lpelthread_t *lt, void **joinarg)
   int res;
   res = pthread_join(lt->pthread, joinarg);
   assert( res==0 );
+
+  /* decrease number of active entities in the LPEL system */
+  atomic_dec(&lpel_active_entities);
 }
 
 
 /**
- * This function is currently called from TaskCreate
- * (this might change)
  *
  * Has to be thread-safe.
  */
@@ -380,7 +384,7 @@ void LpelTaskToWorker(task_t *t)
 {
   int to_worker;
 
-  /* increase num of tasks in the lpel system */
+  /* increase num of active entities in the LPEL system */
   atomic_inc(&lpel_active_entities);
 
   /*TODO placement module */
@@ -393,6 +397,11 @@ void LpelTaskToWorker(task_t *t)
 
 void LpelTaskRemove(task_t *t)
 {
-  atomic_dec(&lpel_active_entities);
+  int isfree = TaskDestroy(t);
+
+  if (isfree != 0) {
+    /* decrease number of active entities in the LPEL system */
+    atomic_dec(&lpel_active_entities);
+  }
 }
 

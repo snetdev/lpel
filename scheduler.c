@@ -172,9 +172,10 @@ void SchedTask(int wid, monitoring_t *mon)
       assert( t->state != TASK_RUNNING);
 
       /* output accounting info */
-      MonitoringPrint(mon, t);
-      MonitoringDebug(mon, "worker loop %u\n", loop);
-
+      if ( !BIT_IS_SET(t->attr.flags, TASK_ATTR_SYSTEM) ) {
+        MonitoringPrint(mon, t);
+        MonitoringDebug(mon, "worker loop %u\n", loop);
+      }
       Reschedule(sc, t);
     } /* end if executed ready task */
 
@@ -247,8 +248,7 @@ static void Reschedule(schedctx_t *sc, task_t *t)
   switch(t->state) {
     case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
       /*TODO handle joinable tasks */
-      TaskDestroy(t);
-      /*TODO decrement lpel active entities (maybe return value with TaskDestroy()?)*/
+      LpelTaskRemove(t);
 
       /* decrement count of managed tasks */
       sc->cnt_tasks--;

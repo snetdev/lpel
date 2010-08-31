@@ -98,8 +98,9 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
 
 /**
  * Destroy a task
+ * @return 1 if the task was physically freed (refcnt reached 0)
  */
-void TaskDestroy(task_t *t)
+int TaskDestroy(task_t *t)
 {
   /* only if nothing references the task anymore */
   /* if ( fetch_and_dec(&t->refcnt) == 1) { */
@@ -122,7 +123,10 @@ void TaskDestroy(task_t *t)
 
     /* free the TCB itself*/
     free(t);
+
+    return 1;
   }
+  return 0;
 }
 
 

@@ -10,6 +10,7 @@
 
 
 
+static lpelthread_t *lt;
 
 
 
@@ -57,6 +58,7 @@ void Relay(task_t *self, void *inarg)
   StreamDestroy(from);
   sleep(1);
   StreamClose(self, to);
+  LpelThreadJoin(lt, NULL);
 }
 
 
@@ -88,7 +90,6 @@ void *InputReader(void *arg)
 static void testBasic(void)
 {
   lpelconfig_t cfg;
-  lpelthread_t *lt;
 
   cfg.num_workers = 2;
   cfg.proc_workers = 2;
@@ -102,7 +103,6 @@ static void testBasic(void)
   LpelRun();
   
   LpelCleanup();
-  LpelThreadJoin(lt, NULL);
 }
 
 
