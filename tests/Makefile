@@ -1,7 +1,7 @@
 CFLAGS = -g -Wall -DNODEBUG
 LDFLAGS = 
 
-all: set cpuassign
+all: lpel
 .PHONY: all
 
 streamtab:
