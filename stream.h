@@ -8,7 +8,7 @@
 #include "bool.h"
 #include "task.h"
 #include "spinlock.h"
-#include "streamset.h"
+#include "streamtab.h"
 #include "atomic.h"
 
 

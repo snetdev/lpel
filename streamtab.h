@@ -1,10 +1,10 @@
-#ifndef _STREAMSET_H_
-#define _STREAMSET_H_
+#ifndef _STREAMTAB_H_
+#define _STREAMTAB_H_
 
 #include <stdio.h>
 
 
-#define STREAMSET_GRP_SIZE  4
+#define STREAMTAB_GRP_SIZE  4
 
 
 
@@ -26,7 +26,7 @@ typedef struct streamtbe streamtbe_t;
 
 struct streamgrp {
   struct streamgrp *next;  /* for the chain */
-  streamtbe_t tab[STREAMSET_GRP_SIZE];
+  streamtbe_t tab[STREAMTAB_GRP_SIZE];
 };
 
 
@@ -42,7 +42,7 @@ typedef struct {
     struct streamgrp *hnd;    /*   handle to the chain */
     int count;                /*   total number of chained table entries */
   } chain;                    /* chain of groups */
-} streamset_t;
+} streamtab_t;
 
 typedef struct {
   struct streamgrp *grp;  /* pointer to grp for next */
@@ -51,30 +51,30 @@ typedef struct {
 } streamtbe_iter_t;
 
 
-extern void StreamsetInit(streamset_t *set, int init_cap2);
-extern void StreamsetCleanup(streamset_t *set);
-extern streamtbe_t *StreamsetAdd(streamset_t *set,
+extern void StreamtabInit(streamtab_t *tab, int init_cap2);
+extern void StreamtabCleanup(streamtab_t *tab);
+extern streamtbe_t *StreamtabAdd(streamtab_t *tab,
     struct stream *s, int *grp_idx);
 
-extern void StreamsetEvent(streamset_t *set, streamtbe_t *tbe);
-extern void StreamsetRemove(streamset_t *set, streamtbe_t *tbe);
-extern void StreamsetReplace(streamset_t *set, streamtbe_t *tbe,
+extern void StreamtabEvent(streamtab_t *tab, streamtbe_t *tbe);
+extern void StreamtabRemove(streamtab_t *tab, streamtbe_t *tbe);
+extern void StreamtabReplace(streamtab_t *tab, streamtbe_t *tbe,
     struct stream *s);
 
-extern void StreamsetChainStart(streamset_t *set);
-extern void StreamsetChainAdd(streamset_t *set, int grp_idx);
-extern int StreamsetChainNotEmpty(streamset_t *set);
+extern void StreamtabChainStart(streamtab_t *tab);
+extern void StreamtabChainAdd(streamtab_t *tab, int grp_idx);
+extern int StreamtabChainNotEmpty(streamtab_t *tab);
 
-extern void StreamsetIterateStart(streamset_t *set, streamtbe_iter_t *iter);
-extern int  StreamsetIterateHasNext(streamset_t *set, streamtbe_iter_t *iter);
-extern streamtbe_t *StreamsetIterateNext(streamset_t *set,
+extern void StreamtabIterateStart(streamtab_t *tab, streamtbe_iter_t *iter);
+extern int  StreamtabIterateHasNext(streamtab_t *tab, streamtbe_iter_t *iter);
+extern streamtbe_t *StreamtabIterateNext(streamtab_t *tab,
     streamtbe_iter_t *iter);
 
-extern void StreamsetPrint(streamset_t *set, FILE *file);
+extern void StreamtabPrint(streamtab_t *tab, FILE *file);
 
 #ifndef NDEBUG
-extern void StreamsetDebug(streamset_t *set);
+extern void StreamtabDebug(streamtab_t *tab);
 #endif
 
 
-#endif /* _STREAMSET_H_ */
+#endif /* _STREAMTAB_H_ */

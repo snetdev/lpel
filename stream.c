@@ -104,7 +104,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
     {
       assert( s->prod.task == NULL );
       s->prod.task = ct;
-      s->prod.tbe  = StreamsetAdd(&ct->streams_write, s, NULL);
+      s->prod.tbe  = StreamtabAdd(&ct->streams_write, s, NULL);
     }
     SpinlockUnlock(&s->prod.lock);
     break;
@@ -115,7 +115,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
       int grpidx;
       assert( s->cons.task == NULL );
       s->cons.task = ct;
-      s->cons.tbe  = StreamsetAdd(&ct->streams_read, s, &grpidx);
+      s->cons.tbe  = StreamtabAdd(&ct->streams_read, s, &grpidx);
       
       /*if consumer task is a collector, register flagtree */
       if ( TASK_IS_WAITANY(ct) ) {
@@ -150,7 +150,7 @@ void StreamClose(task_t *ct, stream_t *s)
   if ( ct == s->prod.task ) {
     SpinlockLock(&s->prod.lock);
     {
-      StreamsetRemove( &ct->streams_write, s->prod.tbe );
+      StreamtabRemove( &ct->streams_write, s->prod.tbe );
       s->prod.task = NULL;
       s->prod.tbe = NULL;
     }
@@ -159,7 +159,7 @@ void StreamClose(task_t *ct, stream_t *s)
   } else if ( ct == s->cons.task ) {
     SpinlockLock(&s->cons.lock);
     {
-      StreamsetRemove( &ct->streams_read, s->cons.tbe );
+      StreamtabRemove( &ct->streams_read, s->cons.tbe );
       s->cons.task = NULL;
       s->cons.tbe = NULL;
       
@@ -206,7 +206,7 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
     /* Task has opened s, hence s contains a reference to the tbe.
        In that tbe, the stream must be replaced. Then, the reference
        to the tbe must be copied to the new stream */
-    StreamsetReplace( &ct->streams_read, s->cons.tbe, snew );
+    StreamtabReplace( &ct->streams_read, s->cons.tbe, snew );
     snew->cons.tbe = s->cons.tbe;
     /* also, set the task in the new stream */
     snew->cons.task = ct; /* ct == s->cons.task */
@@ -286,7 +286,7 @@ void *StreamRead(task_t *ct, stream_t *s)
               (1-STREAM_BUFFER_SIZE) : 1;
 
   /* for monitoring */
-  StreamsetEvent( &ct->streams_read, s->cons.tbe );
+  StreamtabEvent( &ct->streams_read, s->cons.tbe );
 
   return item;
 }
@@ -353,7 +353,7 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
                (1-STREAM_BUFFER_SIZE) : 1;
 
   /* for monitoring */
-  if (ct!=NULL) StreamsetEvent( &ct->streams_write, s->prod.tbe );
+  if (ct!=NULL) StreamtabEvent( &ct->streams_write, s->prod.tbe );
 
   SpinlockLock(&s->cons.lock);
   /*  if flagtree registered, use flagtree mark */
@@ -378,7 +378,7 @@ void StreamWaitAny(task_t *ct)
 {
   assert( TASK_IS_WAITANY(ct) );
   TaskWaitOnAny(ct);
-  StreamsetIterateStart(
+  StreamtabIterateStart(
       &ct->streams_read,
       &ct->waitany_info->iter
       );
@@ -390,7 +390,7 @@ void StreamWaitAny(task_t *ct)
 stream_t *StreamIterNext(task_t *ct)
 {
   assert( TASK_IS_WAITANY(ct) );
-  streamtbe_t *ste = StreamsetIterateNext(
+  streamtbe_t *ste = StreamtabIterateNext(
       &ct->streams_read,
       &ct->waitany_info->iter
       );
@@ -403,7 +403,7 @@ stream_t *StreamIterNext(task_t *ct)
 bool StreamIterHasNext(task_t *ct)
 {
   assert( TASK_IS_WAITANY(ct) );
-  return StreamsetIterateHasNext(
+  return StreamtabIterateHasNext(
       &ct->streams_read,
       &ct->waitany_info->iter
       ) > 0;

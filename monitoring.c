@@ -4,7 +4,7 @@
 #include <stdarg.h>
 #include <assert.h>
 
-#include "streamset.h"
+#include "streamtab.h"
 
 #include "monitoring.h"
 #include "timing.h"
@@ -89,9 +89,9 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
 
     if ( IS_FLAG( MONITORING_STREAMINFO ) ) {
       fprintf(mon->outfile, "W");
-      StreamsetPrint( &t->streams_write, mon->outfile);
+      StreamtabPrint( &t->streams_write, mon->outfile);
       fprintf(mon->outfile, "R");
-      StreamsetPrint( &t->streams_read, mon->outfile);
+      StreamtabPrint( &t->streams_read, mon->outfile);
     }
 
     fprintf(mon->outfile, "\n");

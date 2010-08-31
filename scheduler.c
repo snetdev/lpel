@@ -326,8 +326,8 @@ static bool WaitingTestOnWrite(task_t *wt, void *arg)
 
 static void WaitingTestGather(int i, void *arg)
 {
-  streamset_t *set = (streamset_t *) arg;
-  StreamsetChainAdd( set, i );
+  streamtab_t *tab = (streamtab_t *) arg;
+  StreamtabChainAdd( tab, i );
 }
 
 static bool WaitingTestOnAny(task_t *wt, void *arg)
@@ -338,14 +338,14 @@ static bool WaitingTestOnAny(task_t *wt, void *arg)
   /* first of all, check root flag */
   if (*wt->event_ptr != 0) {
     /* if root flag is set, try to gather all set leafs */
-    StreamsetChainStart( &wt->streams_read );
+    StreamtabChainStart( &wt->streams_read );
     FlagtreeGather(
         &wt->waitany_info->flagtree,
         WaitingTestGather,
         &wt->streams_read
         );
     /* only return true, if at least on leaf could be gathered */
-    return StreamsetChainNotEmpty( &wt->streams_read );
+    return StreamtabChainNotEmpty( &wt->streams_read );
   }
   return false;
 }

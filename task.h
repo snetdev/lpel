@@ -4,7 +4,7 @@
 #include <pcl.h>     /* tasks are executed in user-space with help of
                         GNU Portable Coroutine Library  */
 
-#include "streamset.h"
+#include "streamtab.h"
 #include "flagtree.h"
 #include "rwlock.h"
 #include "timing.h"
@@ -104,7 +104,7 @@ struct task {
   /* dispatch counter */
   unsigned long cnt_dispatch;
   /* streamtables: streams opened for writing/reading */
-  streamset_t streams_read, streams_write;
+  streamtab_t streams_read, streams_write;
 
   /* CODE */
   coroutine_t ctx;

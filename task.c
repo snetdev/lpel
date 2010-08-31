@@ -59,10 +59,10 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
   t->cnt_dispatch = 0;
 
   /* init streamset to write */
-  StreamsetInit( &t->streams_write, 0);
+  StreamtabInit( &t->streams_write, 0);
 
   /* init streamset to read */
-  StreamsetInit( &t->streams_read,
+  StreamtabInit( &t->streams_read,
       (TASK_IS_WAITANY(t)) ?
       TASK_WAITANY_GRPS_INIT : 0
       );
@@ -106,8 +106,8 @@ void TaskDestroy(task_t *t)
   if ( atomic_dec(&t->refcnt) == 0) {
 
     /* free the streamsets */
-    StreamsetCleanup(&t->streams_write);
-    StreamsetCleanup(&t->streams_read);
+    StreamtabCleanup(&t->streams_write);
+    StreamtabCleanup(&t->streams_read);
 
     /* waitany-specific cleanup */
     if ( TASK_IS_WAITANY(t) ) {
