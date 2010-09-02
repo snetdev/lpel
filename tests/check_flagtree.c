@@ -77,6 +77,7 @@ static void testGather(void)
   int leaf, i;
   int num_marks = 5;
   int marks[] = { 3,0,5,14,1 };
+  int cnt;
 
   header("Gather");
   FlagtreeInit(&H, 4, &lock);
@@ -88,7 +89,10 @@ static void testGather(void)
   FlagtreePrint(&H);
 
   fprintf(stderr,"Gather\n");
-  FlagtreeGather(&H, GatherLeaf, NULL);
+  cnt = FlagtreeGather(&H, GatherLeaf, NULL);
+  //cnt = FlagtreeGatherRec(&H, GatherLeaf, NULL);
+  fprintf(stderr,"= %d\n", cnt);
+  assert( cnt == num_marks );
   FlagtreePrint(&H);
 
   FlagtreeCleanup(&H);

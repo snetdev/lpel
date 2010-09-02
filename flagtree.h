@@ -84,9 +84,11 @@ static inline void FlagtreeMark(flagtree_t *ft, int idx, int reader)
 
 #if 0
 /** Gathering procedure without GOTOs */
-static inline void FlagtreeGatherNoGoto(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg)
+static inline int FlagtreeGatherNoGoto(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg)
 {
   int prev, cur, next;
+  /* number of gathered leafs */
+  int count = 0;
   /* register callback */
   ft->gather = gather;
   /* start from root */
@@ -106,6 +108,8 @@ static inline void FlagtreeGatherNoGoto(flagtree_t *ft, flagtree_gather_cb_t gat
       } else {
         /* gather leaf of idx */
         ft->gather( FT_IDX_TO_LEAF(ft->height, cur), arg );
+        /* increment gathered leaf count */
+        count++;
         next = FT_PARENT(cur);
       }
 
@@ -120,6 +124,7 @@ static inline void FlagtreeGatherNoGoto(flagtree_t *ft, flagtree_gather_cb_t gat
     cur = next;
   } while (cur != prev);
   /* cur == prev only at root */
+  return count;
 }
 #endif
 
@@ -132,9 +137,11 @@ static inline void FlagtreeGatherNoGoto(flagtree_t *ft, flagtree_gather_cb_t gat
  * @note  TODO  This works for now only in x86 (guaranteed, w/o fences).
  *              As a workaround, for the procedure of gathering, the RW-Lock must be aquired for writing.
  */
-static inline void FlagtreeGather(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg)
+static inline int FlagtreeGather(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg)
 {
   int prev, cur, next;
+  /* number of gathered leafs */
+  int count = 0;
   /* register callback */
   ft->gather = gather;
   /* start from root */
@@ -153,6 +160,8 @@ static inline void FlagtreeGather(flagtree_t *ft, flagtree_gather_cb_t gather, v
       if ( cur >= FT_LEAF_START_IDX(ft->height) ) {
         /* gather leaf of idx */
         ft->gather( FT_IDX_TO_LEAF(ft->height, cur), arg );
+        /* increment gathered leaf count */
+        count++;
         goto lab_parent;
       }
     } else if (prev == FT_LEFT_CHILD(cur)) {
@@ -181,13 +190,14 @@ lab_out:
   } while (cur != prev); /* cur == prev only at root */
   
   /*TODO UNLOCK_WRITE */
+  return count;
 }
 
 
 extern void FlagtreeInit(flagtree_t *ft, int height, rwlock_t *lock);
 extern void FlagtreeCleanup(flagtree_t *ft);
 extern void FlagtreeGrow(flagtree_t *ft);
-extern void FlagtreeGatherRec(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg);
+extern int  FlagtreeGatherRec(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg);
 
 #ifndef NDEBUG
 extern void FlagtreePrint(flagtree_t *ft);

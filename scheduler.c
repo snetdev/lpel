@@ -337,15 +337,17 @@ static bool WaitingTestOnAny(task_t *wt, void *arg)
 
   /* first of all, check root flag */
   if (*wt->event_ptr != 0) {
+    int cnt;
     /* if root flag is set, try to gather all set leafs */
     StreamtabChainStart( &wt->streams_read );
-    FlagtreeGather(
+    cnt = FlagtreeGather(
         &wt->waitany_info->flagtree,
         WaitingTestGather,
         &wt->streams_read
         );
     /* only return true, if at least on leaf could be gathered */
-    return StreamtabChainNotEmpty( &wt->streams_read );
+    /* return StreamtabChainNotEmpty( &wt->streams_read ); */
+    return cnt > 0;
   }
   return false;
 }
