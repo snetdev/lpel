@@ -46,12 +46,15 @@ struct lpelthread {
   pthread_t pthread;
 };
 
-/* Keep pointer to the configuration provided at LpelInit() */
-static lpelconfig_t *config;
+/* Keep copy of the (checked) configuration provided at LpelInit() */
+static lpelconfig_t config;
+
 /* cpuset for others-threads */
 static cpu_set_t cpuset_others;
 
 static pthread_barrier_t bar_worker_init;
+
+static pthread_t worker_launcher;
 
 
 static int CanSetRealtime(void)
@@ -79,7 +82,7 @@ static int CanSetRealtime(void)
  */
 int LpelNumWorkers(void)
 {
-  return config->num_workers;
+  return config.num_workers;
 }
 
 
@@ -93,10 +96,11 @@ int LpelWorkerTerminate(void)
 
 
 
+
 /**
  * Startup the worker
  */
-static void *LpelWorkerStartup(void *arg)
+static void *WorkerStartup(void *arg)
 {
   int res;
   pid_t tid;
@@ -118,7 +122,7 @@ static void *LpelWorkerStartup(void *arg)
   {
     cpu_set_t cpuset; 
     CPU_ZERO(&cpuset);
-    CPU_SET( wid % config->proc_workers, &cpuset);
+    CPU_SET( wid % config.proc_workers, &cpuset);
 
     res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
     if (res == 0) {
@@ -129,7 +133,7 @@ static void *LpelWorkerStartup(void *arg)
   }
   
   /* set worker as realtime thread */
-  if ( (config->flags & LPEL_FLAG_REALTIME) != 0 ) {
+  if ( (config.flags & LPEL_FLAG_REALTIME) != 0 ) {
     struct sched_param param;
     param.sched_priority = 1; /* lowest real-time, TODO other? */
     res = sched_setscheduler(tid, SCHED_FIFO, &param);
@@ -157,6 +161,46 @@ static void *LpelWorkerStartup(void *arg)
   co_thread_cleanup();
   
   /* exit thread */
+  return NULL;
+}
+
+
+/**
+ * A separate thread that launches the worker threads
+ */
+static void *WorkerLauncher(void *arg)
+{
+  int i, res;
+  int nw = config.num_workers;
+  pthread_t thids[nw];
+  int wid[nw];
+
+  /* initialise barrier */
+  res = pthread_barrier_init(
+      &bar_worker_init,
+      NULL,
+      nw
+      );
+  assert(res == 0 );
+
+  /* launch worker threads */
+  for (i = 0; i < nw; i++) {
+    wid[i] = i;
+    res = pthread_create(&thids[i], NULL, WorkerStartup, &wid[i]);
+    if (res != 0) {
+      assert(0);
+      /*TODO error*/
+    }
+  }
+
+  /* join on finish */
+  for (i = 0; i < nw; i++) {
+    pthread_join(thids[i], NULL);
+  }
+
+  /* destroy barrier */
+  res = pthread_barrier_destroy(&bar_worker_init);
+  assert( res == 0 );
   return NULL;
 }
 
@@ -276,8 +320,8 @@ void LpelInit(lpelconfig_t *cfg)
   /* initialise scheduler */
   SchedInit(cfg->num_workers, NULL);
 
-  /* store a reference to the cfg */
-  config = cfg;
+  /* store a copy of the corrected cfg */
+  config = *cfg;
 
   /* Init libPCL */
   co_thread_init();
@@ -285,41 +329,15 @@ void LpelInit(lpelconfig_t *cfg)
 
 /**
  * Create and execute the worker threads
- * - joins on the worker threads
+ * 
+ * This function returns immediately.
+ * A separate thread is created that creates the worker threads- joins on the worker threads
  */
 void LpelRun(void)
 {
-  pthread_t *thids;
-  int i, res;
-  int nw = config->num_workers;
-  int wid[nw];
-
-  /* initialise barrier */
-  res = pthread_barrier_init(
-      &bar_worker_init,
-      NULL,
-      nw
-      );
-  assert(res == 0 );
-
-  /* launch worker threads */
-  thids = (pthread_t *) malloc(nw * sizeof(pthread_t));
-  for (i = 0; i < nw; i++) {
-    wid[i] = i;
-    res = pthread_create(&thids[i], NULL, LpelWorkerStartup, &wid[i]);
-    if (res != 0) {
-      assert(0);
-      /*TODO error*/
-    }
-  }
-
-  /* join on finish */
-  for (i = 0; i < nw; i++) {
-    pthread_join(thids[i], NULL);
-  }
-
-  /* destroy barrier */
-  res = pthread_barrier_destroy(&bar_worker_init);
+  int res;
+  /* create worker launcher */
+  res = pthread_create(&worker_launcher, NULL, WorkerLauncher, NULL);
   assert( res == 0 );
 }
 
@@ -330,6 +348,9 @@ void LpelRun(void)
  */
 void LpelCleanup(void)
 {
+  /* in any case, wait until the workers are finished */
+  pthread_join(worker_launcher, NULL);
+
   /* Cleanup scheduler */
   SchedCleanup();
 
@@ -388,7 +409,7 @@ void LpelTaskToWorker(task_t *t)
   atomic_inc(&lpel_active_entities);
 
   /*TODO placement module */
-  to_worker = t->uid % config->num_workers;
+  to_worker = t->uid % config.num_workers;
   t->owner = to_worker;
 
   /* assign to appropriate sched context */
