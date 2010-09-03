@@ -7,6 +7,7 @@
  *
  */
 
+#define asm __asm__
 
 typedef struct {
   volatile int counter;

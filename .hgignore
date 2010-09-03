@@ -6,5 +6,8 @@ syntax: glob
 # gedit temporaries
 *~
 
-#
+# object files
 *.o
+
+# dependencies
+.*.d
