@@ -89,6 +89,8 @@ static inline int FlagtreeGatherNoGoto(flagtree_t *ft, flagtree_gather_cb_t gath
   int prev, cur, next;
   /* number of gathered leafs */
   int count = 0;
+  /* nothing to do if root not set */
+  if (ft->buf[0] == 0) return 0;
   /* register callback */
   ft->gather = gather;
   /* start from root */
@@ -142,6 +144,9 @@ static inline int FlagtreeGather(flagtree_t *ft, flagtree_gather_cb_t gather, vo
   int prev, cur, next;
   /* number of gathered leafs */
   int count = 0;
+  /* nothing to do if root not set */
+  if (ft->buf[0] == 0) return 0;
+  
   /* register callback */
   ft->gather = gather;
   /* start from root */

@@ -86,6 +86,10 @@ static void testGather(void)
     leaf=marks[i];
     FlagtreeMark(&H, leaf, 0);
   }
+
+  /* delete a leaf */
+  //H.buf[18] = 0;
+  
   FlagtreePrint(&H);
 
   fprintf(stderr,"Gather\n");

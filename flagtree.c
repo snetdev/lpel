@@ -121,13 +121,12 @@ static int Visit(flagtree_t *ft, int idx, void *arg)
  */
 int FlagtreeGatherRec(flagtree_t *ft, flagtree_gather_cb_t gather, void *arg)
 {
-  int count = 0;
-  /*TODO LOCK_WRITE */
   ft->gather = gather;
   /* start from root */
-  count += Visit(ft, 0, arg);
-  /*TODO UNLOCK_WRITE */
-  return count;
+  if (ft->buf[0] != 0) {
+    return Visit(ft, 0, arg);
+  }
+  return 0;
 };
 
 
