@@ -33,7 +33,7 @@ void Relay(task_t *self, void *inarg)
   while (!term) {
     item = StreamRead( self, ch->in);
     assert( item != NULL );
-    printf("Relay %d: %s", id, item );
+    //printf("Relay %d: %s", id, item );
     StreamWrite( self, ch->out, item);
     if ( 0 == strcmp( item, "T\n")) {
       term = 1;
@@ -84,7 +84,7 @@ void *Outputter(void *arg)
   while (!term) {
     item = OutportRead(oport);
     assert( item != NULL );
-    printf("Outport: %s\n", item );
+    printf("Out: %s", item );
 
     if ( 0 == strcmp( item, "T\n")) {
       term = 1;
