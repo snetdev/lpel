@@ -187,17 +187,19 @@ void StreamClose(task_t *ct, stream_t *s)
  * This is like calling StreamClose(s); StreamOpen(snew, 'r');
  * sequentially, but with the difference that the "position"
  * of the old stream is used for the new stream.
+ * Also, the pointer to the old stream is set to point to the
+ * new stream.
  * This is used in collector tasks, i.e., tasks that can wait
  * on input from any of its streams opened for reading.
  *
  * @param ct    current task
- * @param s     stream which to replace
- * @param snew  stream that replaces s
+ * @param s     adr of ptr to stream which to replace
+ * @param snew  ptr to stream that replaces s
  */
-void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
+void StreamReplace(task_t *ct, stream_t **s, stream_t *snew)
 {
   /* only streams opened for reading can be replaced */
-  assert( ct == s->cons.task );
+  assert( ct == (*s)->cons.task );
   /* new stream must have been closed by previous consumer */
   assert( snew->cons.task == NULL );
 
@@ -206,15 +208,15 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
     /* Task has opened s, hence s contains a reference to the tbe.
        In that tbe, the stream must be replaced. Then, the reference
        to the tbe must be copied to the new stream */
-    StreamtabReplace( &ct->streams_read, s->cons.tbe, snew );
-    snew->cons.tbe = s->cons.tbe;
+    StreamtabReplace( &ct->streams_read, (*s)->cons.tbe, snew );
+    snew->cons.tbe = (*s)->cons.tbe;
     /* also, set the task in the new stream */
-    snew->cons.task = ct; /* ct == s->cons.task */
+    snew->cons.task = ct; /* ct == (*s)->cons.task */
 
     /*if consumer is collector, register flagtree for new stream */
-    snew->wany_idx = s->wany_idx;
+    snew->wany_idx = (*s)->wany_idx;
     /* if stream not empty, mark flagtree */
-    if (snew->wany_idx >= 0 && snew->buf[s->pread] != NULL) {
+    if (snew->wany_idx >= 0 && snew->buf[(*s)->pread] != NULL) {
       FlagtreeMark(&ct->waitany_info->flagtree, snew->wany_idx, -1);
     }
   }
@@ -225,16 +227,19 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
    */
 
   /* clear references in old stream */
-  SpinlockLock(&s->cons.lock);
+  SpinlockLock(&(*s)->cons.lock);
   {
-    s->cons.task = NULL;
-    s->cons.tbe = NULL;
-    s->wany_idx = -1;
+    (*s)->cons.task = NULL;
+    (*s)->cons.tbe = NULL;
+    (*s)->wany_idx = -1;
   }
-  SpinlockUnlock(&s->cons.lock);
+  SpinlockUnlock(&(*s)->cons.lock);
 
   /* destroy request for old stream */
-  StreamDestroy(s);
+  StreamDestroy(*s);
+
+  /* Let s point to the new stream */
+  *s = snew;
 }
 
 

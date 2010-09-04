@@ -42,7 +42,7 @@ extern stream_t *StreamCreate(void);
 extern void StreamDestroy(stream_t *s);
 extern bool StreamOpen(task_t *ct, stream_t *s, char mode);
 extern void StreamClose(task_t *ct, stream_t *s);
-extern void StreamReplace(task_t *ct, stream_t *s, stream_t *snew);
+extern void StreamReplace(task_t *ct, stream_t **s, stream_t *snew);
 extern void *StreamPeek(task_t *ct, stream_t *s);
 extern void *StreamRead(task_t *ct, stream_t *s);
 extern bool StreamIsSpace(task_t *ct, stream_t *s);
