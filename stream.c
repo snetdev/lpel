@@ -249,7 +249,7 @@ void StreamReplace(task_t *ct, stream_t *s, stream_t *snew)
 void *StreamPeek(task_t *ct, stream_t *s)
 { 
   /* check if opened for reading */
-  assert( s->cons.task == ct );
+  assert( ct == NULL || s->cons.task == ct );
 
   /* if the buffer is empty, buf[pread]==NULL */
   return s->buf[s->pread];  
@@ -271,7 +271,7 @@ void *StreamRead(task_t *ct, stream_t *s)
   void *item;
 
   /* check if opened for reading */
-  assert( s->cons.task == ct );
+  assert( ct == NULL || s->cons.task == ct );
 
   /* wait if buffer is empty */
   if ( s->buf[s->pread] == NULL ) {
