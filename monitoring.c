@@ -57,7 +57,7 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
 
   if ( mon->flags == MONITORING_NONE ) return;
 
-  /* determine of task is to be monitored */
+  /* determine if task is to be monitored */
   if ( BIT_IS_SET(t->attr.flags, TASK_ATTR_MONITOR) ||
       IS_FLAG(MONITORING_ALLTASKS) ) {
 
@@ -88,10 +88,10 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
     }
 
     if ( IS_FLAG( MONITORING_STREAMINFO ) ) {
-      fprintf(mon->outfile, "W");
-      StreamtabPrint( &t->streams_write, mon->outfile);
       fprintf(mon->outfile, "R");
       StreamtabPrint( &t->streams_read, mon->outfile);
+      fprintf(mon->outfile, "W");
+      StreamtabPrint( &t->streams_write, mon->outfile);
     }
 
     fprintf(mon->outfile, "\n");

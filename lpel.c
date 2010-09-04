@@ -120,13 +120,14 @@ static void *WorkerStartup(void *arg)
 
   /* set affinity to id % config->proc_workers */
   {
+    int core = wid % config.proc_workers;
     cpu_set_t cpuset; 
     CPU_ZERO(&cpuset);
-    CPU_SET( wid % config.proc_workers, &cpuset);
+    CPU_SET( core, &cpuset);
 
     res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
     if (res == 0) {
-      MonitoringDebug(&mon_info, "worker %d assigned to core\n", wid);
+      MonitoringDebug(&mon_info, "worker %d assigned to core %d\n", wid, core);
     } else {
       /*TODO warning, check errno? */
     }

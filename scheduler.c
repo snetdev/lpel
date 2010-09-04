@@ -174,7 +174,7 @@ void SchedTask(int wid, monitoring_t *mon)
       /* output accounting info */
       if ( !BIT_IS_SET(t->attr.flags, TASK_ATTR_SYSTEM) ) {
         MonitoringPrint(mon, t);
-        MonitoringDebug(mon, "worker loop %u\n", loop);
+        MonitoringDebug(mon, "(worker %d, loop %u)\n", wid, loop);
       }
       Reschedule(sc, t);
     } /* end if executed ready task */

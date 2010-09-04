@@ -291,7 +291,7 @@ void *StreamRead(task_t *ct, stream_t *s)
               (1-STREAM_BUFFER_SIZE) : 1;
 
   /* for monitoring */
-  StreamtabEvent( &ct->streams_read, s->cons.tbe );
+  if (ct!=NULL) StreamtabEvent( &ct->streams_read, s->cons.tbe );
 
   return item;
 }

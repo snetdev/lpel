@@ -5,103 +5,129 @@
 
 #include <assert.h>
 #include "../lpel.h"
+#include "../stream.h"
 #include "../task.h"
 #include "../inport.h"
+#include "../outport.h"
 
 
 
-static lpelthread_t *lt;
 
-
-
-void Consumer(task_t *self, void *inarg)
-{
-  void *item;
-  char *msg;
-
-  StreamOpen( self, (stream_t *)inarg, 'r');
-  do {
-    item = StreamRead( self, (stream_t *)inarg );
-    msg = (char *) item;
-    printf("read Consumer %s\n", msg );
-  } while ( 0 != strcmp( msg, "T\n" ) );
-  StreamClose( self, (stream_t *)inarg);
-  StreamDestroy( (stream_t *)inarg);
-  printf("exit Consumer\n" );
-}
+typedef struct {
+  stream_t *in, *out;
+  int id;
+} channels_t;
 
 
 
 void Relay(task_t *self, void *inarg)
 {
-  void *item;
-  char *msg;
-  stream_t *to, *from;
-  to = StreamCreate();
-  from = (stream_t *)inarg;
-  taskattr_t tattr = {0};
-  task_t *tcons;
+  channels_t *ch = (channels_t *)inarg;
+  int term = 0;
+  int id = ch->id;
+  char *item;
 
-  StreamOpen(self, to, 'w');
-  StreamOpen(self, from, 'r');
-  tcons = TaskCreate(Consumer, (void *)to, tattr);
-  LpelTaskToWorker(tcons);
-  do {
-    item = StreamRead(self, from);
+  StreamOpen(self, ch->in, 'r');
+  StreamOpen(self, ch->out, 'w');
+
+  while (!term) {
+    item = StreamRead( self, ch->in);
     assert( item != NULL );
-    msg = (char *)item;
-    printf("read Relay %s\n", msg );
-    StreamWrite(self, to, item);
-  } while ( 0 != strcmp( msg, "T\n" ) );
-  printf("exit Relay\n" );
-  StreamClose(self, from);
-  StreamDestroy(from);
-  sleep(1);
-  StreamClose(self, to);
-  LpelThreadJoin(lt, NULL);
+    printf("Relay %d: %s", id, item );
+    StreamWrite( self, ch->out, item);
+    if ( 0 == strcmp( item, "T\n")) {
+      term = 1;
+      StreamClose(self, ch->in);
+      StreamClose(self, ch->out);
+      StreamDestroy( ch->out);
+      free(ch);
+    }
+  } // end while
+  printf("Relay %d TERM\n", id);
 }
 
 
-/**
- * Read from stdin and feed into a LPEL stream
- */
-void *InputReader(void *arg)
+static channels_t *ChannelsCreate(stream_t *in, stream_t *out, int id)
 {
-  char *buf;
-  stream_t *instream = StreamCreate();
-  inport_t *in = InportCreate(instream);
+  channels_t *ch = (channels_t *) malloc( sizeof(channels_t));
+  ch->in = in;
+  ch->out = out;
+  ch->id = id;
+  return ch;
+}
+
+stream_t *PipeElement(stream_t *in, int depth)
+{
+  stream_t *out;
+  channels_t *ch;
   taskattr_t tattr = {0};
   task_t *t;
 
-  t = TaskCreate( Relay, (void *)instream, tattr);
+  out = StreamCreate();
+  ch = ChannelsCreate( in, out, depth);
+  t = TaskCreate( Relay, ch, tattr);
   LpelTaskToWorker(t);
 
-  do {
-    buf = (char *) malloc( 120 * sizeof(char) );
-    (void) fgets( buf, 119, stdin  );
-    InportWrite(in, buf);
-  } while ( 0 != strcmp(buf, "T\n") );
-  //printf("exit InputReader\n" );
+  printf("Created Relay %d\n", depth );
+  return (depth > 0) ? PipeElement( out, depth-1) : out;
+}
 
-  InportDestroy(in);
+
+
+void *Outputter(void *arg)
+{
+  stream_t *out = (stream_t *)arg;
+  outport_t *oport = OutportCreate(out);
+  char *item;
+  int term = 0;
+
+  while (!term) {
+    item = OutportRead(oport);
+    assert( item != NULL );
+    printf("Outport: %s\n", item );
+
+    if ( 0 == strcmp( item, "T\n")) {
+      term = 1;
+    }
+  } // end while
+  
+  OutportDestroy(oport);
   return NULL;
 }
 
+
 static void testBasic(void)
 {
+  stream_t *in, *out;
+  char *buf;
+  inport_t *iport;
+  lpelthread_t *lt;
   lpelconfig_t cfg;
 
-  cfg.num_workers = 2;
+  cfg.num_workers = 8;
   cfg.proc_workers = 2;
   cfg.proc_others = 0;
   cfg.flags = 0;
 
   LpelInit(&cfg);
 
-  lt = LpelThreadCreate(InputReader, NULL);
+  in = StreamCreate();
+  out = PipeElement(in, cfg.num_workers*5 - 1);
+
+  lt = LpelThreadCreate(Outputter, out);
 
   LpelRun();
+ 
+  iport = InportCreate(in);
+  do {
+    buf = (char *) malloc( 120 * sizeof(char) );
+    (void) fgets( buf, 119, stdin  );
+    InportWrite(iport, buf);
+  } while ( 0 != strcmp(buf, "T\n") );
+  InportDestroy(iport);
   
+  LpelThreadJoin(lt, NULL);
+
   LpelCleanup();
 }
 

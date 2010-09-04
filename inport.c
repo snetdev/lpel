@@ -2,12 +2,14 @@
 #include <sched.h>
 
 #include "inport.h"
+#include "atomic.h"
 
 
 inport_t *InportCreate(stream_t *s)
 {
   inport_t *ip;
 
+  atomic_inc(&s->refcnt);
   ip = (inport_t *) malloc(sizeof(inport_t));
   ip->stream = s;
 
@@ -25,6 +27,9 @@ void InportWrite(inport_t *ip, void *item)
 void InportDestroy(inport_t *ip)
 {
   
+  /* "close request" */
+  StreamDestroy(ip->stream);
+
   /* stream has to be freed by client */
 
   free(ip);
