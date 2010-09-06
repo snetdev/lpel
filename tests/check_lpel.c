@@ -104,7 +104,7 @@ static void testBasic(void)
   lpelthread_t *lt;
   lpelconfig_t cfg;
 
-  cfg.num_workers = 8;
+  cfg.num_workers = 2;
   cfg.proc_workers = 2;
   cfg.proc_others = 0;
   cfg.flags = 0;
@@ -112,7 +112,7 @@ static void testBasic(void)
   LpelInit(&cfg);
 
   in = StreamCreate();
-  out = PipeElement(in, cfg.num_workers*5 - 1);
+  out = PipeElement(in, cfg.num_workers*20 - 1);
 
   lt = LpelThreadCreate(Outputter, out);
 
