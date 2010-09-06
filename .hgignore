@@ -11,3 +11,6 @@ syntax: glob
 
 # dependencies
 .*.d
+
+# svn files
+.svn*
