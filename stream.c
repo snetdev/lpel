@@ -189,8 +189,6 @@ void StreamClose(task_t *ct, stream_t *s)
  * of the old stream is used for the new stream.
  * Also, the pointer to the old stream is set to point to the
  * new stream.
- * This is used in collector tasks, i.e., tasks that can wait
- * on input from any of its streams opened for reading.
  *
  * @param ct    current task
  * @param s     adr of ptr to stream which to replace

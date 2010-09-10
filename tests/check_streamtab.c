@@ -87,7 +87,7 @@ static void testEvent(void)
 
 static void testIterate(void)
 {
-  int i, add_num = 24;
+  int i, add_num = 23;
   streamtbe_t *tbe[2*NUM_STREAMS];
   streamtbe_t *it_cur;
   streamtbe_iter_t iter;
@@ -102,8 +102,12 @@ static void testIterate(void)
     tbe[i] = StreamtabAdd( &tab, (stream_t *)streams[i], &idx );
     assert( idx == i/STREAMTAB_GRP_SIZE );
   }
+  StreamtabRemove(&tab, tbe[2]);
+  StreamtabRemove(&tab, tbe[20]);
+  StreamtabRemove(&tab, tbe[22]);
   StreamtabPrint(&tab, NULL);
   StreamtabDebug(&tab);
+
 
   /* chain up */
   StreamtabChainStart(&tab);
