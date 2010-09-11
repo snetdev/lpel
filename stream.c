@@ -42,7 +42,9 @@
 
 #include "lpel.h"
 #include "task.h"
+/*XXX
 #include "flagtree.h"
+*/
 #include "sysdep.h"
 
 
@@ -63,7 +65,9 @@ stream_t *StreamCreate(void)
     s->prod.tbe = s->cons.tbe = NULL;
     SpinlockInit(&s->prod.lock);
     SpinlockInit(&s->cons.lock);
+    /*XXX
     s->wany_idx = -1;
+    */
     /* refcnt reflects the number of tasks
        + the stream itself opened this stream {1,2,3} */
     atomic_set(&s->refcnt, 1);
@@ -112,11 +116,19 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
   case 'r':
     SpinlockLock(&s->cons.lock);
     {
+      /*XXX 
       int grpidx;
+      */
       assert( s->cons.task == NULL );
       s->cons.task = ct;
-      s->cons.tbe  = StreamtabAdd(&ct->streams_read, s, &grpidx);
+      s->cons.tbe  = StreamtabAdd(&ct->streams_read, s, NULL);
       
+      if ( TASK_IS_WAITANY(ct) && (s->buf[s->pread]!= NULL) ) {
+        ct->waitany_flag = 1;
+      }
+      /*XXX */
+#if 0
+      s->cons.tbe  = StreamtabAdd(&ct->streams_read, s, &grpidx);
       /*if consumer task is a collector, register flagtree */
       if ( TASK_IS_WAITANY(ct) ) {
         if (grpidx > ct->waitany_info->max_grp_idx) {
@@ -129,6 +141,7 @@ bool StreamOpen(task_t *ct, stream_t *s, char mode)
           FlagtreeMark(&ct->waitany_info->flagtree, s->wany_idx, -1);
         }
       }
+#endif
     }
     SpinlockUnlock(&s->cons.lock);
     break;
@@ -163,10 +176,12 @@ void StreamClose(task_t *ct, stream_t *s)
       s->cons.task = NULL;
       s->cons.tbe = NULL;
       
-      /* if consumer was collector, unregister flagtree */
+      /*XXX if consumer was collector, unregister flagtree */
+#if 0
       if ( TASK_IS_WAITANY(ct) ) {
         s->wany_idx = -1;
       }
+#endif
     }
     SpinlockUnlock(&s->cons.lock);
   
@@ -211,12 +226,20 @@ void StreamReplace(task_t *ct, stream_t **s, stream_t *snew)
     /* also, set the task in the new stream */
     snew->cons.task = ct; /* ct == (*s)->cons.task */
 
+    /* if new consumer is collector, and stream is not empty,
+       set waitany_flag */
+    if ( TASK_IS_WAITANY(ct) && snew->buf[(*s)->pread]!=NULL) {
+      ct->waitany_flag = 1;
+    }
+    /*XXX */
+#if 0
     /*if consumer is collector, register flagtree for new stream */
     snew->wany_idx = (*s)->wany_idx;
     /* if stream not empty, mark flagtree */
     if (snew->wany_idx >= 0 && snew->buf[(*s)->pread] != NULL) {
       FlagtreeMark(&ct->waitany_info->flagtree, snew->wany_idx, -1);
     }
+#endif
   }
   SpinlockUnlock(&snew->cons.lock);
 
@@ -229,7 +252,9 @@ void StreamReplace(task_t *ct, stream_t **s, stream_t *snew)
   {
     (*s)->cons.task = NULL;
     (*s)->cons.tbe = NULL;
+    /*XXX
     (*s)->wany_idx = -1;
+    */
   }
   SpinlockUnlock(&(*s)->cons.lock);
 
@@ -252,7 +277,7 @@ void StreamReplace(task_t *ct, stream_t **s, stream_t *snew)
 void *StreamPeek(task_t *ct, stream_t *s)
 { 
   /* check if opened for reading */
-  assert( ct == NULL || s->cons.task == ct );
+  assert( s->cons.task == ct );
 
   /* if the buffer is empty, buf[pread]==NULL */
   return s->buf[s->pread];  
@@ -274,7 +299,7 @@ void *StreamRead(task_t *ct, stream_t *s)
   void *item;
 
   /* check if opened for reading */
-  assert( ct == NULL || s->cons.task == ct );
+  assert( s->cons.task == ct );
 
   /* wait if buffer is empty */
   if ( s->buf[s->pread] == NULL ) {
@@ -308,7 +333,7 @@ void *StreamRead(task_t *ct, stream_t *s)
 bool StreamIsSpace(task_t *ct, stream_t *s)
 {
   /* check if opened for writing */
-  assert( ct == NULL ||  s->prod.task == ct );
+  assert( s->prod.task == ct );
 
   /* if there is space in the buffer, the location at pwrite holds NULL */
   return ( s->buf[s->pwrite] == NULL );
@@ -332,7 +357,7 @@ bool StreamIsSpace(task_t *ct, stream_t *s)
 void StreamWrite(task_t *ct, stream_t *s, void *item)
 {
   /* check if opened for writing */
-  assert( ct == NULL ||  s->prod.task == ct );
+  assert( s->prod.task == ct );
 
   assert( item != NULL );
 
@@ -359,20 +384,26 @@ void StreamWrite(task_t *ct, stream_t *s, void *item)
   if (ct!=NULL) StreamtabEvent( &ct->streams_write, s->prod.tbe );
 
   SpinlockLock(&s->cons.lock);
-  /*  if flagtree registered, use flagtree mark */
+
+  if ( s->cons.task!=NULL && TASK_IS_WAITANY(s->cons.task)) {
+    s->cons.task->waitany_flag = 1;
+  }
+  /*XXX  if flagtree registered, use flagtree mark
   if (s->wany_idx >= 0) {
     FlagtreeMark(
         &s->cons.task->waitany_info->flagtree,
         s->wany_idx,
-        s->cons.task->owner
+        ct->owner
         );
   }
+  */
   SpinlockUnlock(&s->cons.lock);
 
   return;
 }
 
 
+#if 0
 
 /**
  *TODO
@@ -411,4 +442,5 @@ bool StreamIterHasNext(task_t *ct)
       &ct->waitany_info->iter
       ) > 0;
 }
+#endif
 

@@ -21,6 +21,7 @@ void Consumer(task_t *self, void *inarg)
   char *msg;
   int i, term;
 
+  printf("start Consumer\n" );
   /* open streams */ 
   for (i=0; i<NUM_COLL; i++) {
     StreamOpen(self, scoll[i], 'r');
@@ -31,11 +32,13 @@ void Consumer(task_t *self, void *inarg)
   do {
     stream_t *snext;
     /* here we do wait */
-    StreamWaitAny(self);
+    printf("Consumer waits\n");
+    TaskWaitOnAny(self);
+    printf("Consumer resumes\n");
 
     printf("Consumer iterates:\n");
-    while (StreamIterHasNext(self)) {
-      snext = StreamIterNext(self);
+    for (i=0; i<NUM_COLL; i++) {
+      snext = scoll[i];
 
       item = StreamPeek( self, snext );
       msg = (char *) item;
@@ -61,6 +64,8 @@ void Relay(task_t *self, void *inarg)
   void *item;
   char *msg;
   int i, dest;
+
+  printf("start Relay\n" );
 
   /* open streams */ 
   for (i=0; i<NUM_COLL; i++) {
@@ -97,12 +102,14 @@ void *InputReader(void *arg)
   char *buf;
   inport_t *in = InportCreate(sinp);
 
+  printf("start InputReader\n" );
   do {
     buf = (char *) malloc( 120 * sizeof(char) );
     (void) fgets( buf, 119, stdin  );
     InportWrite(in, buf);
+    printf("InputReader: %s\n", buf );
   } while ( 0 != strcmp(buf, "T\n") );
-  //printf("exit InputReader\n" );
+  printf("exit InputReader\n" );
 
   InportDestroy(in);
   return NULL;
@@ -118,7 +125,7 @@ static void testBasic(void)
 
   cfg.num_workers = 2;
   cfg.proc_workers = 2;
-  cfg.proc_others = 2;
+  cfg.proc_others = 0;
   cfg.flags = 0;
 
   LpelInit(&cfg);
@@ -141,13 +148,14 @@ static void testBasic(void)
 
   LpelRun();
   
+  LpelCleanup();
+
   /* destroy streams */
   StreamDestroy(sinp);
   for (i=0; i<NUM_COLL; i++) {
     StreamDestroy(scoll[i]);
   }
 
-  LpelCleanup();
   LpelThreadJoin(lt, NULL);
 }
 
