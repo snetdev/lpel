@@ -10,6 +10,12 @@ streamtab:
 	gcc -o check_streamtab check_streamtab.o streamtab.o $(LDFLAGS)
 	./check_streamtab
 
+linklst:
+	gcc -c $(CFLAGS) check_linklst.c
+	gcc -c $(CFLAGS) ../linklst.c
+	gcc -o check_linklst check_linklst.o linklst.o $(LDFLAGS)
+	./check_linklst
+
 flagtree:
 	gcc -c -g check_flagtree.c
 	gcc -c -g ../flagtree.c
