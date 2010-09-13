@@ -20,17 +20,18 @@ void Consumer(task_t *self, void *inarg)
   void *item;
   char *msg;
   int i, term;
+  stream_mh_t *in[NUM_COLL];
 
   printf("start Consumer\n" );
   /* open streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamOpen(self, scoll[i], 'r');
+    in[i] = StreamOpen(self, scoll[i], 'r');
   }
 
 
   term = 0;
   do {
-    stream_t *snext;
+    stream_mh_t *snext;
     /* here we do wait */
     printf("Consumer waits\n");
     TaskWaitOnAny(self);
@@ -38,9 +39,9 @@ void Consumer(task_t *self, void *inarg)
 
     printf("Consumer iterates:\n");
     for (i=0; i<NUM_COLL; i++) {
-      snext = scoll[i];
+      snext = in[i];
 
-      item = StreamPeek( self, snext );
+      item = StreamPeek( snext );
       msg = (char *) item;
       if ( msg != NULL ) {
         printf("%s", msg );
@@ -52,7 +53,7 @@ void Consumer(task_t *self, void *inarg)
 
   /* close streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamClose(self, scoll[i]);
+    StreamClose(in[i], true);
   }
   printf("exit Consumer\n" );
 }
@@ -64,61 +65,42 @@ void Relay(task_t *self, void *inarg)
   void *item;
   char *msg;
   int i, dest;
+  stream_mh_t *out[NUM_COLL];
+  stream_mh_t *in;
 
   printf("start Relay\n" );
 
   /* open streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamOpen(self, scoll[i], 'w');
+    out[i] = StreamOpen(self, scoll[i], 'w');
   }
-  StreamOpen(self, sinp, 'r');
+  in = StreamOpen(self, sinp, 'r');
 
   /* main task: relay to consumer via defined stream */
   do {
-    item = StreamRead(self, sinp);
+    item = StreamRead(in);
     assert( item != NULL );
     msg = (char *)item;
     dest = atoi(msg);
     printf("Relay dest: %d\n", dest);
     if ( 0<=dest && dest<NUM_COLL) {
-      StreamWrite(self, scoll[dest], item);
+      StreamWrite( out[dest], item);
     }
   } while ( 0 != strcmp( msg, "T\n" ) );
 
   /* close streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamClose(self, scoll[i]);
+    StreamClose(out[i], false);
   }
-  StreamClose(self, sinp);
+  StreamClose(in, true);
   printf("exit Relay\n" );
 }
 
 
-/**
- * Read from stdin and feed into a LPEL stream
- */
-void *InputReader(void *arg)
-{
-  char *buf;
-  inport_t *in = InportCreate(sinp);
-
-  printf("start InputReader\n" );
-  do {
-    buf = (char *) malloc( 120 * sizeof(char) );
-    (void) fgets( buf, 119, stdin  );
-    InportWrite(in, buf);
-    printf("InputReader: %s\n", buf );
-  } while ( 0 != strcmp(buf, "T\n") );
-  printf("exit InputReader\n" );
-
-  InportDestroy(in);
-  return NULL;
-}
 
 static void testBasic(void)
 {
   lpelconfig_t cfg;
-  lpelthread_t *lt;
   taskattr_t tattr = {0};
   int i;
   task_t *trelay, *tcons;
@@ -144,19 +126,23 @@ static void testBasic(void)
   tcons = TaskCreate( Consumer, NULL, tattr);
   LpelTaskToWorker(tcons);
  
-  lt = LpelThreadCreate(InputReader, NULL);
 
   LpelRun();
+  {
+    char *buf;
+    inport_t *in = InportCreate(sinp);
+    do {
+      buf = (char *) malloc( 120 * sizeof(char) );
+      (void) fgets( buf, 119, stdin  );
+      InportWrite(in, buf);
+      printf("Input: %s\n", buf );
+    } while ( 0 != strcmp(buf, "T\n") );
+    printf("end reading input\n" );
+    InportDestroy(in);
+  }
   
   LpelCleanup();
 
-  /* destroy streams */
-  StreamDestroy(sinp);
-  for (i=0; i<NUM_COLL; i++) {
-    StreamDestroy(scoll[i]);
-  }
-
-  LpelThreadJoin(lt, NULL);
 }
 
 

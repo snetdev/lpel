@@ -26,23 +26,23 @@ void Relay(task_t *self, void *inarg)
   int term = 0;
   int id = ch->id;
   char *item;
+  stream_mh_t *in, *out;
 
-  StreamOpen(self, ch->in, 'r');
-  StreamOpen(self, ch->out, 'w');
+  in = StreamOpen( self, ch->in, 'r');
+  out = StreamOpen( self, ch->out, 'w');
 
   while (!term) {
-    item = StreamRead( self, ch->in);
+    item = StreamRead( in);
     assert( item != NULL );
     //printf("Relay %d: %s", id, item );
-    StreamWrite( self, ch->out, item);
+    StreamWrite( out, item);
     if ( 0 == strcmp( item, "T\n")) {
       term = 1;
-      StreamClose(self, ch->in);
-      StreamClose(self, ch->out);
-      StreamDestroy( ch->out);
-      free(ch);
     }
   } // end while
+  StreamClose( in, true);
+  StreamClose( out, false);
+  free(ch);
   printf("Relay %d TERM\n", id);
 }
 

@@ -25,13 +25,13 @@ static void testAppend(void)
   ListPrint( &list, stdout );
 }
 
-static void testIter(void)
+static void testIter(int num)
 {
   int i;
   list_iter_t *iter;
   header("Iterate");
 
-  for (i=0; i<10; i++) {
+  for (i=0; i<num; i++) {
     ListAppend( &list, pool[i]);
   }
   ListPrint( &list, stdout );
@@ -153,7 +153,8 @@ int main(void)
   
   /* tests */
   testAppend();
-  testIter();
+  testIter(5);
+  testIter(1);
   testIterAppend(1);
   testIterAppend(10);
   testIterRemoveAllFromBeg();
