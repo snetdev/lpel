@@ -67,6 +67,7 @@ void Relay(task_t *self, void *inarg)
   int i, dest;
   stream_mh_t *out[NUM_COLL];
   stream_mh_t *in;
+  int term = 0;
 
   printf("start Relay\n" );
 
@@ -77,16 +78,25 @@ void Relay(task_t *self, void *inarg)
   in = StreamOpen(self, sinp, 'r');
 
   /* main task: relay to consumer via defined stream */
-  do {
+  while( !term) {
     item = StreamRead(in);
     assert( item != NULL );
     msg = (char *)item;
-    dest = atoi(msg);
-    printf("Relay dest: %d\n", dest);
-    if ( 0<=dest && dest<NUM_COLL) {
-      StreamWrite( out[dest], item);
+    if  ( 0 == strcmp( msg, "T\n" ) ) {
+      term = 1;
+      dest = 0;
+    } else {
+      dest = atoi(msg);
     }
-  } while ( 0 != strcmp( msg, "T\n" ) );
+    if ( 0<dest && dest<NUM_COLL) {
+      StreamWrite( out[dest], item);
+      printf("Relay dest: %d\n", dest);
+    }
+  }
+  /* terminate msg goes to 0 */
+  assert( dest==0 );
+  printf("Relay dest: %d\n", dest);
+  StreamWrite( out[dest], item);
 
   /* close streams */ 
   for (i=0; i<NUM_COLL; i++) {
