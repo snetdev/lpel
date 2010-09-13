@@ -79,7 +79,11 @@ int TaskDestroy(task_t *t)
   if ( atomic_dec(&t->refcnt) == 0) {
 
     /* free the not closed stream_mh's */
-    StreamPrintDirty( t, NULL);
+    if (0 != StreamPrintDirty( t, NULL))
+    {
+      //TODO warning
+      assert(0);
+    }
 
     /* delete the coroutine */
     co_delete(t->ctx);

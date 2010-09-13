@@ -20,7 +20,7 @@ void *StreamPeek( stream_mh_t *mh);
 void *StreamRead( stream_mh_t *mh);
 void StreamWrite( stream_mh_t *mh, void *item);
 
-void StreamPrintDirty( struct task *t, FILE *file);
+int StreamPrintDirty( struct task *t, FILE *file);
 
 
 #endif /* _STREAM_H_ */

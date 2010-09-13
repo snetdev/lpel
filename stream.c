@@ -229,9 +229,10 @@ void StreamWrite( stream_mh_t *mh, void *item)
 /**
  * @pre   if file != NULL, it must be open for writing
  */
-void StreamPrintDirty( task_t *t, FILE *file)
+int StreamPrintDirty( task_t *t, FILE *file)
 {
   stream_mh_t *mh, *next;
+  int close_cnt = 0;
 
   assert( t != NULL);
   mh = *TaskGetDirtyStreams( t);
@@ -258,6 +259,7 @@ void StreamPrintDirty( task_t *t, FILE *file)
     /* update states */
     if (mh->state == STMH_REPLACED) { mh->state = STMH_OPEN; }
     if (mh->state == STMH_CLOSED) {
+      close_cnt++;
       free( mh);
     } else {
       mh->dirty = NULL;
@@ -269,4 +271,5 @@ void StreamPrintDirty( task_t *t, FILE *file)
   }
   /* */
   *(TaskGetDirtyStreams(t)) = DIRTY_END;
+  return close_cnt;
 }
