@@ -21,6 +21,7 @@ void *OutportRead(outport_t *op)
     (void) sched_yield();
     item = BufferTop( op->buffer);
   }
+  BufferPop( op->buffer);
   return item;
 }
 

@@ -102,6 +102,7 @@ stream_mh_t *StreamOpen( task_t *ct, stream_t *s, char mode)
     mh->mode = mode;
     mh->state = STMH_OPEN;
     mh->counter = 0;
+    mh->dirty = NULL;
     MarkDirty( mh);
     break;
 
