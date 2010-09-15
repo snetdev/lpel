@@ -62,8 +62,8 @@ static void testIterAppend(int sizeinit)
     list_node_t *node = ListIterNext(iter);
     printf("%lx ", (long) ListNodeGet(node));
     if (i<NUM) {
-      printf("Append i=%x while iter\n", i);
-      ListAppend( &list, pool[i] );
+      printf("Append i=%x through iter\n", i);
+      ListIterAppend( iter, pool[i] );
       i++;
     }
   }
@@ -143,6 +143,27 @@ static void testIterRemoveRange(void)
   ListPrint( &list, stdout );
 }
 
+static void testIterAppendRemoveSingle(void)
+{
+  int i;
+  list_iter_t *iter;
+  
+  header("Iter Append and Remove with single element");
+  list = NULL;
+  ListAppend( &list, pool[0]);
+  
+  ListPrint( &list, stdout );
+
+  iter= ListIterCreate( &list);
+  while( ListIterHasNext(iter) ) {
+    list_node_t *node = ListIterNext(iter);
+    ListIterAppend(iter, pool[1]);
+    if (node==pool[0]) ListIterRemove(iter);
+  }
+  ListPrint( &list, stdout );
+}
+
+
 int main(void)
 {
   long i;
@@ -160,6 +181,7 @@ int main(void)
   testIterRemoveAllFromBeg();
   testIterRemoveLast();
   testIterRemoveRange();
+  testIterAppendRemoveSingle();
   return 0;
 }
 

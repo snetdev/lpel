@@ -4,11 +4,11 @@ LDFLAGS =
 all: lpel
 .PHONY: all
 
-streamtab:
-	gcc -c -g check_streamtab.c
-	gcc -c -g ../streamtab.c
-	gcc -o check_streamtab check_streamtab.o streamtab.o $(LDFLAGS)
-	./check_streamtab
+hashtab:
+	gcc -c -DDEBUG -g check_hashtab.c
+	gcc -c -DDEBUG -g ../hashtab.c
+	gcc -o check_hashtab check_hashtab.o hashtab.o $(LDFLAGS)
+	./check_hashtab
 
 linklst:
 	gcc -c $(CFLAGS) check_linklst.c
