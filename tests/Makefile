@@ -10,22 +10,6 @@ hashtab:
 	gcc -o check_hashtab check_hashtab.o hashtab.o $(LDFLAGS)
 	./check_hashtab
 
-linklst:
-	gcc -c $(CFLAGS) check_linklst.c
-	gcc -c $(CFLAGS) ../linklst.c
-	gcc -o check_linklst check_linklst.o linklst.o $(LDFLAGS)
-	./check_linklst
-
-flagtree:
-	gcc -c -g check_flagtree.c
-	gcc -c -g ../flagtree.c
-	gcc -o check_flagtree check_flagtree.o flagtree.o $(LDFLAGS)
-	./check_flagtree
-
-rwlock:
-	gcc -c check_rwlock.c
-	gcc -o check_rwlock check_rwlock.o $(LDFLAGS) -lpthread
-	./check_rwlock > /dev/null
 
 mpsctq:
 	gcc -c -g check_mpsctq.c

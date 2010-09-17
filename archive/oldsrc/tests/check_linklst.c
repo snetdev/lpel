@@ -61,7 +61,8 @@ static void testIterAppend(int sizeinit)
   while( ListIterHasNext(iter) ) {
     list_node_t *node = ListIterNext(iter);
     printf("%lx ", (long) ListNodeGet(node));
-    if (i<NUM) {
+    while (i<NUM) {
+    //if (i<NUM) {
       printf("Append i=%x through iter\n", i);
       ListIterAppend( iter, pool[i] );
       i++;

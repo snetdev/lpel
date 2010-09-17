@@ -24,7 +24,7 @@ struct list_iter {
 
 
 /**
- * it is safe to append while iterating
+ * it is NOT safe to append while iterating
  */
 void ListAppend( list_hnd_t *lst, list_node_t *node)
 {
@@ -186,7 +186,8 @@ void ListIterAppend( list_iter_t *iter, list_node_t *node)
  * Remove the current node from list
  * @pre iter points to valid element
  * @note IterRemove() may only be called once after
- *       IterNext(), after a  
+ *       IterNext(), as the current node is not a valid
+ *       list node anymore. 
  */
 void ListIterRemove( list_iter_t *iter)
 {
