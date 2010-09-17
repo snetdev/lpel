@@ -13,6 +13,7 @@
  *      accessed Aug 26, 2010
  *      for more details on the FastForward queue.
  *
+ * TODO replace the spinlock by atomic pointer swap
  * 
  */
 

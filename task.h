@@ -17,7 +17,7 @@
 
 #define TASK_ATTR_DEFAULT      (0)
 #define TASK_ATTR_MONITOR   (1<<0)
-#define TASK_ATTR_WAITANY   (1<<1)
+//#define TASK_ATTR_WAITANY   (1<<1)
 #define TASK_ATTR_SYSTEM    (1<<8)
 
 
@@ -110,7 +110,6 @@ struct task {
 extern task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t attr);
 extern int TaskDestroy(task_t *t);
 
-struct stream_mh **TaskGetDirtyStreams( task_t *ct);
 
 extern void TaskCall(task_t *ct);
 extern void TaskWaitOnRead( task_t *ct, struct buffer *s);

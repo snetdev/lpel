@@ -335,7 +335,8 @@ static void WaitingTestGather(int i, void *arg)
 
 static bool WaitingTestOnAny(task_t *wt, void *arg)
 {
-  assert( TASK_IS_WAITANY(wt) );
+  // assert( TASK_IS_WAITANY(wt) );
+  //TODO exchange pointer size
   return xchg( (volatile int *) &wt->wany_flag, 0) != 0;
 
 /*XXX */

@@ -73,9 +73,8 @@ static inline void MarkDirty( stream_mh_t *mh)
      * insert the mh at the front of the dirty_list.
      * Initially, dirty_list of the tab is empty DIRTY_END (!= NULL)
      */
-    stream_mh_t **dirty_list = TaskGetDirtyStreams( mh->task);
-    mh->dirty = *dirty_list;
-    *dirty_list = mh;
+    mh->dirty = mh->task->dirty_list;
+    mh->task->dirty_list = mh;
   }
 }
 
@@ -247,7 +246,7 @@ int StreamPrintDirty( task_t *t, FILE *file)
   int close_cnt = 0;
 
   assert( t != NULL);
-  mh = *TaskGetDirtyStreams( t);
+  mh = t->dirty_list;
 
   if (file!=NULL) {
     fprintf( file,"[" );
@@ -284,7 +283,7 @@ int StreamPrintDirty( task_t *t, FILE *file)
     fprintf( file,"] " );
   }
   /* */
-  *(TaskGetDirtyStreams(t)) = DIRTY_END;
+  t->dirty_list = DIRTY_END;
   return close_cnt;
 }
 

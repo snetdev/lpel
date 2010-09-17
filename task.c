@@ -91,10 +91,6 @@ int TaskDestroy(task_t *t)
 }
 
 
-stream_mh_t **TaskGetDirtyStreams( task_t *ct)
-{
-  return &ct->dirty_list;
-}
 
 /**
  * Call a task (context switch to a task)
