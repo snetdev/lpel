@@ -11,7 +11,6 @@
 #include "timing.h"
 #include "monitoring.h"
 #include "atomic.h"
-#include "sysdep.h"
 #include "taskqueue.h"
 
 #include "stream.h"
@@ -334,8 +333,13 @@ static void WaitingTestGather(int i, void *arg)
 static bool WaitingTestOnAny(task_t *wt, void *arg)
 {
   // assert( TASK_IS_WAITANY(wt) );
-  //TODO exchange pointer size
-  return xchg( (volatile int *) &wt->wany_flag, 0) != 0;
+  //TODO exchange pointer size?
+  // return xchg( (volatile void *) &wt->wany_flag, 0) != 0;
+  if ( wt->wany_flag != 0 ) {
+    wt->wany_flag = 0;
+    return true;
+  }
+  return false;
 
 /*XXX */
 #if 0

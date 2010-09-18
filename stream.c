@@ -123,7 +123,9 @@ stream_mh_t *StreamOpen( task_t *ct, stream_t *s, char mode)
     pthread_spin_lock( &s->lock);
     s->flag_ptr = &ct->wany_flag;
     pthread_spin_unlock( &s->lock);
-    *s->flag_ptr = (void *)0x1;
+    if ( BufferTop( &s->buffer) != NULL) {
+      *s->flag_ptr = (void *)0x1;
+    }
 
   case 'w':
     mh->task = ct;
@@ -161,7 +163,6 @@ void StreamClose( stream_mh_t *mh, bool destroy_s)
     pthread_spin_lock( &mh->stream->lock);
     mh->stream->flag_ptr = &mh->stream->flag_stub;
     pthread_spin_unlock( &mh->stream->lock);
-    *mh->stream->flag_ptr = (void *)0x1;
   }
   if (destroy_s) {
     StreamDestroy( mh->stream);
@@ -187,7 +188,9 @@ void StreamReplace( stream_mh_t *mh, stream_t *snew)
   pthread_spin_lock( &mh->stream->lock);
   mh->stream->flag_ptr = &mh->task->wany_flag;
   pthread_spin_unlock( &mh->stream->lock);
-  *mh->stream->flag_ptr = (void *)0x1;
+  if ( BufferTop(&mh->stream->buffer) != NULL) {
+    *mh->stream->flag_ptr = (void *)0x1;
+  }
 
   mh->state = STMH_REPLACED;
   /* counter is not reset */
