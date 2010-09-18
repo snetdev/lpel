@@ -2,12 +2,22 @@
 #define _STREAM_H_
 
 #include <stdio.h>
+#include <pthread.h>
 
-#include "buffer.h"
 #include "bool.h"
+#include "buffer.h"
+
+typedef struct stream stream_t;
 
 
-typedef struct buffer stream_t;
+struct stream {
+  buffer_t buffer;
+
+  pthread_spinlock_t lock;
+  volatile void **flag_ptr;
+  volatile void *flag_stub;
+};
+
 
 /** stream modifier handle */
 typedef struct stream_mh stream_mh_t;    
@@ -22,6 +32,7 @@ typedef struct stream_iter stream_iter_t;
 struct task;
 
 stream_t *StreamCreate(void);
+void StreamDestroy( stream_t *s);
 stream_mh_t *StreamOpen( struct task *ct, stream_t *s, char mode);
 void StreamClose( stream_mh_t *mh, bool destroy_s);
 void StreamReplace( stream_mh_t *mh, stream_t *snew);

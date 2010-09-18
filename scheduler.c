@@ -12,8 +12,10 @@
 #include "monitoring.h"
 #include "atomic.h"
 #include "sysdep.h"
-
 #include "taskqueue.h"
+
+#include "stream.h"
+#include "buffer.h"
 
 struct schedcfg {
   int dummy;
@@ -313,16 +315,12 @@ static int CollectFromInit(schedctx_t *sc)
 
 static bool WaitingTestOnRead(task_t *wt, void *arg)
 {
-  /* event_ptr points to the position in the buffer
-     where task wants to write to */
-  return *wt->event_ptr == 0;
+  return BufferIsSpace( &wt->wait_s->buffer);
 }
 
 static bool WaitingTestOnWrite(task_t *wt, void *arg)
 {
-  /* event_ptr points to the position in the buffer
-     where task wants to read from */
-  return *wt->event_ptr != 0;
+  return BufferTop( &wt->wait_s->buffer) != NULL;
 }
 
 /*XXX

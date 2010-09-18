@@ -31,7 +31,7 @@
 
 
 struct stream_mh;
-struct buffer;
+struct stream;
 
 
 typedef enum {
@@ -71,13 +71,9 @@ struct task {
   /* attributes */
   taskattr_t attr;
 
-  /* pointer to signalling flag
-   * pointer to void*
-   * contents can change arbitrarily -> volatile
-   */
-  volatile void **event_ptr;
+  /* data to indicate on which event the task is waiting */
   taskstate_wait_t wait_on;
-  struct buffer *wait_s;
+  struct stream *wait_s;
 
   /* waitany-task specific stuff */
   volatile void* wany_flag;
@@ -112,8 +108,8 @@ extern int TaskDestroy(task_t *t);
 
 
 extern void TaskCall(task_t *ct);
-extern void TaskWaitOnRead( task_t *ct, struct buffer *s);
-extern void TaskWaitOnWrite( task_t *ct, struct buffer *s);
+extern void TaskWaitOnRead( task_t *ct, struct stream *s);
+extern void TaskWaitOnWrite( task_t *ct, struct stream *s);
 extern void TaskWaitOnAny(task_t *ct);
 extern void TaskExit(task_t *ct, void *outarg);
 extern void TaskYield(task_t *ct);

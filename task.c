@@ -41,7 +41,6 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
   /* initialize reference counter to 1*/
   atomic_set(&t->refcnt, 1);
 
-  t->event_ptr = NULL;
   
   //t->owner = -1;
   t->sched_info = NULL;
@@ -134,7 +133,6 @@ void TaskWaitOnRead( task_t *ct, stream_t *s)
   assert( ct->state == TASK_RUNNING );
   
   /* WAIT on read event*/;
-  ct->event_ptr = (volatile void**) BufferGetWptr( s);
   ct->state = TASK_WAITING;
   ct->wait_on = WAIT_ON_READ;
   ct->wait_s = s;
@@ -153,7 +151,6 @@ void TaskWaitOnWrite( task_t *ct, stream_t *s)
   assert( ct->state == TASK_RUNNING );
 
   /* WAIT on write event*/
-  ct->event_ptr = (volatile void**) BufferGetRptr( s);
   ct->state = TASK_WAITING;
   ct->wait_on = WAIT_ON_WRITE;
   ct->wait_s = s;
@@ -173,7 +170,6 @@ void TaskWaitOnAny( task_t *ct)
   ct->event_ptr = &ct->waitany_info->flagtree.buf[0];
   */
   /* WAIT upon any input stream setting waitany_flag */
-  ct->event_ptr = &ct->wany_flag;
   ct->state = TASK_WAITING;
   ct->wait_on = WAIT_ON_ANY;
   ct->wait_s = NULL;

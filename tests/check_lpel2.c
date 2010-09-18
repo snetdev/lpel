@@ -132,7 +132,7 @@ static void testBasic(void)
   trelay = TaskCreate( Relay, NULL, tattr);
   LpelTaskToWorker(trelay);
 
-  tattr.flags |= TASK_ATTR_WAITANY;
+  //tattr.flags |= TASK_ATTR_WAITANY;
   tcons = TaskCreate( Consumer, NULL, tattr);
   LpelTaskToWorker(tcons);
  

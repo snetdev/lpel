@@ -31,10 +31,12 @@
 #include <malloc.h>
 #include <string.h>
 #include <assert.h>
+#include <pthread.h>
 
 #include "stream.h"
 #include "buffer.h"
 #include "task.h"
+
 
 struct stream_mh {
   task_t *task;
@@ -84,10 +86,24 @@ static inline void MarkDirty( stream_mh_t *mh)
  */
 stream_t *StreamCreate(void)
 {
-  return BufferCreate();
+  stream_t *s = (stream_t *) malloc( sizeof( stream_t));
+  BufferReset( &s->buffer);
+  s->flag_stub = (void *)0x0;
+  s->flag_ptr = &s->flag_stub;
+  pthread_spin_init( &s->lock, PTHREAD_PROCESS_PRIVATE);
+
+  return s;
 }
 
 
+/**
+ * Destroy a stream
+ */
+void StreamDestroy( stream_t *s)
+{
+  pthread_spin_destroy( &s->lock);
+  free( s);
+}
 
 
 /**
@@ -103,7 +119,12 @@ stream_mh_t *StreamOpen( task_t *ct, stream_t *s, char mode)
 
   switch(mode) {
   case 'r':
-    BufferRegisterFlag( s, &ct->wany_flag);
+    /* set the flag pointer to consumers "wait any flag" */
+    pthread_spin_lock( &s->lock);
+    s->flag_ptr = &ct->wany_flag;
+    pthread_spin_unlock( &s->lock);
+    *s->flag_ptr = (void *)0x1;
+
   case 'w':
     mh->task = ct;
     mh->stream = s;
@@ -133,13 +154,17 @@ void StreamClose( stream_mh_t *mh, bool destroy_s)
 {
   mh->state = STMH_CLOSED;
   /* mark dirty */
-  //TODO mh->task;
+  MarkDirty( mh);
 
   if (mh->mode=='r') {
-    BufferRegisterFlag( mh->stream, NULL);
+    /* let the flag pointer point to the stub */
+    pthread_spin_lock( &mh->stream->lock);
+    mh->stream->flag_ptr = &mh->stream->flag_stub;
+    pthread_spin_unlock( &mh->stream->lock);
+    *mh->stream->flag_ptr = (void *)0x1;
   }
   if (destroy_s) {
-    BufferDestroy( mh->stream);
+    StreamDestroy( mh->stream);
   }
   /* do not free mh, as it will be kept until its state
      has been output via dirty list */
@@ -155,10 +180,15 @@ void StreamReplace( stream_mh_t *mh, stream_t *snew)
 {
   assert( mh->mode == 'r');
   /* destroy old stream */
-  BufferDestroy( mh->stream);
-  /* assign new stream and register flag */
+  StreamDestroy( mh->stream);
+  /* assign new stream */
   mh->stream = snew;
-  BufferRegisterFlag( mh->stream, &mh->task->wany_flag);
+  /*register flag */
+  pthread_spin_lock( &mh->stream->lock);
+  mh->stream->flag_ptr = &mh->task->wany_flag;
+  pthread_spin_unlock( &mh->stream->lock);
+  *mh->stream->flag_ptr = (void *)0x1;
+
   mh->state = STMH_REPLACED;
   /* counter is not reset */
   MarkDirty( mh);
@@ -173,7 +203,7 @@ void StreamReplace( stream_mh_t *mh, stream_t *snew)
 void *StreamPeek( stream_mh_t *mh)
 { 
   assert( mh->mode == 'r');
-  return BufferTop( mh->stream);
+  return BufferTop( &mh->stream->buffer);
 }    
 
 
@@ -188,15 +218,15 @@ void *StreamRead( stream_mh_t *mh)
 
   assert( mh->mode == 'r');
   
-  item = BufferTop( mh->stream);
+  item = BufferTop( &mh->stream->buffer);
   /* wait if buffer is empty */
   if ( item == NULL ) {
     TaskWaitOnWrite( mh->task, mh->stream);
-    item = BufferTop( mh->stream);
+    item = BufferTop( &mh->stream->buffer);
   }
   assert( item != NULL);
   /* pop off the top element */
-  BufferPop( mh->stream);
+  BufferPop( &mh->stream->buffer);
 
   /* for monitoring */
   mh->counter++;
@@ -222,12 +252,17 @@ void StreamWrite( stream_mh_t *mh, void *item)
   assert( item != NULL );
 
   /* wait while buffer is full */
-  if ( !BufferIsSpace( mh->stream) ) {
+  if ( !BufferIsSpace( &mh->stream->buffer) ) {
     TaskWaitOnRead( mh->task, mh->stream);
   }
-  assert( BufferIsSpace( mh->stream) );
+  assert( BufferIsSpace( &mh->stream->buffer) );
   /* put item into buffer */
-  BufferPut( mh->stream, item);
+  BufferPut( &mh->stream->buffer, item);
+
+  /* set the flag to notify consumers */
+  pthread_spin_lock( &mh->stream->lock);
+  *mh->stream->flag_ptr = (void *)0x1;
+  pthread_spin_unlock( &mh->stream->lock);
 
   /* for monitoring */
   mh->counter++;
