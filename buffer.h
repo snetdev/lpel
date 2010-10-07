@@ -1,8 +1,9 @@
 #ifndef _BUFFER_H_
 #define _BUFFER_H_
 
+
 #ifndef  STREAM_BUFFER_SIZE
-#define  STREAM_BUFFER_SIZE 16
+#define  STREAM_BUFFER_SIZE 8
 #endif
 
 

@@ -19,7 +19,6 @@
 #include "buffer.h"
 
 
-
 /**
  * Reset a buffer
  */

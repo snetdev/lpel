@@ -30,7 +30,7 @@
 #define TASK_IS_WAITANY(t)  (BIT_IS_SET((t)->attr.flags, TASK_ATTR_WAITANY))
 
 
-struct stream_mh;
+struct stream_desc;
 struct stream;
 
 
@@ -92,7 +92,7 @@ struct task {
   /* dispatch counter */
   unsigned long cnt_dispatch;
   /* streams marked as dirty */
-  struct stream_mh *dirty_list;
+  struct stream_desc *dirty_list;
 
   /* CODE */
   coroutine_t ctx;

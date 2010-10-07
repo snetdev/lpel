@@ -26,7 +26,7 @@ void Relay(task_t *self, void *inarg)
   int term = 0;
   int id = ch->id;
   char *item;
-  stream_mh_t *in, *out;
+  stream_desc_t *in, *out;
 
   in = StreamOpen( self, ch->in, 'r');
   out = StreamOpen( self, ch->out, 'w');

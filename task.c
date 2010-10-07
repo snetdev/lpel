@@ -50,7 +50,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
   t->cnt_dispatch = 0;
 
   /* init streamset to write */
-  t->dirty_list = (stream_mh_t *)-1;
+  t->dirty_list = (stream_desc_t *)-1;
   
   t->wany_flag = NULL;
 
