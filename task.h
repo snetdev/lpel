@@ -75,8 +75,9 @@ struct task {
   taskstate_wait_t wait_on;
   struct stream *wait_s;
 
-  /* waitany-task specific stuff */
-  volatile void* wany_flag;
+  /* poll token */
+  atomic_t poll_token;
+  struct stream_desc *wakeup_sd;
 
   /* reference counter */
   atomic_t refcnt;

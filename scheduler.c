@@ -199,6 +199,15 @@ void SchedTask(int wid, monitoring_t *mon)
 }
 
 
+
+void SchedWakeup( task_t *by, task_t *whom)
+{
+
+}
+
+
+
+
 /** PRIVATE FUNCTIONS *******************************************************/
 
 /**

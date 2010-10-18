@@ -13,6 +13,7 @@ extern void SchedCleanup(void);
 
 extern void SchedAssignTask(int wid, task_t *t);
 extern void SchedTask(int wid, monitoring_t *mon);
+extern void SchedWakeup( task_t *by, task_t *whom);
 
 
 #endif /* _SCHEDULER_H_ */

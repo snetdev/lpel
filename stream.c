@@ -32,6 +32,7 @@
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
+#include <pcl.h>
 
 #include "stream.h"
 #include "buffer.h"
@@ -88,10 +89,11 @@ stream_t *StreamCreate(void)
 {
   stream_t *s = (stream_t *) malloc( sizeof( stream_t));
   BufferReset( &s->buffer);
-  s->flag_stub = (void *)0x0;
-  s->flag_ptr = &s->flag_stub;
-  pthread_spin_init( &s->lock, PTHREAD_PROCESS_PRIVATE);
-
+  pthread_spin_init( &s->prod_lock, PTHREAD_PROCESS_PRIVATE);
+  atomic_set( &s->n_sem, 0);
+  atomic_set( &s->e_sem, STREAM_BUFFER_SIZE);
+  s->prod_sd = NULL;
+  s->cons_sd = NULL;
   return s;
 }
 
@@ -101,7 +103,7 @@ stream_t *StreamCreate(void)
  */
 void StreamDestroy( stream_t *s)
 {
-  pthread_spin_destroy( &s->lock);
+  pthread_spin_destroy( &s->prod_lock);
   free( s);
 }
 
@@ -115,34 +117,25 @@ void StreamDestroy( stream_t *s)
  */
 stream_desc_t *StreamOpen( task_t *ct, stream_t *s, char mode)
 {
-  stream_desc_t *sd = (stream_desc_t *) malloc( sizeof( stream_desc_t));
+  stream_desc_t *sd;
 
+  assert( mode == 'r' || mode == 'w' );
+
+  sd = (stream_desc_t *) malloc( sizeof( stream_desc_t));
+  sd->task = ct;
+  sd->stream = s;
+  sd->mode = mode;
+  sd->state = STDESC_OPEN;
+  sd->counter = 0;
+  sd->next  = NULL;
+  sd->dirty = NULL;
+  MarkDirty( sd);
+  
   switch(mode) {
-  case 'r':
-    /* set the flag pointer to consumers "wait any flag" */
-    pthread_spin_lock( &s->lock);
-    s->flag_ptr = &ct->wany_flag;
-    pthread_spin_unlock( &s->lock);
-    if ( BufferTop( &s->buffer) != NULL) {
-      *s->flag_ptr = (void *)0x1;
-    }
-
-  case 'w':
-    sd->task = ct;
-    sd->stream = s;
-    sd->mode = mode;
-    sd->state = STDESC_OPEN;
-    sd->counter = 0;
-    sd->next  = NULL;
-    sd->dirty = NULL;
-    MarkDirty( sd);
-    break;
-
-  default: /* wrong mode */
-    free( sd);
-    assert(0); /* TODO throw error */
-    return NULL;
+    case 'r': s->cons_sd = sd; break;
+    case 'w': s->prod_sd = sd; break;
   }
+  
   return sd;
 }
 
@@ -158,13 +151,15 @@ void StreamClose( stream_desc_t *sd, bool destroy_s)
   /* mark dirty */
   MarkDirty( sd);
 
-  if (sd->mode=='r') {
-    /* let the flag pointer point to the stub */
-    pthread_spin_lock( &sd->stream->lock);
-    sd->stream->flag_ptr = &sd->stream->flag_stub;
-    pthread_spin_unlock( &sd->stream->lock);
+  
+  switch(sd->mode) {
+    case 'r': sd->stream->cons_sd = NULL; break;
+    case 'w': sd->stream->prod_sd = NULL; break;
+    default: assert(0);
   }
   if (destroy_s) {
+    assert( sd->stream->cons_sd == NULL);
+    assert( sd->stream->prod_sd == NULL);
     StreamDestroy( sd->stream);
   }
   /* do not free sd, as it will be kept until its state
@@ -184,13 +179,8 @@ void StreamReplace( stream_desc_t *sd, stream_t *snew)
   StreamDestroy( sd->stream);
   /* assign new stream */
   sd->stream = snew;
-  /*register flag */
-  pthread_spin_lock( &sd->stream->lock);
-  sd->stream->flag_ptr = &sd->task->wany_flag;
-  pthread_spin_unlock( &sd->stream->lock);
-  if ( BufferTop(&sd->stream->buffer) != NULL) {
-    *sd->stream->flag_ptr = (void *)0x1;
-  }
+  /* new consumer sd of stream */
+  sd->stream->cons_sd = sd;
 
   sd->state = STDESC_REPLACED;
   /* counter is not reset */
@@ -218,18 +208,41 @@ void *StreamPeek( stream_desc_t *sd)
 void *StreamRead( stream_desc_t *sd)
 {
   void *item;
+  task_t *self;
 
   assert( sd->mode == 'r');
-  
-  item = BufferTop( &sd->stream->buffer);
-  /* wait if buffer is empty */
-  if ( item == NULL ) {
-    TaskWaitOnWrite( sd->task, sd->stream);
-    item = BufferTop( &sd->stream->buffer);
+
+  /* quasi P(n_sem) */
+  {
+    self = sd->task;
+    assert( self->state == TASK_RUNNING );
+    self->state = TASK_WAITING;
+    if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
+      /* wait on write */
+      self->wait_on = WAIT_ON_WRITE;
+      self->wait_s = sd->stream;
+      /* context switch */
+      co_resume();
+    }
+    self->state = TASK_RUNNING;
   }
+
+
+  /* read the top element */
+  item = BufferTop( &sd->stream->buffer);
   assert( item != NULL);
   /* pop off the top element */
   BufferPop( &sd->stream->buffer);
+
+
+  /* quasi V(e_sem) */
+  {
+    if ( fetch_and_inc( &sd->stream->e_sem) < 0) {
+      /* e_sem was -1 */
+      /* wakeup producer: make ready */
+      SchedWakeUp( self, sd->stream->prod_sd->task);
+    }
+  }
 
   /* for monitoring */
   sd->counter++;
@@ -250,22 +263,59 @@ void *StreamRead( stream_desc_t *sd)
  */
 void StreamWrite( stream_desc_t *sd, void *item)
 {
+  task_t *self;
+  int poll_wakeup = 0;
+
   /* check if opened for writing */
   assert( sd->mode == 'w' );
   assert( item != NULL );
 
-  /* wait while buffer is full */
-  if ( !BufferIsSpace( &sd->stream->buffer) ) {
-    TaskWaitOnRead( sd->task, sd->stream);
+  /* quasi P(e_sem) */
+  {
+    self = sd->task;
+    assert( self->state == TASK_RUNNING );
+    self->state = TASK_WAITING;
+    if ( fetch_and_dec( &sd->stream->e_sem) == 0) {
+      /* wait on write */
+      self->wait_on = WAIT_ON_READ;
+      self->wait_s = sd->stream;
+      /* context switch */
+      co_resume();
+    }
+    self->state = TASK_RUNNING;
   }
-  assert( BufferIsSpace( &sd->stream->buffer) );
-  /* put item into buffer */
-  BufferPut( &sd->stream->buffer, item);
 
-  /* set the flag to notify consumers */
-  pthread_spin_lock( &sd->stream->lock);
-  *sd->stream->flag_ptr = (void *)0x1;
-  pthread_spin_unlock( &sd->stream->lock);
+  /* writing to the buffer and checking if consumer polls must be atomic */
+  pthread_spin_lock( &sd->stream->prod_lock);
+  {
+    /* there must be space now in buffer */
+    assert( BufferIsSpace( &sd->stream->buffer) );
+    /* put item into buffer */
+    BufferPut( &sd->stream->buffer, item);
+
+    if ( sd->stream->is_poll) {
+      /* get consumer's poll token */
+      poll_wakeup = atomic_swap( &sd->stream->cons_sd->task->poll_token, 0);
+      sd->stream->is_poll = 0;
+    }
+  }
+  pthread_spin_unlock( &sd->stream->prod_lock);
+
+  /* we are the sole producer task waking the polling consumer up */
+  if (poll_wakeup) {
+    sd->stream->cons_sd->task->wakeup_sd = sd->stream->cons_sd;
+    SchedWakeup( self, sd->stream->cons_sd->task);
+  }
+
+
+  /* quasi V(n_sem) */
+  {
+    if ( fetch_and_inc( &sd->stream->n_sem) < 0) {
+      /* n_sem was -1 */
+      /* wakeup consumer: make ready */
+      SchedWakeUp( self, sd->stream->cons_sd->task);
+    }
+  }
 
   /* for monitoring */
   sd->counter++;
@@ -340,6 +390,7 @@ void StreamPoll( stream_list_t *list)
 {
   task_t *self;
   stream_iter_t *iter;
+  int do_ctx_switch = 1;
 
   assert( *list != NULL);
 
@@ -347,24 +398,55 @@ void StreamPoll( stream_list_t *list)
   self = (*list)->task;
 
   /* set task as waiting */
+  self->state = TASK_WAITING;
+
+  /* place a poll token */
+  atomic_set( &self->poll_token, 1);
 
   /* for each stream in the list */
   iter = StreamIterCreate( list);
   while( StreamIterHasNext( iter)) {
     stream_desc_t *sd = StreamIterNext( iter);
     /* lock stream (prod-side) */
-    /* check if there is something in the buffer */
-    /* - if yes, we can try to take the token in task (lock task) */
-    /*   - if we have it, we do not have to switch context at all */
-    /*   - if not, somebody has already woken me up, cancel & ctx switch*/
-         /* unlock stream */
-    /* - if not, register stream as activator */
+    pthread_spin_lock( &sd->stream->prod_lock);
+    {
+      /* check if there is something in the buffer */
+      if ( BufferTop( &sd->stream->buffer) != NULL) {
+        /* yes, we can stop iterating through streams.
+         * determine, if we have been woken up by another producer: 
+         */
+        int tok = atomic_swap( &self->poll_token, 0);
+        /* we have not been waken yet, no need for ctx switch */
+        if (tok) {
+          do_ctx_switch = 0;
+          self->wakeup_sd = sd;
+        }
+
+        /* unlock stream */
+        pthread_spin_unlock( &sd->stream->prod_lock);
+        /* exit loop */
+        break;
+
+      } else {
+        /* nothing in the buffer, register stream as activator */
+        sd->stream->is_poll = 1;
+      }
+    }
     /* unlock stream */
-  }
+    pthread_spin_unlock( &sd->stream->prod_lock);
+  } /* end for each stream */
+
   /* context switch */
+  if (do_ctx_switch) {
+    co_resume();
+  } else {
+    self->state = TASK_RUNNING;
+  }
 
-
-  /*NOTE: activator could 'rotate' list handle to the activating stream descriptor */
+  /* 'rotate' list to stream descriptor for non-empty buffer */
+  *list = self->wakeup_sd;
+  
+  return;
 }
 
 
