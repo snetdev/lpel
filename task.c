@@ -41,6 +41,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
   /* initialize reference counter to 1*/
   atomic_set(&t->refcnt, 1);
 
+  atomic_set(&t->poll_token, 0);
   
   //t->owner = -1;
   t->sched_info = NULL;
@@ -52,7 +53,6 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
   /* init streamset to write */
   t->dirty_list = (stream_desc_t *)-1;
   
-  t->wany_flag = NULL;
 
   t->code = func;
   /* function, argument (data), stack base address, stacksize */
@@ -61,6 +61,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
     /*TODO throw error!*/
     assert(0);
   }
+  pthread_spin_init( &t->is_executing, PTHREAD_PROCESS_PRIVATE);
   t->inarg = inarg;
   t->outarg = NULL;
  
@@ -98,9 +99,19 @@ int TaskDestroy(task_t *t)
  */
 void TaskCall(task_t *t)
 {
-  assert( t->state == TASK_READY );
+  assert( t->state == TASK_READY);
   t->state = TASK_RUNNING;
+
+  /*
+   * A coroutine must not run simultaneously in more than one thread.
+   * An attempt to do so will result in spinning until another thread
+   * has switched the context back.
+   */
+  pthread_spin_lock( &t->is_executing);
+  /* CONTEXT SWITCH */
   co_call(t->ctx);
+  /* unlock */
+  pthread_spin_unlock( &t->is_executing);
 }
 
 
@@ -122,61 +133,6 @@ static void TaskStartup(void *data)
 }
 
 
-
-/**
- * Set Task waiting for a read event
- *
- * @pre ct->state == TASK_RUNNING
- */
-void TaskWaitOnRead( task_t *ct, stream_t *s)
-{ 
-  assert( ct->state == TASK_RUNNING );
-  
-  /* WAIT on read event*/;
-  ct->state = TASK_WAITING;
-  ct->wait_on = WAIT_ON_READ;
-  ct->wait_s = s;
-  
-  /* context switch */
-  co_resume();
-}
-
-/**
- * Set Task waiting for a read event
- *
- * @pre ct->state == TASK_RUNNING
- */
-void TaskWaitOnWrite( task_t *ct, stream_t *s)
-{
-  assert( ct->state == TASK_RUNNING );
-
-  /* WAIT on write event*/
-  ct->state = TASK_WAITING;
-  ct->wait_on = WAIT_ON_WRITE;
-  ct->wait_s = s;
-  
-  /* context switch */
-  co_resume();
-}
-
-/**
- * @pre ct->state == TASK_RUNNING
- */
-void TaskWaitOnAny( task_t *ct)
-{
-  assert( ct->state == TASK_RUNNING );
-
-  /*XXX WAIT upon any input stream setting root flag
-  ct->event_ptr = &ct->waitany_info->flagtree.buf[0];
-  */
-  /* WAIT upon any input stream setting waitany_flag */
-  ct->state = TASK_WAITING;
-  ct->wait_on = WAIT_ON_ANY;
-  ct->wait_s = NULL;
-  
-  /* context switch */
-  co_resume();
-}
 
 
 /**
@@ -202,7 +158,7 @@ void TaskExit( task_t *ct, void *outarg)
 
 
 /**
- * Yield execution back to worker thread
+ * Yield execution back to scheduler voluntarily
  *
  * @param ct  pointer to the current task
  * @pre ct->state == TASK_RUNNING

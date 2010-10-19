@@ -1,8 +1,9 @@
 #ifndef _TASK_H_
 #define _TASK_H_
 
-#include <pcl.h>     /* tasks are executed in user-space with help of
-                        GNU Portable Coroutine Library  */
+#include <pthread.h>
+#include <pcl.h>    /* tasks are executed in user-space with help of
+                       GNU Portable Coroutine Library  */
 
 #include "timing.h"
 #include "atomic.h"
@@ -17,7 +18,6 @@
 
 #define TASK_ATTR_DEFAULT      (0)
 #define TASK_ATTR_MONITOR   (1<<0)
-//#define TASK_ATTR_WAITANY   (1<<1)
 #define TASK_ATTR_SYSTEM    (1<<8)
 
 
@@ -65,8 +65,9 @@ struct task {
   unsigned long uid;
   taskstate_t state;
   /* queue handling: prev, next */
-  task_t *volatile prev;
-  task_t *volatile next;
+  //task_t *volatile prev;
+  //task_t *volatile next;
+  task_t *prev, *next;
 
   /* attributes */
   taskattr_t attr;
@@ -98,6 +99,7 @@ struct task {
   /* CODE */
   coroutine_t ctx;
   taskfunc_t code;
+  pthread_spinlock_t is_executing;
   void *inarg;  /* input argument  */
   void *outarg; /* output argument */
 };
@@ -109,9 +111,6 @@ extern int TaskDestroy(task_t *t);
 
 
 extern void TaskCall(task_t *ct);
-extern void TaskWaitOnRead( task_t *ct, struct stream *s);
-extern void TaskWaitOnWrite( task_t *ct, struct stream *s);
-extern void TaskWaitOnAny(task_t *ct);
 extern void TaskExit(task_t *ct, void *outarg);
 extern void TaskYield(task_t *ct);
 

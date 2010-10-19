@@ -37,6 +37,7 @@
 #include "stream.h"
 #include "buffer.h"
 #include "task.h"
+#include "scheduler.h"
 
 
 struct stream_desc {
@@ -240,7 +241,7 @@ void *StreamRead( stream_desc_t *sd)
     if ( fetch_and_inc( &sd->stream->e_sem) < 0) {
       /* e_sem was -1 */
       /* wakeup producer: make ready */
-      SchedWakeUp( self, sd->stream->prod_sd->task);
+      SchedWakeup( self, sd->stream->prod_sd->task);
     }
   }
 
@@ -313,7 +314,7 @@ void StreamWrite( stream_desc_t *sd, void *item)
     if ( fetch_and_inc( &sd->stream->n_sem) < 0) {
       /* n_sem was -1 */
       /* wakeup consumer: make ready */
-      SchedWakeUp( self, sd->stream->cons_sd->task);
+      SchedWakeup( self, sd->stream->cons_sd->task);
     }
   }
 
@@ -438,6 +439,7 @@ void StreamPoll( stream_list_t *list)
 
   /* context switch */
   if (do_ctx_switch) {
+    self->wait_on = WAIT_ON_ANY;
     co_resume();
   } else {
     self->state = TASK_RUNNING;
