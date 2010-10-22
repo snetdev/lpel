@@ -33,12 +33,17 @@
 #include "scheduler.h"
 
 
+typedef struct lpelenv lpelenv_t;
 
-struct lpelthread {
+struct lpelthread_t {
   pthread_t pthread;
+  bool detached;
   void (*func)(void *);
   void *arg;
+  char[20] name;
+  monitoring_t mon;
 };
+
 
 typedef struct {
   pthread_t     thread;
@@ -106,6 +111,21 @@ int LpelAssignWorkerToCore( int wid, int *core)
   res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
   return (res == 0) ? 0 : errno;
 }
+
+
+int LpelAssignOthersToCores( void)
+{
+  int res;
+  pid_t tid;
+
+  /* get thread id */
+  tid = gettid();
+  
+  res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset_others);
+  return (res == 0) ? 0 : errno;
+}
+
+
 
 int LpelAssignWorkerRealtime( void)
 {
@@ -176,9 +196,40 @@ static void *WorkerStartup(void *arg)
   
   /* exit thread */
   pthread_exit(NULL);
+  return NULL;
 }
 
 
+/**
+ * Startup an others thread
+ */
+static void *ThreadStartup( void *arg)
+{
+  lpelthread_t *env = (lpelenv_t *)arg;
+
+  //env.mon
+
+  /* Init libPCL */
+  co_thread_init();
+
+  /* set the cpu set */
+  res = LpelAssignOthersToCores();
+  assert( res==0 );
+
+  /* call the function */
+  env->func( env->arg);
+
+  /* Cleanup libPCL */
+  co_thread_cleanup();
+
+  /* if detached, cleanup the env now,
+     otherwise it will be done on join */
+  if (env->detached) {
+    //TODO cleanup
+    free( env);
+  }
+  return NULL;
+}
 
 
 /* test only for a single flag in CheckConfig */
@@ -315,7 +366,9 @@ void LpelInit(lpelconfig_t *cfg)
   SchedInit( config.num_workers, NULL);
 
   /* create table for worker data structures */
-  worker_thread_data = (worker_thread_t *) malloc( config.num_workers * sizeof(worker_thread_t) );
+  worker_thread_data = (worker_thread_t *) malloc(
+      config.num_workers * sizeof(worker_thread_t)
+      );
 
   /* for each worker id, create data structure and store in table */
   for( i=0; i<config.num_workers; i++) {
@@ -387,41 +440,50 @@ void LpelCleanup(void)
 
 
 
-static void *ThreadStartup( void *arg)
-{
-  lpelthread_t *td = (lpelthread_t *)arg;
-
-  /* set the cpu set */
-  //TODO
-  res = pthread_getaffinity_np( lt->pthread, sizeof(cpu_set_t), &cpuset_others);
-  assert( res==0 );
-
-  /* call the function */
-  td->func( td->arg);
-
-}
 
 
-
-void LpelThreadCreate( lpelthread_t *thread,
-    void *(*func)(void *), void *arg)
+lpelthread_t *LpelThreadCreate( void (*func)(void *), void *arg, bool detached)
 {
   int res;
+  pthread_attr_t attr;
 
-  thread->func = func;
-  thread->arg = arg;
+  lpelthread_t *env = (lpelthread_t *) malloc( sizeof( lpelthread_t));
+
+
+  pthread_attr_init( &attr);
+  pthread_attr_setdetachstate( &attr,
+      (detached) ? PTHREAD_CREATE_DETACHED : PTHREAD_CREATE_JOINABLE
+      );
+
+  
+  env->func = func;
+  env->arg = arg;
+  env->detached = detached;
 
   /* create thread with default attributes */
-  res = pthread_create( &thread->pthread, NULL, ThreadStartup, thread);
+  res = pthread_create( &env->pthread, attr, ThreadStartup, env);
   assert( res==0 );
+
+  pthread_attr_destroy( &attr);
+
+  return env;
 }
 
 
-
+/**
+ * @pre  thread must not have been created detached
+ * @post lt is freed and the reference is invalidated
+ */
 void LpelThreadJoin( lpelthread_t *lt)
 {
   int res;
+  assert( lt->detached == false);
   res = pthread_join(lt->pthread, NULL);
+
+  /* cleanup */
+  //TODO
+  free(lt);
+  
   assert( res==0 );
 }
 
