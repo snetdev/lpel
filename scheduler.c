@@ -17,25 +17,55 @@
 #include "stream.h"
 #include "buffer.h"
 
+
+typedef struct {
+  pthread_mutex_t lock;
+  pthread_cond_t  notempty;
+  taskqueue_t     queue;
+} blocking_tq_t;
+
+static void QueueInit( blocking_tq_t *tq)
+{
+  TaskqueueInit( &tq->queue);
+  pthread_mutex_init( &tq->lock);
+  pthread_cond_init( &tq->notempty);
+}
+
+static task_t *QueueGet( blocking_tq_t *tq)
+{
+  task_t *t;
+  /* monitor enter */
+  pthread_mutex_lock( &tq->lock);
+  while( 0 == tq->queue.count) {
+    pthread_cond_wait( &tq->notempty, &tq->lock);
+  }
+  t = TaskqueuePopFront( &tq->queue);
+  pthread_mutex_unlock( &tq->lock);
+  /* monitor exit */
+  return t;
+}
+
+
+static void QueuePut( blocking_tq_t *tq)
+{
+
+}
+
+
+
+
 struct schedcfg {
   int dummy;
 };
 
 typedef struct schedctx schedctx_t;
 
+
+
+
 struct schedctx {
   int wid;
-  taskqueue_t init_queue;
-  pthread_mutex_t lock_iq;
-  taskqueue_t ready_queue;
-  struct {
-    taskqueue_t on_read;
-    taskqueue_t on_write;
-    taskqueue_t on_any;
-    int cnt;
-  } waiting_queue;
   int cnt_tasks;
-  int cnt_yield;
 };
 
 static int num_workers = -1;
@@ -46,15 +76,6 @@ static void ActivatorTask(task_t *self, void *inarg);
 static void Reschedule(schedctx_t *sc, task_t *t);
 
 
-/* prototypes for private functions */
-static int CollectFromInit(schedctx_t *sc);
-
-static bool WaitingTestOnRead(task_t *wt, void *arg);
-static bool WaitingTestOnWrite(task_t *wt, void *arg);
-static bool WaitingTestOnAny(task_t *wt, void *arg);
-
-
-static void WaitingRemove(task_t *wt, void *arg);
 
 
 /**
@@ -82,16 +103,8 @@ void SchedInit(int size, schedcfg_t *cfg)
       sc = &schedarray[i];
       sc->wid = i;
 
-      TaskqueueInit(&sc->init_queue);
-      pthread_mutex_init( &sc->lock_iq, NULL );
-      
+      pthread_mutex_init( &sc->lock_rq, NULL );
       TaskqueueInit(&sc->ready_queue);
-      
-      TaskqueueInit(&sc->waiting_queue.on_read);
-      TaskqueueInit(&sc->waiting_queue.on_write);
-      TaskqueueInit(&sc->waiting_queue.on_any);
-      sc->waiting_queue.cnt = 0;
-
       sc->cnt_tasks = 0;
   }
 }
@@ -111,7 +124,7 @@ void SchedCleanup(void)
     /* nothing to be done for taskqueue_t */
 
     /* destroy locks */
-    pthread_mutex_destroy(&sc->lock_iq);
+    pthread_mutex_destroy(&sc->lock_rq);
   }
 
   /* free memory for scheduler data */
@@ -126,10 +139,9 @@ void SchedAssignTask(int wid, task_t *t)
 {
   schedctx_t *sc = &schedarray[wid];
 
-  /* place into the foreign init queue */
-  pthread_mutex_lock( &sc->lock_iq );
-  TaskqueueEnqueue( &sc->init_queue, t );
-  pthread_mutex_unlock( &sc->lock_iq );
+  pthread_mutex_lock( &sc->lock_rq );
+  TaskqueueEnqueue( &sc->ready_queue, t );
+  pthread_mutex_unlock( &sc->lock_rq );
 }
 
 
@@ -146,18 +158,6 @@ void SchedTask(int wid, monitoring_t *mon)
   schedctx_t *sc = &schedarray[wid];
   unsigned int loop;
   task_t *act;  
-  
-  sc->cnt_yield = 0;
-
-  /* create ActivatorTask */
-  {
-    taskattr_t tattr;
-    tattr.flags = TASK_ATTR_SYSTEM;
-    act = TaskCreate( ActivatorTask, sc, tattr);
-    act->state = TASK_READY;
-    /* put into ready queue */
-    TaskqueueEnqueue( &sc->ready_queue, act );
-  }
 
   /* MAIN SCHEDULER LOOP */
   loop=0;

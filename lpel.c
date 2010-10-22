@@ -32,19 +32,20 @@
 #include "task.h"
 #include "scheduler.h"
 
-/* used (imported) modules of LPEL */
-#include "monitoring.h"
-#include "atomic.h"
-
-/*
- * Global active entities count.
- */
-atomic_t lpel_active_entities = ATOMIC_INIT(0);
 
 
 struct lpelthread {
   pthread_t pthread;
+  void (*func)(void *);
+  void *arg;
 };
+
+typedef struct {
+  pthread_t     thread;
+  worker_ctx_t *context;
+} worker_thread_t;
+
+static worker_thread_t *worker_thread_data;
 
 /* Keep copy of the (checked) configuration provided at LpelInit() */
 static lpelconfig_t config;
@@ -52,9 +53,6 @@ static lpelconfig_t config;
 /* cpuset for others-threads */
 static cpu_set_t cpuset_others;
 
-static pthread_barrier_t bar_worker_init;
-
-static pthread_t worker_launcher;
 
 
 static int CanSetRealtime(void)
@@ -86,25 +84,53 @@ int LpelNumWorkers(void)
 }
 
 
+
 /**
- * Poll the terminate condition for worker
+ * Assigns worker with specified id to a core
+ * @return 0 if successful, errno otherwise
  */
-int LpelWorkerTerminate(void)
+int LpelAssignWorkerToCore( int wid, int *core)
 {
-  return (atomic_read(&lpel_active_entities) <= 0);
+  int res;
+  pid_t tid;
+  cpu_set_t cpuset; 
+  
+  *core = wid % config.proc_workers;
+  
+  CPU_ZERO(&cpuset);
+  CPU_SET( *core, &cpuset);
+
+  /* get thread id */
+  tid = gettid();
+  
+  res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
+  return (res == 0) ? 0 : errno;
 }
 
+int LpelAssignWorkerRealtime( void)
+{
+  int res = 0;
+  if ( (config.flags & LPEL_FLAG_REALTIME) != 0 ) {
+    pid_t tid;
+    struct sched_param param;
 
+    /* get thread id */
+    tid = gettid();
 
+    param.sched_priority = 1; /* lowest real-time, TODO other? */
+    res = sched_setscheduler(tid, SCHED_FIFO, &param);
+    return (res == 0) ? 0 : errno;
+  }
+  return -1;
+}
 
 /**
  * Startup the worker
  */
 static void *WorkerStartup(void *arg)
 {
-  int res;
-  pid_t tid;
   int wid = *((int *)arg);
+  int res, core;
   monitoring_t mon_info;
 
   /* Init libPCL */
@@ -115,29 +141,17 @@ static void *WorkerStartup(void *arg)
 
   MonitoringDebug(&mon_info, "worker %d started\n", wid);
 
-  /* get thread id */
-  tid = gettid();
 
   /* set affinity to id % config->proc_workers */
-  {
-    int core = wid % config.proc_workers;
-    cpu_set_t cpuset; 
-    CPU_ZERO(&cpuset);
-    CPU_SET( core, &cpuset);
-
-    res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
-    if (res == 0) {
-      MonitoringDebug(&mon_info, "worker %d assigned to core %d\n", wid, core);
-    } else {
-      /*TODO warning, check errno? */
-    }
+  res = AssignWorkerToCore( wid, &core);
+  if ( res == 0) {
+    MonitoringDebug(&mon_info, "worker %d assigned to core %d\n", wid, core);
+  } else {
+    /*TODO warning, check errno=res */
   }
   
-  /* set worker as realtime thread */
-  if ( (config.flags & LPEL_FLAG_REALTIME) != 0 ) {
-    struct sched_param param;
-    param.sched_priority = 1; /* lowest real-time, TODO other? */
-    res = sched_setscheduler(tid, SCHED_FIFO, &param);
+  /* set worker as realtime thread, if set so */
+    res = AssignWorkerRealtime( wid);
     if (res == 0) {
       MonitoringDebug(&mon_info, "worker %d set realtime priority\n", wid);
     } else {
@@ -145,9 +159,6 @@ static void *WorkerStartup(void *arg)
     }
   }
   
-  /* barrier for all worker threads, assures that the workers
-    are assigned to their CPUs */
-  pthread_barrier_wait( &bar_worker_init );
 
   /**************************************************************************/
   /* Start the scheduler task */
@@ -168,89 +179,12 @@ static void *WorkerStartup(void *arg)
 }
 
 
-/**
- * A separate thread that launches the worker threads
- */
-static void *WorkerLauncher(void *arg)
-{
-  int i, res;
-  int nw = config.num_workers;
-  pthread_t thids[nw];
-  int wid[nw];
-
-  /* Init libPCL */
-  //co_thread_init();
-
-  /* initialise barrier */
-  res = pthread_barrier_init(
-      &bar_worker_init,
-      NULL,
-      nw
-      );
-  assert(res == 0 );
-
-  /* launch worker threads */
-  for (i = 0; i < nw; i++) {
-    wid[i] = i;
-    res = pthread_create(&thids[i], NULL, WorkerStartup, &wid[i]);
-    if (res != 0) {
-      assert(0);
-      /*TODO error*/
-    }
-  }
-
-  /* join on finish */
-  for (i = 0; i < nw; i++) {
-    pthread_join(thids[i], NULL);
-  }
-
-  /* destroy barrier */
-  res = pthread_barrier_destroy(&bar_worker_init);
-  assert( res == 0 );
-
-  /* Cleanup libPCL */
-  //co_thread_cleanup();
-
-  pthread_exit(NULL);
-  return NULL;
-}
 
 
-
-
-/* test only for a single flag in LpelInit! */
+/* test only for a single flag in CheckConfig */
 #define LPEL_ICFG(f)   (( cfg->flags & (f) ) != 0 )
 
-/**
- * Initialise the LPEL
- *
- * If FLAG_AUTO is set, values set for num_workers, proc_workers and
- * proc_others are ignored and set for default as follows:
- *
- * AUTO: if #proc_avail > 1:
- *         num_workers = proc_workers = #proc_avail - 1
- *         proc_others = 1
- *       else
- *         proc_workers = num_workers = 1,
- *         proc_others = 0
- *
- * otherwise, following sanity checks are performed:
- *
- *  num_workers, proc_workers > 0
- *  proc_others >= 0
- *  num_workers = i*proc_workers, i>0
- *
- * If the realtime flag is invalid or the process has not
- * the appropriate privileges, it is ignored and a warning
- * will be displayed
- *
- * REALTIME: only valid, if
- *       #proc_avail >= proc_workers + proc_others &&
- *       proc_others != 0 &&
- *       num_workers == proc_workers 
- *
- */
-void LpelInit(lpelconfig_t *cfg)
+static void CheckConfig( lpelconfig_t *cfg)
 {
   int proc_avail;
 
@@ -308,50 +242,126 @@ void LpelInit(lpelconfig_t *cfg)
       cfg->flags &= ~(LPEL_FLAG_REALTIME);
     }
   }
+}
 
+
+static void CreateCpusetOthers( lpelconfig_t *cfg)
+{
+  int  i;
   /* create the cpu_set for other threads */
-  {
-    int  i;
-    CPU_ZERO( &cpuset_others );
-    if (cfg->proc_others == 0) {
-      /* distribute on the workers */
-      for (i=0; i<cfg->proc_workers; i++) {
-        CPU_SET(i, &cpuset_others);
-      }
-    } else {
-      /* set to proc_others */
-      for( i=cfg->proc_workers;
-          i<cfg->proc_workers+cfg->proc_others;
-          i++ ) {
-        CPU_SET(i, &cpuset_others);
-      }
+  CPU_ZERO( &cpuset_others );
+  if (cfg->proc_others == 0) {
+    /* distribute on the workers */
+    for (i=0; i<cfg->proc_workers; i++) {
+      CPU_SET(i, &cpuset_others);
+    }
+  } else {
+    /* set to proc_others */
+    for( i=cfg->proc_workers;
+        i<cfg->proc_workers+cfg->proc_others;
+        i++ ) {
+      CPU_SET(i, &cpuset_others);
     }
   }
+}
 
-  /* initialise scheduler */
-  SchedInit(cfg->num_workers, NULL);
 
-  /* store a copy of the corrected cfg */
+
+/**
+ * Initialise the LPEL
+ *
+ * If FLAG_AUTO is set, values set for num_workers, proc_workers and
+ * proc_others are ignored and set for default as follows:
+ *
+ * AUTO: if #proc_avail > 1:
+ *         num_workers = proc_workers = #proc_avail - 1
+ *         proc_others = 1
+ *       else
+ *         proc_workers = num_workers = 1,
+ *         proc_others = 0
+ *
+ * otherwise, following sanity checks are performed:
+ *
+ *  num_workers, proc_workers > 0
+ *  proc_others >= 0
+ *  num_workers = i*proc_workers, i>0
+ *
+ * If the realtime flag is invalid or the process has not
+ * the appropriate privileges, it is ignored and a warning
+ * will be displayed
+ *
+ * REALTIME: only valid, if
+ *       #proc_avail >= proc_workers + proc_others &&
+ *       proc_others != 0 &&
+ *       num_workers == proc_workers 
+ *
+ */
+void LpelInit(lpelconfig_t *cfg)
+{
+  int i;
+
+  /* store a local copy of cfg */
   config = *cfg;
+  
+  /* check (and correct) the config */
+  CheckConfig( &config);
+  /* create the cpu affinity set for non-worker threads */
+  CreateCpusetOthers( &config);
 
   /* Init libPCL */
   co_thread_init();
+  
+  /* initialise scheduler */
+  SchedInit( config.num_workers, NULL);
+
+  /* create table for worker data structures */
+  worker_thread_data = (worker_thread_t *) malloc( config.num_workers * sizeof(worker_thread_t) );
+
+  /* for each worker id, create data structure and store in table */
+  for( i=0; i<config.num_workers; i++) {
+    worker_thread_data[i].context = SchedWorkerDataCreate(i);
+    worker_thread_data[i].thread = NULL;
+  }
 }
 
 /**
  * Create and execute the worker threads
  * 
- * This function returns immediately.
- * A separate thread is created that creates the worker threads- joins on the worker threads
  */
-void LpelRun(void)
+void LpelWorkerStart(void)
 {
-  int res;
-  /* create worker launcher */
-  res = pthread_create(&worker_launcher, NULL, WorkerLauncher, NULL);
-  assert( res == 0 );
+  int i, res;
+
+  for( i=0; i<config.num_workers; i++) {
+    res = pthread_create(
+        &worker_thread_data[i].thread,  /* pthread_t is kept for joining */
+        NULL,
+        WorkerStartup,    
+        (void *) &worker_thread_data[i].context  /* context passed to worker */
+        );
+    /*TODO error*/
+    assert( res == 0);
+  }
 }
 
+
+void LpelWorkerStop(void)
+{
+  int i, res;
+  
+  for( i=0; i<config.num_workers; i++) {
+    //TODO signal termination to workers
+    // SchedWorkersTerminate() ?
+  }
+
+  /* wait on the workers */
+  for( i=0; i<config.num_workers; i++) {
+    res = pthread_join( worker_thread_data[i].thread, NULL);
+    /*TODO error*/
+    assert( res == 0);
+  }
+
+}
 
 /**
  * Cleans the LPEL up
@@ -359,10 +369,14 @@ void LpelRun(void)
  */
 void LpelCleanup(void)
 {
-  /* in any case, wait until the workers are finished */
-  pthread_join(worker_launcher, NULL);
 
-  /*TODO join on the other created threads? */
+  /* for each worker, destroy its context */
+  for( i=0; i<config.num_workers; i++) {
+    SchedWorkerDataDestroy( worker_thread_data[i].context);
+  }
+
+  /* destroy worker data table */
+  free( worker_thread_data);
 
   /* Cleanup scheduler */
   SchedCleanup();
@@ -373,42 +387,42 @@ void LpelCleanup(void)
 
 
 
-
-
-
-
-lpelthread_t *LpelThreadCreate(
-    void *(*start_routine)(void *), void *arg)
+static void *ThreadStartup( void *arg)
 {
-  lpelthread_t *lt = (lpelthread_t *) malloc( sizeof(lpelthread_t) );
-  int res;
+  lpelthread_t *td = (lpelthread_t *)arg;
 
-  /* create thread with default attributes */
-  res = pthread_create(&lt->pthread, NULL, start_routine, arg);
-  assert( res==0 );
-
-  /* set the affinity mask */
+  /* set the cpu set */
+  //TODO
   res = pthread_getaffinity_np( lt->pthread, sizeof(cpu_set_t), &cpuset_others);
   assert( res==0 );
 
-  /* increase num of active entities in the LPEL system */
-  atomic_inc(&lpel_active_entities);
+  /* call the function */
+  td->func( td->arg);
 
-  return lt;
 }
 
 
 
-void LpelThreadJoin( lpelthread_t *lt, void **joinarg)
+void LpelThreadCreate( lpelthread_t *thread,
+    void *(*func)(void *), void *arg)
 {
   int res;
-  res = pthread_join(lt->pthread, joinarg);
+
+  thread->func = func;
+  thread->arg = arg;
+
+  /* create thread with default attributes */
+  res = pthread_create( &thread->pthread, NULL, ThreadStartup, thread);
   assert( res==0 );
+}
 
-  free(lt);
 
-  /* decrease number of active entities in the LPEL system */
-  atomic_dec(&lpel_active_entities);
+
+void LpelThreadJoin( lpelthread_t *lt)
+{
+  int res;
+  res = pthread_join(lt->pthread, NULL);
+  assert( res==0 );
 }
 
 
@@ -420,24 +434,11 @@ void LpelTaskToWorker(task_t *t)
 {
   int to_worker;
 
-  /* increase num of active entities in the LPEL system */
-  atomic_inc(&lpel_active_entities);
-
   /*TODO placement module */
   to_worker = t->uid % config.num_workers;
   t->owner = to_worker;
 
   /* assign to appropriate sched context */
   SchedAssignTask( to_worker, t );
-}
-
-void LpelTaskRemove(task_t *t)
-{
-  int isfree = TaskDestroy(t);
-
-  if (isfree != 0) {
-    /* decrease number of active entities in the LPEL system */
-    atomic_dec(&lpel_active_entities);
-  }
 }
 
