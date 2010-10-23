@@ -209,23 +209,18 @@ void *StreamPeek( stream_desc_t *sd)
 void *StreamRead( stream_desc_t *sd)
 {
   void *item;
-  task_t *self;
+  task_t *self = sd->task;
 
   assert( sd->mode == 'r');
 
   /* quasi P(n_sem) */
-  {
-    self = sd->task;
-    assert( self->state == TASK_RUNNING );
+  if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
+    /* wait on write */
     self->state = TASK_WAITING;
-    if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
-      /* wait on write */
-      self->wait_on = WAIT_ON_WRITE;
-      self->wait_s = sd->stream;
-      /* context switch */
-      co_resume();
-    }
-    self->state = TASK_RUNNING;
+    self->wait_on = WAIT_ON_WRITE;
+    self->wait_s = sd->stream;
+    /* context switch */
+    co_resume();
   }
 
 
@@ -237,12 +232,10 @@ void *StreamRead( stream_desc_t *sd)
 
 
   /* quasi V(e_sem) */
-  {
-    if ( fetch_and_inc( &sd->stream->e_sem) < 0) {
-      /* e_sem was -1 */
-      /* wakeup producer: make ready */
-      SchedWakeup( self, sd->stream->prod_sd->task);
-    }
+  if ( fetch_and_inc( &sd->stream->e_sem) < 0) {
+    /* e_sem was -1 */
+    /* wakeup producer: make ready */
+    SchedWakeup( self, sd->stream->prod_sd->task);
   }
 
   /* for monitoring */
@@ -264,7 +257,7 @@ void *StreamRead( stream_desc_t *sd)
  */
 void StreamWrite( stream_desc_t *sd, void *item)
 {
-  task_t *self;
+  task_t *self = sd->task;
   int poll_wakeup = 0;
 
   /* check if opened for writing */
@@ -272,18 +265,13 @@ void StreamWrite( stream_desc_t *sd, void *item)
   assert( item != NULL );
 
   /* quasi P(e_sem) */
-  {
-    self = sd->task;
-    assert( self->state == TASK_RUNNING );
+  if ( fetch_and_dec( &sd->stream->e_sem) == 0) {
+    /* wait on write */
     self->state = TASK_WAITING;
-    if ( fetch_and_dec( &sd->stream->e_sem) == 0) {
-      /* wait on write */
-      self->wait_on = WAIT_ON_READ;
-      self->wait_s = sd->stream;
-      /* context switch */
-      co_resume();
-    }
-    self->state = TASK_RUNNING;
+    self->wait_on = WAIT_ON_READ;
+    self->wait_s = sd->stream;
+    /* context switch */
+    co_resume();
   }
 
   /* writing to the buffer and checking if consumer polls must be atomic */
@@ -310,12 +298,10 @@ void StreamWrite( stream_desc_t *sd, void *item)
 
 
   /* quasi V(n_sem) */
-  {
-    if ( fetch_and_inc( &sd->stream->n_sem) < 0) {
-      /* n_sem was -1 */
-      /* wakeup consumer: make ready */
-      SchedWakeup( self, sd->stream->cons_sd->task);
-    }
+  if ( fetch_and_inc( &sd->stream->n_sem) < 0) {
+    /* n_sem was -1 */
+    /* wakeup consumer: make ready */
+    SchedWakeup( self, sd->stream->cons_sd->task);
   }
 
   /* for monitoring */
@@ -398,9 +384,6 @@ void StreamPoll( stream_list_t *list)
   /* get 'self', i.e. the task calling StreamPoll() */
   self = (*list)->task;
 
-  /* set task as waiting */
-  self->state = TASK_WAITING;
-
   /* place a poll token */
   atomic_set( &self->poll_token, 1);
 
@@ -410,7 +393,7 @@ void StreamPoll( stream_list_t *list)
     stream_desc_t *sd = StreamIterNext( iter);
     /* lock stream (prod-side) */
     pthread_spin_lock( &sd->stream->prod_lock);
-    {
+    { /* CS BEGIN */
       /* check if there is something in the buffer */
       if ( BufferTop( &sd->stream->buffer) != NULL) {
         /* yes, we can stop iterating through streams.
@@ -432,17 +415,17 @@ void StreamPoll( stream_list_t *list)
         /* nothing in the buffer, register stream as activator */
         sd->stream->is_poll = 1;
       }
-    }
+    } /* CS END */
     /* unlock stream */
     pthread_spin_unlock( &sd->stream->prod_lock);
   } /* end for each stream */
 
   /* context switch */
   if (do_ctx_switch) {
+    /* set task as waiting */
+    self->state = TASK_WAITING;
     self->wait_on = WAIT_ON_ANY;
     co_resume();
-  } else {
-    self->state = TASK_RUNNING;
   }
 
   /* 'rotate' list to stream descriptor for non-empty buffer */

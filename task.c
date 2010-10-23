@@ -61,7 +61,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
     /*TODO throw error!*/
     assert(0);
   }
-  pthread_spin_init( &t->is_executing, PTHREAD_PROCESS_PRIVATE);
+  pthread_mutex_init( &t->lock);
   t->inarg = inarg;
   t->outarg = NULL;
  
@@ -78,6 +78,9 @@ int TaskDestroy(task_t *t)
   /* only if nothing references the task anymore */
   /* if ( fetch_and_dec(&t->refcnt) == 1) { */
   if ( atomic_dec(&t->refcnt) == 0) {
+
+
+    pthread_mutex_destroy( &t->lock);
 
     /* delete the coroutine */
     co_delete(t->ctx);
@@ -102,35 +105,11 @@ void TaskCall(task_t *t)
   assert( t->state == TASK_READY);
   t->state = TASK_RUNNING;
 
-  /*
-   * A coroutine must not run simultaneously in more than one thread.
-   * An attempt to do so will result in spinning until another thread
-   * has switched the context back.
-   */
-  pthread_spin_lock( &t->is_executing);
+  /* CAUTION: a coroutine must not run simultaneously in more than one thread! */
   /* CONTEXT SWITCH */
   co_call(t->ctx);
-  /* unlock */
-  pthread_spin_unlock( &t->is_executing);
 }
 
-
-
-/**
- * Hidden Startup function for user specified task function
- *
- * Calls task function with proper signature
- */
-static void TaskStartup(void *data)
-{
-  task_t *t = (task_t *)data;
-  taskfunc_t func = t->code;
-  /* call the task function with inarg as parameter */
-  func(t, t->inarg);
-
-  /* if task function returns, exit properly */
-  TaskExit(t, NULL);
-}
 
 
 
@@ -175,7 +154,19 @@ void TaskYield( task_t *ct)
 
 
 /**
- * Join with a task
+ * Hidden Startup function for user specified task function
+ *
+ * Calls task function with proper signature
  */
-/*TODO place in waiting queue with event_ptr pointing to task's outarg */
+static void TaskStartup(void *data)
+{
+  task_t *t = (task_t *)data;
+  taskfunc_t func = t->code;
+  /* call the task function with inarg as parameter */
+  func(t, t->inarg);
+
+  /* if task function returns, exit properly */
+  TaskExit(t, NULL);
+}
+
 

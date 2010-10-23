@@ -45,7 +45,7 @@ extern lpelthread_t *LpelThreadCreate(
 
 extern void LpelThreadJoin( lpelthread_t *lt, void **joinarg);
 
-extern void LpelTaskToWorker(task_t *t);
-extern void LpelTaskRemove(task_t *t);
+//extern void LpelTaskToWorker(task_t *t);
+//extern void LpelTaskRemove(task_t *t);
 
 #endif /* _LPEL_H_ */

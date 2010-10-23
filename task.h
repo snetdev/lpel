@@ -5,8 +5,10 @@
 #include <pcl.h>    /* tasks are executed in user-space with help of
                        GNU Portable Coroutine Library  */
 
+#include "scheduler.h"
 #include "timing.h"
 #include "atomic.h"
+
 
 /**
  * If a stacksize attribute <= 0 is specified,
@@ -69,6 +71,9 @@ struct task {
   //task_t *volatile next;
   task_t *prev, *next;
 
+  /* lock */
+  pthread_mutex_t lock;
+  
   /* attributes */
   taskattr_t attr;
 
@@ -84,7 +89,8 @@ struct task {
   atomic_t refcnt;
 
   int owner;         /* owning worker thread TODO as place_t */
-  void *sched_info;  /* scheduling information  */
+  schedctx_t *sched_context;
+  void *sched_info;  /* scheduling information for this task */
 
   /* ACCOUNTING INFORMATION */
   /* timestamps for creation, start/stop of last dispatch */
@@ -99,7 +105,6 @@ struct task {
   /* CODE */
   coroutine_t ctx;
   taskfunc_t code;
-  pthread_spinlock_t is_executing;
   void *inarg;  /* input argument  */
   void *outarg; /* output argument */
 };

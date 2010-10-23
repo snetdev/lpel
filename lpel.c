@@ -14,7 +14,7 @@
 #include <linux/unistd.h>
 #include <sys/syscall.h> 
 
-#include <pthread.h> /* worker threads are pthreads (linux has 1-1 mapping) */
+#include <pthread.h> /* worker threads are OS threads */
 #include <pcl.h>     /* tasks are executed in user-space with help of
                         GNU Portable Coroutine Library  */
 
@@ -33,24 +33,18 @@
 #include "scheduler.h"
 
 
-typedef struct lpelenv lpelenv_t;
-
-struct lpelthread_t {
+struct lpelthread {
   pthread_t pthread;
   bool detached;
-  void (*func)(void *);
+  int worker;
+  void (*func)(struct lpelthread *, void *);
   void *arg;
   char[20] name;
   monitoring_t mon;
 };
 
-
-typedef struct {
-  pthread_t     thread;
-  worker_ctx_t *context;
-} worker_thread_t;
-
-static worker_thread_t *worker_thread_data;
+/* table for storing workers thread data */
+static lpelthread_t *worker_thread_data;
 
 /* Keep copy of the (checked) configuration provided at LpelInit() */
 static lpelconfig_t config;
@@ -59,6 +53,11 @@ static lpelconfig_t config;
 static cpu_set_t cpuset_others;
 
 
+static void CleanupEnv( lpelthread_t *env)
+{
+  //TODO
+  free( env);
+}
 
 static int CanSetRealtime(void)
 {
@@ -78,42 +77,7 @@ static int CanSetRealtime(void)
 #endif
 }
 
-
-
-/**
- * Get the number of workers
- */
-int LpelNumWorkers(void)
-{
-  return config.num_workers;
-}
-
-
-
-/**
- * Assigns worker with specified id to a core
- * @return 0 if successful, errno otherwise
- */
-int LpelAssignWorkerToCore( int wid, int *core)
-{
-  int res;
-  pid_t tid;
-  cpu_set_t cpuset; 
-  
-  *core = wid % config.proc_workers;
-  
-  CPU_ZERO(&cpuset);
-  CPU_SET( *core, &cpuset);
-
-  /* get thread id */
-  tid = gettid();
-  
-  res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
-  return (res == 0) ? 0 : errno;
-}
-
-
-int LpelAssignOthersToCores( void)
+static void ThreadAssign( lpelthread_t *env)
 {
   int res;
   pid_t tid;
@@ -121,46 +85,38 @@ int LpelAssignOthersToCores( void)
   /* get thread id */
   tid = gettid();
   
-  res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset_others);
-  return (res == 0) ? 0 : errno;
+  if ( env->worker == -1) {
+    /* a non worker (others) thread */
+    res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset_others);
+    assert( res == 0);
+
+  } else {
+    /* a worker thread */
+    int core;
+    cpu_set_t cpuset;
+
+    assert( (env->worker >= 0) && (env->worker < config.num_workers) );
+    
+    core = wid % config.proc_workers;
+
+    CPU_ZERO(&cpuset);
+    CPU_SET( core, &cpuset);
+    res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
+    assert( res == 0);
+
+    /* make non-preemptible */
+    if ( (config.flags & LPEL_FLAG_REALTIME) != 0 ) {
+      struct sched_param param;
+      param.sched_priority = 1; /* lowest real-time, TODO other? */
+      res = sched_setscheduler(tid, SCHED_FIFO, &param);
+      assert( res == 0);
+    }
 }
-
-
-
-int LpelAssignWorkerRealtime( void)
-{
-  int res = 0;
-  if ( (config.flags & LPEL_FLAG_REALTIME) != 0 ) {
-    pid_t tid;
-    struct sched_param param;
-
-    /* get thread id */
-    tid = gettid();
-
-    param.sched_priority = 1; /* lowest real-time, TODO other? */
-    res = sched_setscheduler(tid, SCHED_FIFO, &param);
-    return (res == 0) ? 0 : errno;
-  }
-  return -1;
-}
-
-/**
- * Startup the worker
- */
-static void *WorkerStartup(void *arg)
-{
-  int wid = *((int *)arg);
-  int res, core;
-  monitoring_t mon_info;
-
-  /* Init libPCL */
-  co_thread_init();
-
+#if 0
   /* initialise monitoring */
   MonitoringInit(&mon_info, wid, MONITORING_ALL);
 
   MonitoringDebug(&mon_info, "worker %d started\n", wid);
-
 
   /* set affinity to id % config->proc_workers */
   res = AssignWorkerToCore( wid, &core);
@@ -171,37 +127,22 @@ static void *WorkerStartup(void *arg)
   }
   
   /* set worker as realtime thread, if set so */
-    res = AssignWorkerRealtime( wid);
-    if (res == 0) {
-      MonitoringDebug(&mon_info, "worker %d set realtime priority\n", wid);
-    } else {
-      /*TODO warning, check errno? */
-    }
+  res = AssignWorkerRealtime( wid);
+  if (res == 0) {
+    MonitoringDebug(&mon_info, "worker %d set realtime priority\n", wid);
+  } else {
+    /*TODO warning, check errno? */
   }
-  
-
-  /**************************************************************************/
-  /* Start the scheduler task */
-  SchedTask( wid, &mon_info );
-  /* scheduler task will return when there is no more work to do */
-  /**************************************************************************/
 
   MonitoringDebug(&mon_info, "worker %d exiting\n", wid);
-
   /* cleanup monitoring */ 
   MonitoringCleanup(&mon_info);
+#endif
 
-  /* Cleanup libPCL */
-  co_thread_cleanup();
-  
-  /* exit thread */
-  pthread_exit(NULL);
-  return NULL;
-}
 
 
 /**
- * Startup an others thread
+ * Startup a lpel thread
  */
 static void *ThreadStartup( void *arg)
 {
@@ -212,24 +153,27 @@ static void *ThreadStartup( void *arg)
   /* Init libPCL */
   co_thread_init();
 
-  /* set the cpu set */
-  res = LpelAssignOthersToCores();
-  assert( res==0 );
+  /* assign to cpu(s) */
+  ThreadAssign( env);
 
   /* call the function */
-  env->func( env->arg);
-
-  /* Cleanup libPCL */
-  co_thread_cleanup();
+  env->func( env, env->arg);
 
   /* if detached, cleanup the env now,
      otherwise it will be done on join */
   if (env->detached) {
-    //TODO cleanup
-    free( env);
+    /* workers are never detached */
+    assert( env->worker == -1);
+    CleanupEnv( env);
   }
+  
+  /* Cleanup libPCL */
+  co_thread_cleanup();
+
   return NULL;
 }
+
+
 
 
 /* test only for a single flag in CheckConfig */
@@ -366,31 +310,31 @@ void LpelInit(lpelconfig_t *cfg)
   SchedInit( config.num_workers, NULL);
 
   /* create table for worker data structures */
-  worker_thread_data = (worker_thread_t *) malloc(
-      config.num_workers * sizeof(worker_thread_t)
+  worker_thread_data = (lpelthread_t *) malloc(
+      config.num_workers * sizeof(lpelthread_t)
       );
 
-  /* for each worker id, create data structure and store in table */
+  /* for each worker, create data structure and 
+     spawn worker */
   for( i=0; i<config.num_workers; i++) {
-    worker_thread_data[i].context = SchedWorkerDataCreate(i);
-    worker_thread_data[i].thread = NULL;
-  }
-}
+    
+    lpelthread_t *env = &worker_thread_data[i];
+    /* for convenience */
+    env->pthread = NULL;
+    env->func = SchedTask; //TODO
+    env->detached = false;
+    /* relevant data */
+    env->worker = i;
+    snprintf( &env->name, 21, "worker%02d", i);
+    env->arg = SchedWorkerDataCreate(i);
+    //TODO mon init
 
-/**
- * Create and execute the worker threads
- * 
- */
-void LpelWorkerStart(void)
-{
-  int i, res;
-
-  for( i=0; i<config.num_workers; i++) {
+    /* spawn thread */
     res = pthread_create(
-        &worker_thread_data[i].thread,  /* pthread_t is kept for joining */
-        NULL,
-        WorkerStartup,    
-        (void *) &worker_thread_data[i].context  /* context passed to worker */
+        &env->pthread, /* pthread_t is kept for joining */
+        NULL,          /* default attributes (joinable) */
+        ThreadStartup,    
+        (void *) env 
         );
     /*TODO error*/
     assert( res == 0);
@@ -398,34 +342,39 @@ void LpelWorkerStart(void)
 }
 
 
-void LpelWorkerStop(void)
+
+void LpelStopWorker(void)
 {
   int i, res;
   
+  /* signal termination to workers */
   for( i=0; i<config.num_workers; i++) {
-    //TODO signal termination to workers
-    // SchedWorkersTerminate() ?
+    //TODO SchedWorkersTerminate() ?
   }
 
-  /* wait on the workers */
-  for( i=0; i<config.num_workers; i++) {
-    res = pthread_join( worker_thread_data[i].thread, NULL);
-    /*TODO error*/
-    assert( res == 0);
-  }
 
 }
 
 /**
  * Cleans the LPEL up
+ * - wait for the workers to finish
  * - free the data structures of worker threads
  */
 void LpelCleanup(void)
 {
 
-  /* for each worker, destroy its context */
+  /* wait on the workers */
   for( i=0; i<config.num_workers; i++) {
-    SchedWorkerDataDestroy( worker_thread_data[i].context);
+    lpelthread_t *env = &worker_thread_data[i];
+    /* wait for the worker to finish */
+    res = pthread_join( env->pthread, NULL);
+    /*TODO error*/
+    assert( res == 0);
+
+    /* delete worker context */
+    SchedWorkerDataDestroy( env->arg);
+    
+    CleanupEnv( env);
   }
 
   /* destroy worker data table */
@@ -442,26 +391,34 @@ void LpelCleanup(void)
 
 
 
-lpelthread_t *LpelThreadCreate( void (*func)(void *), void *arg, bool detached)
+lpelthread_t *LpelThreadCreate( void (*func)(lpelthread_t *, void *),
+    void *arg, bool detached, char *name)
 {
   int res;
   pthread_attr_t attr;
 
   lpelthread_t *env = (lpelthread_t *) malloc( sizeof( lpelthread_t));
 
+  env->worker = -1;
+  env->func = func;
+  env->arg = arg;
+  env->detached = detached;
+  if (name != NULL) {
+    strncpy( &env->name, name, 21);
+    env->name[20]= '\0';
+  } else {
+    memset( &env->name, '\0', 21);
+  }
 
+  //TODO monitoring
+
+  /* create attributes for joinable/detached*/
   pthread_attr_init( &attr);
   pthread_attr_setdetachstate( &attr,
       (detached) ? PTHREAD_CREATE_DETACHED : PTHREAD_CREATE_JOINABLE
       );
-
   
-  env->func = func;
-  env->arg = arg;
-  env->detached = detached;
-
-  /* create thread with default attributes */
-  res = pthread_create( &env->pthread, attr, ThreadStartup, env);
+  res = pthread_create( &env->pthread, &attr, ThreadStartup, env);
   assert( res==0 );
 
   pthread_attr_destroy( &attr);
@@ -474,17 +431,24 @@ lpelthread_t *LpelThreadCreate( void (*func)(void *), void *arg, bool detached)
  * @pre  thread must not have been created detached
  * @post lt is freed and the reference is invalidated
  */
-void LpelThreadJoin( lpelthread_t *lt)
+void LpelThreadJoin( lpelthread_t *env)
 {
   int res;
-  assert( lt->detached == false);
-  res = pthread_join(lt->pthread, NULL);
+  assert( env->detached == false);
+  res = pthread_join(env->pthread, NULL);
+  assert( res==0 );
 
   /* cleanup */
-  //TODO
-  free(lt);
-  
-  assert( res==0 );
+  CleanupEnv( env);
+}
+
+
+/**
+ * Get the number of workers
+ */
+int LpelNumWorkers(void)
+{
+  return config.num_workers;
 }
 
 
@@ -492,7 +456,7 @@ void LpelThreadJoin( lpelthread_t *lt)
  *
  * Has to be thread-safe.
  */
-void LpelTaskToWorker(task_t *t)
+void LpelTaskToWorker( task_t *t)
 {
   int to_worker;
 
