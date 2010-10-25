@@ -5,17 +5,17 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <assert.h>
-#include <sched.h>
+#include <errno.h>
 
 #include "lpel.h"
 #include "scheduler.h"
 #include "timing.h"
 #include "monitoring.h"
 #include "atomic.h"
-#include "taskqueue.h"
+#include "bqueue.h"
 
+#include "task.h"
 #include "stream.h"
-#include "buffer.h"
 
 
 struct schedcfg {
@@ -24,33 +24,35 @@ struct schedcfg {
 
 
 
+#define SCTYPE_WORKER  0
+#define SCTYPE_WRAPPER 1
+
 
 struct schedctx {
-  int wid; 
+  int type;
+  lpelthread_t *env;
+  union {
+    struct {
+      bqueue_t rq;
+    } wrapper;
+    struct {
+      int wid; 
+    } worker;
+  } ctx;
 };
 
 
-static struct {
-  taskqueue_t     queue;
-  pthread_mutex_t lock;
-  pthread_cond_t  activate;
-  bool terminate;  
-} sched_global;
 
-
-
-
+static bqueue_t sched_global;
 
 static int num_workers = -1;
-static schedctx_t *schedarray;
+
+static schedctx_t *workers;
 
 
 
-static void PutQueue( task_t *t);
-
-static void Reschedule(schedctx_t *sc, task_t *t);
-
-
+/* static function prototypes */
+static void SchedWorker( lpelthread_t *env, void *arg);
 
 
 /**
@@ -69,33 +71,25 @@ void SchedInit(int size, schedcfg_t *cfg)
 
   num_workers = size;
   
-  /* allocate the array of scheduler data */
-  schedarray = (schedctx_t *) calloc( size, sizeof(schedctx_t) );
-
   
-  /* init global data */
-  TaskqueueInit( &sched_global.queue);
-  pthread_mutex_init( &sched_global.lock);
-  pthread_cond_init( &sched_global.activate);
-  sched_global.terminate = false;
+  /* init global ready queue */
+  BQueueInit( &sched_global);
+
+    
+  /* allocate the array of scheduler data */
+  workers = (schedctx_t *) malloc( num_workers * sizeof(schedctx_t) );
+
+  /* create worker threads */
+  for( i=0; i<num_workers; i++) {
+    schedctx_t *sc = &workers[i];
+    char wname[11];
+    sc->type = SCTYPE_WORKER;
+    sc->ctx.worker.wid = i;
+    snprintf( wname, 11, "worker%02d", i);
+    /* aquire thread */ 
+    sc->env = LpelThreadCreate( SchedWorker, (void*)sc, false, wname);
+  }
 }
-
-
-schedctx_t *SchedContextCreate( int wid)
-{
-  schedctx_t *sc = &schedarray[wid];
-
-  sc->wid = wid;
-
-  return sc;
-}
-
-
-void SchedContextDestroy( schedctx_t *sc)
-{
-  /* do nothing */
-}
-
 
 
 /**
@@ -104,21 +98,37 @@ void SchedContextDestroy( schedctx_t *sc)
  */
 void SchedCleanup(void)
 {
-  assert( sched_global.terminate == true );
-  
-  /* destroy globals */
-  pthread_mutex_destroy( &sched_global.lock);
-  pthread_cond_destroy( &sched_global.activate);
+  int i;
+
+  /* wait for the workers to finish */
+  for( i=0; i<num_workers; i++) {
+    LpelThreadJoin( workers[i].env);
+  }
 
   /* free memory for scheduler data */
-  free( schedarray);
+  free( workers);
+  
+  /* destroy global ready queue */
+  BQueueCleanup( &sched_global);
 }
+
+
+
 
 
 
 void SchedWakeup( task_t *by, task_t *whom)
 {
-  PutQueue( whom);
+  /* dependent on whom, put in global or wrapper queue */
+  schedctx_t *sc = whom->sched_context;
+  
+  if ( sc->type == SCTYPE_WORKER) {
+    BQueuePut( &sched_global, whom);
+  } else if ( sc->type == SCTYPE_WRAPPER) {
+    BQueuePut( &sc->ctx.wrapper.rq, whom);
+  } else {
+    assert(0);
+  }
 }
 
 
@@ -126,9 +136,9 @@ void SchedWakeup( task_t *by, task_t *whom)
 /**
  * Assign a task to the scheduler
  */
-void SchedAssignTask( schedctx_t *sc, task_t *t)
+void SchedAssignTask( task_t *t)
 {
-  PutQueue( t);
+  BQueuePut( &sched_global, t);
 }
 
 
@@ -139,101 +149,140 @@ void SchedAssignTask( schedctx_t *sc, task_t *t)
  * Main worker thread
  *
  */
-void SchedThread( lpelthread_t *env, void *arg)
+static void SchedWorker( lpelthread_t *env, void *arg)
 {
   schedctx_t *sc = (schedctx_t *)arg;
-  unsigned int loop;
+  unsigned int loop, delayed;
+  int wid;
   bool terminate;
   task_t *t;  
+
+  wid = sc->ctx.worker.wid;
+
+  /* assign to core */
+  LpelThreadAssign( env, wid % num_workers );
 
   /* MAIN SCHEDULER LOOP */
   loop=0;
   do {
-
-    /* monitor enter */
-    pthread_mutex_lock( &sched_global.lock);
-    terminate = sched_global.terminate;
-    while( 0 == sched_global.queue.count && !terminate) {
-      pthread_cond_wait( &sched_global.activate, &sched_global.lock);
-      terminate = sched_global.terminate;
-    }
-    t = TaskqueuePopFront( &sched_global.queue);
-    pthread_mutex_unlock( &sched_global.lock);
-    /* monitor exit */
-    
+    terminate = BQueueFetch( &sched_global, &t);
     if (t != NULL) {
-      /* execute task */
-      pthread_mutex_lock( t->lock);
+      
+      /* aqiure task lock, count congestion */
+      if ( EBUSY == pthread_mutex_trylock( &t->lock)) {
+        delayed++;
+        pthread_mutex_lock( &t->lock);
+      }
+
+      t->sched_context = sc;
       t->cnt_dispatch++;
 
+      /* execute task */
       TIMESTAMP(&t->times.start);
       TaskCall(t);
       TIMESTAMP(&t->times.stop);
+      
       /* task returns in every case in a different state */
       assert( t->state != TASK_RUNNING);
 
       /* output accounting info */
-      MonPrintTask(env, t);
-      MonWorkerDbg(env, "(worker %d, loop %u)\n", sc->wid, loop);
+      //MonTaskPrint(env, t);
+      MonDebug(env, "(worker %d, loop %u)\n", wid, loop);
 
-      Reschedule(sc, t);
-      pthread_mutex_unlock( t->lock);
+      /* check state of task, place into appropriate queue */
+      switch(t->state) {
+        case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
+          TaskDestroy( t);
+          break;
+
+        case TASK_WAITING: /* task returned from a blocking call*/
+          /* do nothing */
+          break;
+
+        case TASK_READY: /* task yielded execution  */
+          assert( sc->type == SCTYPE_WORKER);
+          BQueuePut( &sched_global, t);
+          break;
+
+        default: assert(0); /* should not be reached */
+      }
+      pthread_mutex_unlock( &t->lock);
     } /* end if executed ready task */
-
-
     loop++;
   } while ( !terminate );
   /* stop only if there are no more tasks in the system */
   /* MAIN SCHEDULER LOOP END */
-  
 }
 
 
 
+void SchedWrapper( lpelthread_t *env, void *arg)
+{
+  task_t *t = (task_t *)arg;
+  unsigned int loop;
+  bool terminate;
+  bqueue_t *rq;
+  schedctx_t *sc;
 
+  /* create scheduler context */
+  sc = (schedctx_t *) malloc( sizeof( schedctx_t));
+  sc->type = SCTYPE_WRAPPER;
+  sc->env = env;
+  rq = &sc->ctx.wrapper.rq;
+  BQueueInit( rq);
+
+  /* assign scheduler context */
+  t->sched_context = sc;
+
+
+  /* assign to others */
+  LpelThreadAssign( env, -1 );
+
+  /* MAIN SCHEDULER LOOP */
+  loop=0;
+  do {
+    (void) BQueueFetch( rq, &t);
+    assert(t != NULL);
+    
+    t->cnt_dispatch++;
+
+    /* execute task */
+    TIMESTAMP(&t->times.start);
+    TaskCall(t);
+    TIMESTAMP(&t->times.stop);
+      
+    /* task returns in every case in a different state */
+    assert( t->state != TASK_RUNNING);
+
+    /* output accounting info */
+    //MonTaskPrint(env, t);
+    MonDebug(env, "(loop %u)\n", loop);
+
+    /* check state of task, place into appropriate queue */
+    switch(t->state) {
+      case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
+        terminate = true;
+        TaskDestroy( t);
+        break;
+
+      case TASK_WAITING: /* task returned from a blocking call*/
+        /* do nothing */
+        break;
+
+      case TASK_READY: /* task yielded execution  */
+        assert( sc->type == SCTYPE_WRAPPER);
+        BQueuePut( &sc->ctx.wrapper.rq, t);
+        break;
+
+      default: assert(0); /* should not be reached */
+    }
+    loop++;
+  } while ( !terminate );
+
+  /* free the scheduler context */
+  free( sc);
+}
 
 
 /** PRIVATE FUNCTIONS *******************************************************/
-
-
-static void PutQueue( task_t *t)
-{
-  /* put into ready queue */
-  pthread_mutex_lock( &sched_global.lock );
-  TaskqueueEnqueue( &sched_global.queue, t );
-  if ( 1 == &sched_global.queue.count ) {
-    pthread_cond_signal( &sched_global.activate );
-  }
-  pthread_mutex_unlock( &sched_global.lock );
-}
-
-/**
- * Reschedule a task after execution
- *
- * @param sc   scheduler context
- * @param t    task returned from execution in a different state than READY
- */
-static void Reschedule(schedctx_t *sc, task_t *t)
-{
-  /* check state of task, place into appropriate queue */
-  switch(t->state) {
-    case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
-      /*TODO handle joinable tasks */
-      TaskDestroy( t);
-      break;
-
-    case TASK_WAITING: /* task returned from a blocking call*/
-      /* do nothing */
-      break;
-
-    case TASK_READY: /* task yielded execution  */
-      /* put into ready queue */
-      PutQueue( t);
-      break;
-
-    default:
-      assert(0); /* should not be reached */
-  }
-}
-
 

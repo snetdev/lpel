@@ -12,8 +12,8 @@ typedef struct schedctx schedctx_t;
 extern void SchedInit(int size, schedcfg_t *cfg);
 extern void SchedCleanup(void);
 
-extern void SchedAssignTask(int wid, struct task *t);
-extern void SchedThread( lpelthread_t *env, void *arg);
+extern void SchedAssignTask( struct task *t);
+//extern void SchedWrapper( lpelthread_t *env, void *arg);
 extern void SchedWakeup( struct task *by, struct task *whom);
 
 

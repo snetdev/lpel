@@ -7,7 +7,10 @@
 #include "stream.h"
 
 #include "monitoring.h"
+#include "scheduler.h"
 #include "timing.h"
+#include "task.h"
+#include "lpel.h"
 
 #define IS_FLAG(v)  ( (mon->flags & (v)) == (v) )
 
@@ -27,33 +30,68 @@
 } while (0)
 
 
-
-void MonitoringInit(monitoring_t *mon, int worker_id, int flags)
+/**
+ * mon_n00_worker01.log
+ */
+void MonInit( lpelthread_t *env, int flags)
 {
-  char fname[11];
-  int cnt_written;
-  cnt_written = snprintf(fname, 11, "out%03d.log", worker_id);
-  assert(cnt_written==10);
+# define FNAME_MAXLEN   (LPEL_THREADNAME_MAXLEN + 12)
+  char fname[FNAME_MAXLEN+1];
+
+  (void) snprintf(fname, 11, "mon_n%02d_%s.log", env->node, env->name);
+  fname[FNAME_MAXLEN] = '\0';
 
   /* copy flags */
-  mon->flags = flags;
+  env->mon.flags = flags;
 
   /* open logfile */
-  mon->outfile = fopen(fname, "w");
-  assert( mon->outfile != NULL);
+  env->mon.outfile = fopen(fname, "w");
+  assert( env->mon.outfile != NULL);
 }
 
-void MonitoringCleanup(monitoring_t *mon)
+void MonCleanup( lpelthread_t *env)
 {
   int ret;
-  ret = fclose(mon->outfile);
+  ret = fclose( env->mon.outfile);
   assert(ret == 0);
 }
 
-void MonitoringPrint(monitoring_t *mon, task_t *t)
+
+
+void MonDebug( lpelthread_t *env, const char *fmt, ...)
+{
+  timing_t ts;
+  char buf[PRINT_TS_BUFLEN];
+  va_list ap;
+
+  /* print current timestamp */
+  TIMESTAMP(&ts);
+  PRINT_TS(&ts,buf);
+  fprintf( env->mon.outfile, "%s ", buf);
+
+  va_start(ap, fmt);
+  vfprintf( env->mon.outfile, fmt, ap);
+  va_end(ap);
+
+  fflush( env->mon.outfile);
+}
+
+
+void MonTaskEvent( task_t *t, const char *fmt, ...)
+{
+  monitoring_t *mon = &t->sched_context->env.mon;
+
+}
+
+
+
+void MonTaskPrint( task_t *t)
 {
   int ret;
   char buf[PRINT_TS_BUFLEN];
+
+  monitoring_t *mon = &t->sched_context->env.mon;
+
 
   if ( mon->flags == MONITORING_NONE ) return;
 
@@ -95,22 +133,4 @@ void MonitoringPrint(monitoring_t *mon, task_t *t)
     ret = fflush(mon->outfile);
     assert(ret == 0);
   } /* end if */
-}
-
-void MonitoringDebug(monitoring_t *mon, const char *fmt, ...)
-{
-  timing_t ts;
-  char buf[PRINT_TS_BUFLEN];
-  va_list ap;
-
-  /* print current timestamp */
-  TIMESTAMP(&ts);
-  PRINT_TS(&ts,buf);
-  fprintf(mon->outfile, "%s ", buf);
-
-  va_start(ap, fmt);
-  vfprintf(mon->outfile, fmt, ap);
-  va_end(ap);
-
-  fflush(mon->outfile);
 }
