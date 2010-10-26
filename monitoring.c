@@ -38,7 +38,7 @@ void MonInit( lpelthread_t *env, int flags)
 # define FNAME_MAXLEN   (LPEL_THREADNAME_MAXLEN + 12)
   char fname[FNAME_MAXLEN+1];
 
-  (void) snprintf(fname, 11, "mon_n%02d_%s.log", env->node, env->name);
+  (void) snprintf(fname, FNAME_MAXLEN+1, "mon_n%02d_%s.log", env->node, env->name);
   fname[FNAME_MAXLEN] = '\0';
 
   /* copy flags */
@@ -79,19 +79,17 @@ void MonDebug( lpelthread_t *env, const char *fmt, ...)
 
 void MonTaskEvent( task_t *t, const char *fmt, ...)
 {
-  monitoring_t *mon = &t->sched_context->env.mon;
+  //monitoring_t *mon = &t->sched_context->env.mon;
 
 }
 
 
 
-void MonTaskPrint( task_t *t)
+void MonTaskPrint( lpelthread_t *env, task_t *t)
 {
   int ret;
   char buf[PRINT_TS_BUFLEN];
-
-  monitoring_t *mon = &t->sched_context->env.mon;
-
+  monitoring_t *mon = &env->mon;
 
   if ( mon->flags == MONITORING_NONE ) return;
 

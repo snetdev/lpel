@@ -22,16 +22,16 @@ typedef struct {
   char  events[MON_MAX_EVENTS][20];
 } monitoring_t;
 
-#include "lpel.h"
+struct lpelthread;
 
-void MonInit( lpelthread_t *env, int flags);
-void MonCleanup( lpelthread_t *env);
-void MonDebug( lpelthread_t *env, const char *fmt, ...);
+void MonInit( struct lpelthread *env, int flags);
+void MonCleanup( struct lpelthread *env);
+void MonDebug( struct lpelthread *env, const char *fmt, ...);
 
 struct task;
 
 void MonTaskEvent( struct task *t, const char *fmt, ...);
-void MonTaskPrint( struct task *t);
+void MonTaskPrint( struct lpelthread *env, struct task *t);
 
 
 

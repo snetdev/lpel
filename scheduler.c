@@ -23,27 +23,11 @@ struct schedcfg {
 };
 
 
-
-#define SCTYPE_WORKER  0
-#define SCTYPE_WRAPPER 1
-
-
 struct schedctx {
-  int type;
+  int wid; 
   lpelthread_t *env;
-  union {
-    struct {
-      bqueue_t rq;
-    } wrapper;
-    struct {
-      int wid; 
-    } worker;
-  } ctx;
+  bqueue_t rq;
 };
-
-
-
-static bqueue_t sched_global;
 
 static int num_workers = -1;
 
@@ -68,13 +52,7 @@ void SchedInit(int size, schedcfg_t *cfg)
   int i;
 
   assert(0 <= size);
-
   num_workers = size;
-  
-  
-  /* init global ready queue */
-  BQueueInit( &sched_global);
-
     
   /* allocate the array of scheduler data */
   workers = (schedctx_t *) malloc( num_workers * sizeof(schedctx_t) );
@@ -83,8 +61,8 @@ void SchedInit(int size, schedcfg_t *cfg)
   for( i=0; i<num_workers; i++) {
     schedctx_t *sc = &workers[i];
     char wname[11];
-    sc->type = SCTYPE_WORKER;
-    sc->ctx.worker.wid = i;
+    sc->wid = i;
+    BQueueInit( &sc->rq);
     snprintf( wname, 11, "worker%02d", i);
     /* aquire thread */ 
     sc->env = LpelThreadCreate( SchedWorker, (void*)sc, false, wname);
@@ -103,17 +81,12 @@ void SchedCleanup(void)
   /* wait for the workers to finish */
   for( i=0; i<num_workers; i++) {
     LpelThreadJoin( workers[i].env);
+    BQueueCleanup( &workers[i].rq);
   }
 
   /* free memory for scheduler data */
   free( workers);
-  
-  /* destroy global ready queue */
-  BQueueCleanup( &sched_global);
 }
-
-
-
 
 
 
@@ -122,25 +95,27 @@ void SchedWakeup( task_t *by, task_t *whom)
   /* dependent on whom, put in global or wrapper queue */
   schedctx_t *sc = whom->sched_context;
   
-  if ( sc->type == SCTYPE_WORKER) {
-    BQueuePut( &sched_global, whom);
-  } else if ( sc->type == SCTYPE_WRAPPER) {
-    BQueuePut( &sc->ctx.wrapper.rq, whom);
-  } else {
-    assert(0);
-  }
+  BQueuePut( &sc->rq, whom);
 }
 
+
+
+void SchedTerminate( void)
+{
+  int i;
+  for( i=0; i<num_workers; i++) {
+    BQueueTerm( &workers[i].rq ); 
+  }
+}
 
 
 /**
  * Assign a task to the scheduler
  */
-void SchedAssignTask( task_t *t)
+void SchedAssignTask( task_t *t, int wid)
 {
-  BQueuePut( &sched_global, t);
+  BQueuePut( &workers[wid].rq, t);
 }
-
 
 
 
@@ -153,19 +128,16 @@ static void SchedWorker( lpelthread_t *env, void *arg)
 {
   schedctx_t *sc = (schedctx_t *)arg;
   unsigned int loop, delayed;
-  int wid;
   bool terminate;
   task_t *t;  
 
-  wid = sc->ctx.worker.wid;
-
   /* assign to core */
-  LpelThreadAssign( env, wid % num_workers );
+  LpelThreadAssign( env, sc->wid % num_workers );
 
   /* MAIN SCHEDULER LOOP */
   loop=0;
   do {
-    terminate = BQueueFetch( &sched_global, &t);
+    terminate = BQueueFetch( &sc->rq, &t);
     if (t != NULL) {
       
       /* aqiure task lock, count congestion */
@@ -186,8 +158,8 @@ static void SchedWorker( lpelthread_t *env, void *arg)
       assert( t->state != TASK_RUNNING);
 
       /* output accounting info */
-      //MonTaskPrint(env, t);
-      MonDebug(env, "(worker %d, loop %u)\n", wid, loop);
+      MonTaskPrint( sc->env, t);
+      MonDebug(env, "(worker %d, loop %u)\n", sc->wid, loop);
 
       /* check state of task, place into appropriate queue */
       switch(t->state) {
@@ -200,8 +172,7 @@ static void SchedWorker( lpelthread_t *env, void *arg)
           break;
 
         case TASK_READY: /* task yielded execution  */
-          assert( sc->type == SCTYPE_WORKER);
-          BQueuePut( &sched_global, t);
+          BQueuePut( &sc->rq, t);
           break;
 
         default: assert(0); /* should not be reached */
@@ -221,18 +192,17 @@ void SchedWrapper( lpelthread_t *env, void *arg)
   task_t *t = (task_t *)arg;
   unsigned int loop;
   bool terminate;
-  bqueue_t *rq;
   schedctx_t *sc;
 
   /* create scheduler context */
   sc = (schedctx_t *) malloc( sizeof( schedctx_t));
-  sc->type = SCTYPE_WRAPPER;
+  sc->wid = -1;
   sc->env = env;
-  rq = &sc->ctx.wrapper.rq;
-  BQueueInit( rq);
+  BQueueInit( &sc->rq);
 
   /* assign scheduler context */
   t->sched_context = sc;
+  BQueuePut( &sc->rq, t);
 
 
   /* assign to others */
@@ -241,7 +211,7 @@ void SchedWrapper( lpelthread_t *env, void *arg)
   /* MAIN SCHEDULER LOOP */
   loop=0;
   do {
-    (void) BQueueFetch( rq, &t);
+    (void) BQueueFetch( &sc->rq, &t);
     assert(t != NULL);
     
     t->cnt_dispatch++;
@@ -255,7 +225,7 @@ void SchedWrapper( lpelthread_t *env, void *arg)
     assert( t->state != TASK_RUNNING);
 
     /* output accounting info */
-    //MonTaskPrint(env, t);
+    MonTaskPrint( sc->env, t);
     MonDebug(env, "(loop %u)\n", loop);
 
     /* check state of task, place into appropriate queue */
@@ -270,8 +240,7 @@ void SchedWrapper( lpelthread_t *env, void *arg)
         break;
 
       case TASK_READY: /* task yielded execution  */
-        assert( sc->type == SCTYPE_WRAPPER);
-        BQueuePut( &sc->ctx.wrapper.rq, t);
+        BQueuePut( &sc->rq, t);
         break;
 
       default: assert(0); /* should not be reached */

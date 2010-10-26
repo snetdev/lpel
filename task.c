@@ -61,7 +61,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
     /*TODO throw error!*/
     assert(0);
   }
-  pthread_mutex_init( &t->lock);
+  pthread_mutex_init( &t->lock, NULL);
   t->inarg = inarg;
   t->outarg = NULL;
  
@@ -102,7 +102,7 @@ int TaskDestroy(task_t *t)
  */
 void TaskCall(task_t *t)
 {
-  assert( t->state == TASK_READY);
+  assert( t->state != TASK_RUNNING);
   t->state = TASK_RUNNING;
 
   /* CAUTION: a coroutine must not run simultaneously in more than one thread! */

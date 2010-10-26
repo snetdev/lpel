@@ -6,6 +6,8 @@
 #define _GNU_SOURCE
 
 #include <malloc.h>
+#include <stdio.h>
+#include <string.h>
 #include <assert.h>
 
 #include <sched.h>
@@ -31,6 +33,7 @@
 
 #include "task.h"
 #include "scheduler.h"
+#include "monitoring.h"
 
 
 
@@ -101,15 +104,14 @@ static int CanSetRealtime(void)
  */
 static void *ThreadStartup( void *arg)
 {
-  lpelthread_t *env = (lpelenv_t *)arg;
-
-  //env.mon
+  lpelthread_t *env = (lpelthread_t *)arg;
 
   /* Init libPCL */
   co_thread_init();
 
-  /* assign to cpu(s) */
-  ThreadAssign( env);
+  /* initialize monitoring */
+  MonInit( env, MONITORING_ALL);
+
 
   /* call the function */
   env->func( env, env->arg);
@@ -117,10 +119,11 @@ static void *ThreadStartup( void *arg)
   /* if detached, cleanup the env now,
      otherwise it will be done on join */
   if (env->detached) {
-    /* workers are never detached */
-    assert( env->worker == -1);
     CleanupEnv( env);
   }
+
+  /* cleanup monitoring */
+  MonCleanup( env);
   
   /* Cleanup libPCL */
   co_thread_cleanup();
@@ -248,8 +251,6 @@ static void CreateCpusetOthers( lpelconfig_t *cfg)
  */
 void LpelInit(lpelconfig_t *cfg)
 {
-  int i;
-
   /* store a local copy of cfg */
   config = *cfg;
   
@@ -322,7 +323,7 @@ void LpelThreadAssign( lpelthread_t *env, int core)
       assert( res == 0);
     }
   }
-
+}
 
 /**
  * Aquire a thread from the LPEL
@@ -339,7 +340,7 @@ lpelthread_t *LpelThreadCreate( void (*func)(lpelthread_t *, void *),
   env->arg = arg;
   env->detached = detached;
   if (name != NULL) {
-    strncpy( &env->name, name, LPEL_THREADNAME_MAXLEN+1);
+    strncpy( env->name, name, LPEL_THREADNAME_MAXLEN+1);
     env->name[LPEL_THREADNAME_MAXLEN]= '\0';
   } else {
     memset( &env->name, '\0', LPEL_THREADNAME_MAXLEN+1);
@@ -377,7 +378,6 @@ void LpelThreadJoin( lpelthread_t *env)
   CleanupEnv( env);
 }
 
-
 /**
  * Get the number of workers
  */
@@ -385,5 +385,4 @@ int LpelNumWorkers(void)
 {
   return config.num_workers;
 }
-
 
