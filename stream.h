@@ -45,6 +45,7 @@ void StreamReplace( stream_desc_t *sd, stream_t *snew);
 void *StreamPeek( stream_desc_t *sd);
 void *StreamRead( stream_desc_t *sd);
 void StreamWrite( stream_desc_t *sd, void *item);
+void StreamPoll( stream_list_t *list);
 
 int StreamPrintDirty( struct task *t, FILE *file);
 

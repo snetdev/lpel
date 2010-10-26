@@ -2,12 +2,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-
 #include <assert.h>
 #include "../lpel.h"
+#include "../scheduler.h"
 #include "../stream.h"
 #include "../task.h"
-#include "../inport.h"
 
 #define NUM_COLL    (4*10+1)
 stream_t *sinp;
@@ -17,33 +16,32 @@ stream_t *scoll[NUM_COLL];
 
 void Consumer(task_t *self, void *inarg)
 {
-  void *item;
   char *msg;
   int i, term;
-  stream_mh_t *in[NUM_COLL];
+  stream_list_t lst;
+  stream_iter_t *iter;
 
   printf("start Consumer\n" );
   /* open streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    in[i] = StreamOpen(self, scoll[i], 'r');
+    StreamListAppend( &lst, StreamOpen(self, scoll[i], 'r'));
   }
 
+  iter = StreamIterCreate(&lst);
 
   term = 0;
   do {
-    stream_mh_t *snext;
     /* here we do wait */
-    printf("Consumer waits\n");
-    TaskWaitOnAny(self);
+    printf("Consumer poll\n");
+    StreamPoll( &lst);
     printf("Consumer resumes\n");
 
     printf("Consumer iterates:\n");
-    for (i=0; i<NUM_COLL; i++) {
-      snext = in[i];
-
-      item = StreamPeek( snext );
-      msg = (char *) item;
-      if ( msg != NULL ) {
+    StreamIterReset(&lst, iter);
+    while( StreamIterHasNext(iter)) {
+      stream_desc_t *snext = StreamIterNext(iter);
+      if ( NULL != StreamPeek( snext )) {
+        msg = (char *) StreamRead( snext);
         printf("%s", msg );
         if (0 == strcmp( msg, "T\n" )) term=1;
       }
@@ -52,10 +50,15 @@ void Consumer(task_t *self, void *inarg)
   } while (0 == term) ;
 
   /* close streams */ 
-  for (i=0; i<NUM_COLL; i++) {
-    StreamClose(in[i], true);
+  StreamIterReset(&lst, iter);
+  while( StreamIterHasNext(iter)) {
+    stream_desc_t *snext = StreamIterNext(iter);
+    StreamClose( snext, true);
   }
+  StreamIterDestroy( iter);
   printf("exit Consumer\n" );
+  
+  SchedTerminate();
 }
 
 
@@ -65,8 +68,8 @@ void Relay(task_t *self, void *inarg)
   void *item;
   char *msg;
   int i, dest;
-  stream_mh_t *out[NUM_COLL];
-  stream_mh_t *in;
+  stream_desc_t *out[NUM_COLL];
+  stream_desc_t *in;
   int term = 0;
 
   printf("start Relay\n" );
@@ -107,13 +110,28 @@ void Relay(task_t *self, void *inarg)
 }
 
 
+static void Inputter(task_t *self, void *arg)
+{
+  stream_desc_t *out = StreamOpen( self, (stream_t*)arg, 'w'); 
+  char *buf;
+
+  do {
+    buf = (char *) malloc( 120 * sizeof(char) );
+    (void) fgets( buf, 119, stdin  );
+    StreamWrite( out, buf);
+  } while ( 0 != strcmp(buf, "T\n") );
+
+  StreamClose( out, false);
+}
+
 
 static void testBasic(void)
 {
   lpelconfig_t cfg;
   taskattr_t tattr = {0};
   int i;
-  task_t *trelay, *tcons;
+  task_t *trelay, *tcons, *intask;
+  lpelthread_t *inlt;
 
   cfg.num_workers = 2;
   cfg.proc_workers = 2;
@@ -130,29 +148,19 @@ static void testBasic(void)
 
   /* create tasks */
   trelay = TaskCreate( Relay, NULL, tattr);
-  LpelTaskToWorker(trelay);
+  SchedAssignTask( trelay, trelay->uid % 2);
 
   //tattr.flags |= TASK_ATTR_WAITANY;
   tcons = TaskCreate( Consumer, NULL, tattr);
-  LpelTaskToWorker(tcons);
+  SchedAssignTask( tcons, tcons->uid % 2);
  
+  
+  intask = TaskCreate( Inputter, sinp, tattr);
+  inlt = LpelThreadCreate( SchedWrapper, intask, false, "inputter");
 
-  LpelRun();
-  {
-    char *buf;
-    inport_t *in = InportCreate(sinp);
-    do {
-      buf = (char *) malloc( 120 * sizeof(char) );
-      (void) fgets( buf, 119, stdin  );
-      InportWrite(in, buf);
-      printf("Input: %s\n", buf );
-    } while ( 0 != strcmp(buf, "T\n") );
-    printf("end reading input\n" );
-    InportDestroy(in);
-  }
+  LpelThreadJoin( inlt);
   
   LpelCleanup();
-
 }
 
 

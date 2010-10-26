@@ -90,6 +90,8 @@ static void Outputter(task_t *self, void *arg)
   } // end while
 
   StreamClose( in, true);
+  
+  //SchedTerminate();
 }
 
 
