@@ -152,15 +152,7 @@ void StreamClose( stream_desc_t *sd, bool destroy_s)
   /* mark dirty */
   MarkDirty( sd);
 
-  
-  switch(sd->mode) {
-    case 'r': sd->stream->cons_sd = NULL; break;
-    case 'w': sd->stream->prod_sd = NULL; break;
-    default: assert(0);
-  }
   if (destroy_s) {
-    assert( sd->stream->cons_sd == NULL);
-    assert( sd->stream->prod_sd == NULL);
     StreamDestroy( sd->stream);
   }
   /* do not free sd, as it will be kept until its state

@@ -73,7 +73,7 @@ void MonDebug( lpelthread_t *env, const char *fmt, ...)
   vfprintf( env->mon.outfile, fmt, ap);
   va_end(ap);
 
-  fflush( env->mon.outfile);
+  //fflush( env->mon.outfile);
 }
 
 
@@ -87,7 +87,6 @@ void MonTaskEvent( task_t *t, const char *fmt, ...)
 
 void MonTaskPrint( lpelthread_t *env, task_t *t)
 {
-  int ret;
   char buf[PRINT_TS_BUFLEN];
   monitoring_t *mon = &env->mon;
 
@@ -128,7 +127,6 @@ void MonTaskPrint( lpelthread_t *env, task_t *t)
     }
 
     fprintf(mon->outfile, "\n");
-    ret = fflush(mon->outfile);
-    assert(ret == 0);
+    //fflush(mon->outfile);
   } /* end if */
 }

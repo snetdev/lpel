@@ -28,15 +28,17 @@ void Relay(task_t *self, void *inarg)
 
   in = StreamOpen( self, ch->in, 'r');
   out = StreamOpen( self, ch->out, 'w');
+  
+  printf("Relay %d START\n", id);
 
   while (!term) {
     item = StreamRead( in);
     assert( item != NULL );
     //printf("Relay %d: %s", id, item );
-    StreamWrite( out, item);
     if ( 0 == strcmp( item, "T\n")) {
       term = 1;
     }
+    StreamWrite( out, item);
   } // end while
   StreamClose( in, true);
   StreamClose( out, false);
@@ -78,6 +80,8 @@ static void Outputter(task_t *self, void *arg)
   char *item;
   int term = 0;
 
+  printf("Outputter START\n");
+
   while (!term) {
     item = StreamRead(in);
     assert( item != NULL );
@@ -91,6 +95,7 @@ static void Outputter(task_t *self, void *arg)
 
   StreamClose( in, true);
   
+  printf("Outputter TERM\n");
   //SchedTerminate();
 }
 
@@ -100,6 +105,7 @@ static void Inputter(task_t *self, void *arg)
   stream_desc_t *out = StreamOpen( self, (stream_t*)arg, 'w'); 
   char *buf;
 
+  printf("Inputter START\n");
   do {
     buf = (char *) malloc( 120 * sizeof(char) );
     (void) fgets( buf, 119, stdin  );
@@ -107,6 +113,7 @@ static void Inputter(task_t *self, void *arg)
   } while ( 0 != strcmp(buf, "T\n") );
 
   StreamClose( out, false);
+  printf("Inputter TERM\n");
 }
 
 static void testBasic(void)
@@ -136,6 +143,7 @@ static void testBasic(void)
   LpelThreadJoin( inlt);
   LpelThreadJoin( outlt);
       
+  printf("Calling SchedTerminate()\n");
   SchedTerminate();
 
   LpelCleanup();

@@ -25,6 +25,7 @@ struct schedcfg {
 
 struct schedctx {
   int wid; 
+  unsigned int num_tasks;
   lpelthread_t *env;
   bqueue_t rq;
 };
@@ -62,6 +63,7 @@ void SchedInit(int size, schedcfg_t *cfg)
     schedctx_t *sc = &workers[i];
     char wname[11];
     sc->wid = i;
+    sc->num_tasks = 0;
     BQueueInit( &sc->rq);
     snprintf( wname, 11, "worker%02d", i);
     /* aquire thread */ 
@@ -114,7 +116,10 @@ void SchedTerminate( void)
  */
 void SchedAssignTask( task_t *t, int wid)
 {
-  BQueuePut( &workers[wid].rq, t);
+  schedctx_t *sc = &workers[wid];
+
+  sc->num_tasks += 1;
+  BQueuePut( &sc->rq, t);
 }
 
 
@@ -138,6 +143,8 @@ static void SchedWorker( lpelthread_t *env, void *arg)
   loop=0;
   do {
     terminate = BQueueFetch( &sc->rq, &t);
+    assert( (t!=NULL) || terminate );
+
     if (t != NULL) {
       
       /* aqiure task lock, count congestion */
@@ -165,6 +172,7 @@ static void SchedWorker( lpelthread_t *env, void *arg)
       switch(t->state) {
         case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
           TaskDestroy( t);
+          sc->num_tasks -= 1;
           break;
 
         case TASK_WAITING: /* task returned from a blocking call*/
@@ -180,9 +188,12 @@ static void SchedWorker( lpelthread_t *env, void *arg)
       pthread_mutex_unlock( &t->lock);
     } /* end if executed ready task */
     loop++;
-  } while ( !terminate );
+  } while ( t != NULL || !terminate );
+
+  assert( sc->num_tasks == 0);
   /* stop only if there are no more tasks in the system */
   /* MAIN SCHEDULER LOOP END */
+  MonDebug(env, "worker %d exited.\n", sc->wid);
 }
 
 
@@ -191,11 +202,12 @@ void SchedWrapper( lpelthread_t *env, void *arg)
 {
   task_t *t = (task_t *)arg;
   unsigned int loop;
-  bool terminate;
+  bool terminate = false;
   schedctx_t *sc;
 
   /* create scheduler context */
   sc = (schedctx_t *) malloc( sizeof( schedctx_t));
+  sc->num_tasks = 1;
   sc->wid = -1;
   sc->env = env;
   BQueueInit( &sc->rq);
@@ -232,6 +244,7 @@ void SchedWrapper( lpelthread_t *env, void *arg)
     switch(t->state) {
       case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
         terminate = true;
+        sc->num_tasks -= 1;
         TaskDestroy( t);
         break;
 
@@ -248,6 +261,9 @@ void SchedWrapper( lpelthread_t *env, void *arg)
     loop++;
   } while ( !terminate );
 
+  assert( sc->num_tasks == 0);
+  MonDebug(env, "wrapper exited.\n");
+  
   /* free the scheduler context */
   free( sc);
 }
