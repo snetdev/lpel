@@ -22,6 +22,7 @@ void BQueueCleanup( bqueue_t *bq)
 void BQueuePut( bqueue_t *bq, task_t *t)
 {
   pthread_mutex_lock( &bq->lock );
+  assert( bq->terminate == false );
   TaskqueuePushBack( &bq->queue, t );
   if ( 1 == bq->queue.count ) {
     pthread_cond_signal( &bq->cond );
@@ -29,8 +30,9 @@ void BQueuePut( bqueue_t *bq, task_t *t)
   pthread_mutex_unlock( &bq->lock );
 }
 
-bool BQueueFetch( bqueue_t *bq, task_t **t)
+task_t *BQueueFetch( bqueue_t *bq)
 {
+  task_t *t;
   bool terminate;
   pthread_mutex_lock( &bq->lock);
   terminate = bq->terminate;
@@ -38,9 +40,11 @@ bool BQueueFetch( bqueue_t *bq, task_t **t)
     pthread_cond_wait( &bq->cond, &bq->lock);
     terminate = bq->terminate;
   }
-  *t = TaskqueuePopFront( &bq->queue);
+  t = TaskqueuePopFront( &bq->queue);
   pthread_mutex_unlock( &bq->lock);
-  return terminate;
+  /* check: if t==NULL then terminate==true */
+  assert( (t!=NULL) || terminate );
+  return t;
 }
 
 void BQueueTerm( bqueue_t *bq)

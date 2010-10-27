@@ -16,7 +16,7 @@ typedef struct {
 void BQueueInit( bqueue_t *bq);
 void BQueueCleanup( bqueue_t *bq);
 void BQueuePut( bqueue_t *bq, task_t *t);
-bool BQueueFetch( bqueue_t *bq, task_t **t);
+task_t *BQueueFetch( bqueue_t *bq);
 void BQueueTerm( bqueue_t *bq);
 
 #endif /* _BQUEUE_H_ */

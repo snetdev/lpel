@@ -133,7 +133,6 @@ static void SchedWorker( lpelthread_t *env, void *arg)
 {
   schedctx_t *sc = (schedctx_t *)arg;
   unsigned int loop, delayed;
-  bool terminate;
   task_t *t;  
 
   /* assign to core */
@@ -142,11 +141,9 @@ static void SchedWorker( lpelthread_t *env, void *arg)
   /* MAIN SCHEDULER LOOP */
   loop=0;
   do {
-    terminate = BQueueFetch( &sc->rq, &t);
-    assert( (t!=NULL) || terminate );
+    t = BQueueFetch( &sc->rq);
 
     if (t != NULL) {
-      
       /* aqiure task lock, count congestion */
       if ( EBUSY == pthread_mutex_trylock( &t->lock)) {
         delayed++;
@@ -188,7 +185,7 @@ static void SchedWorker( lpelthread_t *env, void *arg)
       pthread_mutex_unlock( &t->lock);
     } /* end if executed ready task */
     loop++;
-  } while ( t != NULL || !terminate );
+  } while ( t != NULL );
 
   assert( sc->num_tasks == 0);
   /* stop only if there are no more tasks in the system */
@@ -223,7 +220,7 @@ void SchedWrapper( lpelthread_t *env, void *arg)
   /* MAIN SCHEDULER LOOP */
   loop=0;
   do {
-    (void) BQueueFetch( &sc->rq, &t);
+    t = BQueueFetch( &sc->rq);
     assert(t != NULL);
     
     t->cnt_dispatch++;
