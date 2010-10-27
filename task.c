@@ -24,7 +24,7 @@ static void TaskStartup(void *data);
 /**
  * Create a task
  */
-task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
+task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
 {
   task_t *t = (task_t *)malloc( sizeof(task_t) );
   t->uid = fetch_and_inc(&taskseq);
@@ -32,7 +32,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
   t->prev = t->next = NULL;
   
   /* task attributes */
-  t->attr = attr;
+  t->attr = *attr;
   /* fix attributes */
   if (t->attr.stacksize <= 0) {
     t->attr.stacksize = TASK_STACKSIZE_DEFAULT;
@@ -43,7 +43,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t attr)
 
   atomic_set(&t->poll_token, 0);
   
-  //t->owner = -1;
+  t->sched_context = NULL;
   t->sched_info = NULL;
 
   TIMESTAMP(&t->times.creat);

@@ -93,6 +93,7 @@ stream_t *StreamCreate(void)
   pthread_spin_init( &s->prod_lock, PTHREAD_PROCESS_PRIVATE);
   atomic_set( &s->n_sem, 0);
   atomic_set( &s->e_sem, STREAM_BUFFER_SIZE);
+  s->is_poll = 0;
   s->prod_sd = NULL;
   s->cons_sd = NULL;
   return s;
@@ -419,6 +420,26 @@ void StreamPoll( stream_list_t *list)
     self->wait_on = WAIT_ON_ANY;
     co_resume();
   }
+
+  /* unregister activators
+   * - would only be necessary, if the consumer task closes the stream
+   *   while the producer is in an is_poll state,
+   *   as this could result in a SEGFAULT when the producer
+   *   is trying to dereference sd->stream->cons_sd
+   * - a consumer closes the stream if it read
+   *   a terminate record or a sync record, and between reading the record
+   *   and closing the stream the consumer issues no StreamPoll()
+   *   and no entity writes a record on the stream after these records.
+   */
+  /*
+  iter = StreamIterCreate( list);
+  while( StreamIterHasNext( iter)) {
+    stream_desc_t *sd = StreamIterNext( iter);
+    pthread_spin_lock( &sd->stream->prod_lock);
+    sd->stream->is_poll = 0;
+    pthread_spin_unlock( &sd->stream->prod_lock);
+  }
+  */
 
   /* 'rotate' list to stream descriptor for non-empty buffer */
   *list = self->wakeup_sd;

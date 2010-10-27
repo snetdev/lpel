@@ -339,6 +339,7 @@ lpelthread_t *LpelThreadCreate( void (*func)(lpelthread_t *, void *),
   env->func = func;
   env->arg = arg;
   env->detached = detached;
+  env->node = 0;
   if (name != NULL) {
     strncpy( env->name, name, LPEL_THREADNAME_MAXLEN+1);
     env->name[LPEL_THREADNAME_MAXLEN]= '\0';

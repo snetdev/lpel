@@ -88,7 +88,6 @@ struct task {
   /* reference counter */
   atomic_t refcnt;
 
-  int owner;         /* owning worker thread TODO as place_t */
   schedctx_t *sched_context;
   void *sched_info;  /* scheduling information for this task */
 
@@ -111,7 +110,7 @@ struct task {
 
 
 
-extern task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t attr);
+extern task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t *attr);
 extern int TaskDestroy(task_t *t);
 
 
