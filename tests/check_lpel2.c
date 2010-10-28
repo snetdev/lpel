@@ -57,8 +57,8 @@ void Consumer(task_t *self, void *inarg)
   }
   StreamIterDestroy( iter);
   printf("exit Consumer\n" );
-  
-  SchedTerminate();
+
+  //SchedTerminate();
 }
 
 
@@ -122,6 +122,7 @@ static void Inputter(task_t *self, void *arg)
   } while ( 0 != strcmp(buf, "T\n") );
 
   StreamClose( out, false);
+  printf("exit Inputter\n" );
 }
 
 
@@ -147,19 +148,21 @@ static void testBasic(void)
   }
 
   /* create tasks */
-  trelay = TaskCreate( Relay, NULL, tattr);
+  trelay = TaskCreate( Relay, NULL, &tattr);
   SchedAssignTask( trelay, trelay->uid % 2);
 
   //tattr.flags |= TASK_ATTR_WAITANY;
-  tcons = TaskCreate( Consumer, NULL, tattr);
+  tcons = TaskCreate( Consumer, NULL, &tattr);
   SchedAssignTask( tcons, tcons->uid % 2);
  
   
-  intask = TaskCreate( Inputter, sinp, tattr);
+  intask = TaskCreate( Inputter, sinp, &tattr);
   inlt = LpelThreadCreate( SchedWrapper, intask, false, "inputter");
 
   LpelThreadJoin( inlt);
-  
+ 
+  SchedTerminate();
+
   LpelCleanup();
 }
 

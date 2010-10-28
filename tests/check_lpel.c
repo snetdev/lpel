@@ -65,7 +65,7 @@ stream_t *PipeElement(stream_t *in, int depth)
 
   out = StreamCreate();
   ch = ChannelsCreate( in, out, depth);
-  t = TaskCreate( Relay, ch, tattr);
+  t = TaskCreate( Relay, ch, &tattr);
   SchedAssignTask( t, t->uid % 2);
 
   printf("Created Relay %d\n", depth );
@@ -134,10 +134,10 @@ static void testBasic(void)
   in = StreamCreate();
   out = PipeElement(in, cfg.num_workers*20 - 1);
 
-  outtask = TaskCreate( Outputter, out, tattr);
+  outtask = TaskCreate( Outputter, out, &tattr);
   outlt = LpelThreadCreate( SchedWrapper, outtask, false, "outputter");
 
-  intask = TaskCreate( Inputter, in, tattr);
+  intask = TaskCreate( Inputter, in, &tattr);
   inlt = LpelThreadCreate( SchedWrapper, intask, false, "inputter");
 
   LpelThreadJoin( inlt);
