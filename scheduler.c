@@ -165,6 +165,8 @@ static void SchedWorker( lpelthread_t *env, void *arg)
       MonTaskPrint( sc->env, t);
       MonDebug(env, "(worker %d, loop %u)\n", sc->wid, loop);
 
+      pthread_mutex_unlock( &t->lock);
+      
       /* check state of task, place into appropriate queue */
       switch(t->state) {
         case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
@@ -182,7 +184,6 @@ static void SchedWorker( lpelthread_t *env, void *arg)
 
         default: assert(0); /* should not be reached */
       }
-      pthread_mutex_unlock( &t->lock);
     } /* end if executed ready task */
     loop++;
   } while ( t != NULL );
