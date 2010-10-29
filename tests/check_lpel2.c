@@ -44,6 +44,7 @@ void Consumer(task_t *self, void *inarg)
         msg = (char *) StreamRead( snext);
         printf("%s", msg );
         if (0 == strcmp( msg, "T\n" )) term=1;
+        free(msg);
       }
     }
     //sleep(5);
@@ -58,7 +59,7 @@ void Consumer(task_t *self, void *inarg)
   StreamIterDestroy( iter);
   printf("exit Consumer\n" );
 
-  //SchedTerminate();
+  SchedTerminate();
 }
 
 
@@ -103,6 +104,7 @@ void Relay(task_t *self, void *inarg)
 
   /* close streams */ 
   for (i=0; i<NUM_COLL; i++) {
+    StreamWrite( out[i], calloc(1,1));
     StreamClose(out[i], false);
   }
   StreamClose(in, true);
@@ -119,7 +121,7 @@ static void Inputter(task_t *self, void *arg)
     buf = (char *) malloc( 120 * sizeof(char) );
     (void) fgets( buf, 119, stdin  );
     StreamWrite( out, buf);
-  } while ( 0 != strcmp(buf, "T\n") );
+  } while ( buf[0] != 'T') ;
 
   StreamClose( out, false);
   printf("exit Inputter\n" );
@@ -161,7 +163,7 @@ static void testBasic(void)
 
   LpelThreadJoin( inlt);
  
-  SchedTerminate();
+  //SchedTerminate();
 
   LpelCleanup();
 }

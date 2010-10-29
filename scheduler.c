@@ -109,11 +109,16 @@ void SchedWakeup( task_t *by, task_t *whom)
   schedctx_t *sc = whom->sched_context;
   
   pthread_mutex_lock( &sc->lock );
+  assert( sc->num_tasks > 0 );
   TaskqueuePushBack( &sc->queue, whom );
   if ( 1 == sc->queue.count ) {
     pthread_cond_signal( &sc->cond );
   }
   pthread_mutex_unlock( &sc->lock );
+
+  MonDebug( by->sched_context->env,
+      "worker %d: task %u has woken up task %u\n",
+      by->sched_context->wid, by->uid, whom->uid );
 }
 
 
@@ -169,9 +174,13 @@ static void SchedWorker( lpelthread_t *env, void *arg)
   /* MAIN SCHEDULER LOOP */
   loop=0;
   do {
+    MonDebug(env, "worker %d, loop %u\n", sc->wid, loop);
+
     pthread_mutex_lock( &sc->lock );
     while( 0 == sc->queue.count &&
         (sc->num_tasks > 0 || !sc->terminate) ) {
+      MonDebug( env, "worker %d waiting (queue: %u, tasks: %u, term: %d)\n",
+          sc->wid, sc->queue.count, sc->num_tasks, sc->terminate);
       pthread_cond_wait( &sc->cond, &sc->lock);
     }
     /* if queue is empty, t:=NULL */
@@ -198,7 +207,6 @@ static void SchedWorker( lpelthread_t *env, void *arg)
 
       /* output accounting info */
       MonTaskPrint( sc->env, t);
-      MonDebug(env, "(worker %d, loop %u)\n", sc->wid, loop);
 
       pthread_mutex_unlock( &t->lock);
       
@@ -231,7 +239,8 @@ static void SchedWorker( lpelthread_t *env, void *arg)
   assert( sc->num_tasks == 0);
   /* stop only if there are no more tasks in the system */
   /* MAIN SCHEDULER LOOP END */
-  MonDebug(env, "worker %d exited.\n", sc->wid);
+  MonDebug(env, "worker %d exited (queue: %u, tasks: %u, term: %d)\n",
+      sc->wid, sc->queue.count, sc->num_tasks, sc->terminate);
 }
 
 
