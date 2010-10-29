@@ -15,6 +15,10 @@
 #define MONITORING_NONE           ( 0)
 #define MONITORING_ALL            (-1)
 
+#define MON_DO_FLUSH
+
+
+
 typedef struct {
   FILE *outfile;
   int   flags;

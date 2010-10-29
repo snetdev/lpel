@@ -32,7 +32,6 @@
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
-#include <pcl.h>
 
 #include "stream.h"
 #include "buffer.h"
@@ -65,22 +64,7 @@ struct stream_iter {
 #define DIRTY_END   ((stream_desc_t *)-1)
 
 
-
-static inline void MarkDirty( stream_desc_t *sd)
-{
-
-  /* only add if not dirty yet */
-  if (sd->dirty == NULL) {
-    /*
-     * Set the dirty ptr of sd to the dirty_list ptr of the task
-     * and the dirty_list ptr of the task to sd, i.e.,
-     * insert the sd at the front of the dirty_list.
-     * Initially, dirty_list of the tab is empty DIRTY_END (!= NULL)
-     */
-    sd->dirty = sd->task->dirty_list;
-    sd->task->dirty_list = sd;
-  }
-}
+static inline void MarkDirty( stream_desc_t *sd);
 
 
 /**
@@ -307,62 +291,6 @@ void StreamWrite( stream_desc_t *sd, void *item)
 
 
 /**
- * @pre   if file != NULL, it must be open for writing
- */
-int StreamPrintDirty( task_t *t, FILE *file)
-{
-  stream_desc_t *sd, *next;
-  int close_cnt = 0;
-
-  assert( t != NULL);
-  sd = t->dirty_list;
-
-  if (file!=NULL) {
-    fprintf( file,"[" );
-  }
-
-  while (sd != DIRTY_END) {
-    /* all elements in the dirty list must belong to same task */
-    assert( sd->task == t );
-
-    /* print sd */
-    if (file!=NULL) {
-      fprintf( file,
-          "%p,%c,%c,%lu;",
-          sd->stream, sd->mode, sd->state, sd->counter
-          );
-    }
-
-    /* get the next dirty entry, and clear the link in the current entry */
-    next = sd->dirty;
-    
-    /* update states */
-    if (sd->state == STDESC_REPLACED) { 
-      sd->state = STDESC_OPEN;
-    }
-    if (sd->state == STDESC_CLOSED) {
-      close_cnt++;
-      free( sd);
-    } else {
-      sd->dirty = NULL;
-    }
-    sd = next;
-  }
-  if (file!=NULL) {
-    fprintf( file,"] " );
-  }
-  /* */
-  t->dirty_list = DIRTY_END;
-  return close_cnt;
-}
-
-
-/****************************************************************************/
-/*  Functions to support polling on a stream descriptor list                */
-/****************************************************************************/
-
-
-/**
  * Poll a list of streams
  *
  * @pre list must not be empty (*list != NULL)
@@ -445,10 +373,85 @@ void StreamPoll( stream_list_t *list)
 
   /* 'rotate' list to stream descriptor for non-empty buffer */
   *list = self->wakeup_sd;
-  
-  return;
 }
 
+
+
+/****************************************************************************/
+/*  Printing, for monitoring output                                         */
+/****************************************************************************/
+
+
+/**
+ * @pre   if file != NULL, it must be open for writing
+ */
+int StreamPrintDirty( task_t *t, FILE *file)
+{
+  stream_desc_t *sd, *next;
+  int close_cnt = 0;
+
+  assert( t != NULL);
+  sd = t->dirty_list;
+
+  if (file!=NULL) {
+    fprintf( file,"[" );
+  }
+
+  while (sd != DIRTY_END) {
+    /* all elements in the dirty list must belong to same task */
+    assert( sd->task == t );
+
+    /* print sd */
+    if (file!=NULL) {
+      fprintf( file,
+          "%p,%c,%c,%lu;",
+          sd->stream, sd->mode, sd->state, sd->counter
+          );
+    }
+
+    /* get the next dirty entry, and clear the link in the current entry */
+    next = sd->dirty;
+    
+    /* update states */
+    if (sd->state == STDESC_REPLACED) { 
+      sd->state = STDESC_OPEN;
+    }
+    if (sd->state == STDESC_CLOSED) {
+      close_cnt++;
+      free( sd);
+    } else {
+      sd->dirty = NULL;
+    }
+    sd = next;
+  }
+  if (file!=NULL) {
+    fprintf( file,"] " );
+  }
+  /* */
+  t->dirty_list = DIRTY_END;
+  return close_cnt;
+}
+
+
+/****************************************************************************/
+/* Private functions                                                        */
+/****************************************************************************/
+
+static inline void MarkDirty( stream_desc_t *sd)
+{
+
+  /* only add if not dirty yet */
+  if (sd->dirty == NULL) {
+    /*
+     * Set the dirty ptr of sd to the dirty_list ptr of the task
+     * and the dirty_list ptr of the task to sd, i.e.,
+     * insert the sd at the front of the dirty_list.
+     * Initially, dirty_list of the tab is empty DIRTY_END (!= NULL)
+     */
+    sd->dirty = sd->task->dirty_list;
+    sd->task->dirty_list = sd;
+  }
+}
 
 
 
@@ -457,7 +460,6 @@ void StreamPoll( stream_list_t *list)
 /****************************************************************************/
 /* Functions for maintaining a list of stream descriptors                   */
 /****************************************************************************/
-
 
 
 

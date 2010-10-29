@@ -151,7 +151,50 @@ void TaskYield( task_t *ct)
   co_resume();
 }
 
+/****************************************************************************/
+/*  Printing, for monitoring output                                         */
+/****************************************************************************/
 
+
+#define FLAGS_TEST(vec,f)   (( (vec) & (f) ) == (f) )
+
+void TaskPrint( task_t *t, FILE *file, int flags)
+{
+  /* print general info: name, disp.cnt, state */
+  fprintf( file,
+      "tid %lu disp %lu st %c ",
+      t->uid, t->cnt_dispatch, t->state
+      );
+
+  /* waiting info */
+  if ( t->state == TASK_WAITING) {
+    fprintf( file, "on %c:%p ", t->wait_on, t->wait_s );
+  }
+
+  /* print times */
+  if ( FLAGS_TEST( flags, TASK_PRINT_TIMES) ) {
+    if ( t->state == TASK_ZOMBIE) {
+      fprintf( file, "creat ");
+      TimingPrint( &t->times.creat, file);
+    }
+    fprintf( file, "start ");
+    TimingPrint( &t->times.start, file);
+    fprintf( file, "stop ");
+    TimingPrint( &t->times.stop, file);
+  }
+
+  /* print stream info */
+  if ( FLAGS_TEST( flags, TASK_PRINT_STREAMS) ) {
+    StreamPrintDirty( t, file);
+  }
+}
+
+
+
+
+/****************************************************************************/
+/* Private functions                                                        */
+/****************************************************************************/
 
 /**
  * Hidden Startup function for user specified task function

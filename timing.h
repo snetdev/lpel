@@ -2,6 +2,8 @@
 #define _TIMING_H_
 
 
+#include <stdio.h>
+
 /*
  * Link with librt:
  *   -lrt
@@ -133,6 +135,17 @@ static inline void TimingExpAvg(timing_t *t,
 static inline double TimingToMSec(const timing_t *t)
 {
   return (((double)t->tv_sec) * 1000.0f) + (((double)t->tv_nsec) / 1000000.0f);
+}
+
+
+/**
+ * Print a time in nsec
+ */
+static inline void TimingPrint( const timing_t *t, FILE *file)
+{
+  (void) fprintf( file, "%lu%09lu ",
+      (unsigned long) t->tv_sec, t->tv_nsec
+      );
 }
 
 #endif /* _TIMING_H_ */

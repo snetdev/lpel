@@ -42,13 +42,20 @@ void Consumer(task_t *self, void *inarg)
       stream_desc_t *snext = StreamIterNext(iter);
       if ( NULL != StreamPeek( snext )) {
         msg = (char *) StreamRead( snext);
-        printf("%s", msg );
-        if (0 == strcmp( msg, "T\n" )) term=1;
-        free(msg);
+        if (0 == strcmp( msg, "T\n" )) {
+          term=1;
+        } else {
+          printf("%s", msg );
+          free(msg);
+        }
       }
     }
     //sleep(5);
   } while (0 == term) ;
+
+  /* print & free termination message */
+  printf("%s", msg );
+  free(msg);
 
   /* close streams */ 
   StreamIterReset(&lst, iter);
@@ -100,12 +107,11 @@ void Relay(task_t *self, void *inarg)
   /* terminate msg goes to 0 */
   assert( dest==0 );
   printf("Relay dest: %d\n", dest);
-  StreamWrite( out[dest], item);
 
-  /* close streams */ 
+  /* relay to all, close streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamWrite( out[i], calloc(1,1));
-    StreamClose(out[i], false);
+    StreamWrite( out[i], item);
+    StreamClose( out[i], false);
   }
   StreamClose(in, true);
   printf("exit Relay\n" );
@@ -140,6 +146,7 @@ static void testBasic(void)
   cfg.proc_workers = 2;
   cfg.proc_others = 0;
   cfg.flags = 0;
+  cfg.node = -1;
 
   LpelInit(&cfg);
 
