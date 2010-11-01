@@ -28,6 +28,7 @@ struct schedctx {
   int wid; 
   lpelthread_t    *env;
   unsigned int     num_tasks;
+  unsigned int     loop;
   taskqueue_t      queue;
   pthread_mutex_t  lock;
   pthread_cond_t   cond;
@@ -165,16 +166,16 @@ void SchedAssignTask( task_t *t, int wid)
 static void SchedWorker( lpelthread_t *env, void *arg)
 {
   schedctx_t *sc = (schedctx_t *)arg;
-  unsigned int loop, delayed;
+  unsigned int delayed;
   task_t *t;  
 
   /* assign to core */
   LpelThreadAssign( env, sc->wid );
 
   /* MAIN SCHEDULER LOOP */
-  loop=0;
+  sc->loop=0;
   do {
-    MonDebug(env, "worker %d, loop %u\n", sc->wid, loop);
+    MonDebug(env, "worker %d, loop %u\n", sc->wid, sc->loop);
 
     pthread_mutex_lock( &sc->lock );
     while( 0 == sc->queue.count &&
@@ -233,7 +234,7 @@ static void SchedWorker( lpelthread_t *env, void *arg)
         default: assert(0); /* should not be reached */
       }
     } /* end if executed ready task */
-    loop++;
+    sc->loop++;
   } while ( t != NULL );
 
   assert( sc->num_tasks == 0);
@@ -248,7 +249,6 @@ static void SchedWorker( lpelthread_t *env, void *arg)
 void SchedWrapper( lpelthread_t *env, void *arg)
 {
   task_t *t = (task_t *)arg;
-  unsigned int loop;
   schedctx_t *sc;
 
   /* create scheduler context */
@@ -270,8 +270,9 @@ void SchedWrapper( lpelthread_t *env, void *arg)
   LpelThreadAssign( env, -1 );
 
   /* MAIN SCHEDULER LOOP */
-  loop=0;
+  sc->loop=0;
   do {
+    MonDebug(env, "loop %u\n", sc->loop);
     pthread_mutex_lock( &sc->lock );
     while( 0 == sc->queue.count ) {
       pthread_cond_wait( &sc->cond, &sc->lock);
@@ -294,7 +295,6 @@ void SchedWrapper( lpelthread_t *env, void *arg)
 
     /* output accounting info */
     MonTaskPrint( sc->env, t);
-    MonDebug(env, "(loop %u)\n", loop);
 
     /* check state of task, place into appropriate queue */
     switch(t->state) {
@@ -316,7 +316,7 @@ void SchedWrapper( lpelthread_t *env, void *arg)
 
       default: assert(0); /* should not be reached */
     }
-    loop++;
+    sc->loop++;
   } while ( !sc->terminate );
 
   assert( sc->num_tasks == 0);

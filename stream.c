@@ -236,13 +236,14 @@ void StreamWrite( stream_desc_t *sd, void *item)
 {
   task_t *self = sd->task;
   int poll_wakeup = 0;
+  int cnt_full;
 
   /* check if opened for writing */
   assert( sd->mode == 'w' );
   assert( item != NULL );
 
   /* quasi P(e_sem) */
-  if ( fetch_and_dec( &sd->stream->e_sem) == 0) {
+  if ( fetch_and_dec( &sd->stream->e_sem)== 0) {
     /* wait on write */
     self->state = TASK_WAITING;
     self->wait_on = WAIT_ON_READ;
@@ -267,19 +268,21 @@ void StreamWrite( stream_desc_t *sd, void *item)
   }
   pthread_spin_unlock( &sd->stream->prod_lock);
 
-  /* we are the sole producer task waking the polling consumer up */
-  if (poll_wakeup) {
-    sd->stream->cons_sd->task->wakeup_sd = sd->stream->cons_sd;
-    SchedWakeup( self, sd->stream->cons_sd->task);
-  }
 
 
   /* quasi V(n_sem) */
-  if ( fetch_and_inc( &sd->stream->n_sem) < 0) {
+  cnt_full = fetch_and_inc( &sd->stream->n_sem);
+  if ( cnt_full < 0) {
     /* n_sem was -1 */
-    assert( poll_wakeup == 0 );
     /* wakeup consumer: make ready */
     SchedWakeup( self, sd->stream->cons_sd->task);
+  } else {
+    /* we are the sole producer task waking the polling consumer up */
+    if (poll_wakeup) {
+      //assert( cnt_full >= 0 );
+      sd->stream->cons_sd->task->wakeup_sd = sd->stream->cons_sd;
+      SchedWakeup( self, sd->stream->cons_sd->task);
+    }
   }
 
   /* for monitoring */
