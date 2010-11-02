@@ -162,25 +162,20 @@ void TaskPrint( task_t *t, FILE *file, int flags)
 {
   /* print general info: name, disp.cnt, state */
   fprintf( file,
-      "tid %lu disp %lu st %c ",
-      t->uid, t->cnt_dispatch, t->state
+      "tid %lu disp %lu st %c%c ",
+      t->uid, t->cnt_dispatch, t->state, (t->state==TASK_WAITING)? t->wait_on : ' '
       );
-
-  /* waiting info */
-  if ( t->state == TASK_WAITING) {
-    fprintf( file, "on %c:%p ", t->wait_on, t->wait_s );
-  }
 
   /* print times */
   if ( FLAGS_TEST( flags, TASK_PRINT_TIMES) ) {
+    timing_t diff;
     if ( t->state == TASK_ZOMBIE) {
       fprintf( file, "creat ");
       TimingPrint( &t->times.creat, file);
     }
-    fprintf( file, "start ");
-    TimingPrint( &t->times.start, file);
-    fprintf( file, "stop ");
-    TimingPrint( &t->times.stop, file);
+    TimingDiff( &diff, &t->times.start, &t->times.stop);
+    fprintf( file, "et ");
+    TimingPrint( &diff , file);
   }
 
   /* print stream info */

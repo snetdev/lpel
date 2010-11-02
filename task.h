@@ -82,7 +82,6 @@ struct task {
 
   /* data to indicate on which event the task is waiting */
   taskstate_wait_t wait_on;
-  struct stream *wait_s;
 
   /* poll token */
   atomic_t poll_token;

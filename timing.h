@@ -21,6 +21,7 @@ typedef struct timespec timing_t;
  */
 #ifdef DO_TIMING
 # define TIMESTAMP(t) do { \
+    /*TODO check if CLOCK_MONOTONIC is available */ \
     (void) clock_gettime(CLOCK_MONOTONIC, (t) ); \
   } while (0)
 #else
@@ -36,8 +37,7 @@ typedef struct timespec timing_t;
  */
 static inline void TimingStart(timing_t *t)
 {
-  (void) clock_gettime(CLOCK_MONOTONIC, t);
-  /*TODO check if CLOCK_MONOTONIC is available */
+  TIMESTAMP( t);
 }
 
 /**
@@ -50,7 +50,7 @@ static inline void TimingEnd(timing_t *t)
   timing_t start, end;
   
   /* get end time  */
-  (void) clock_gettime(CLOCK_MONOTONIC, &end);
+  TIMESTAMP( &end);
   /* store start time */
   start = *t;
 
@@ -79,6 +79,20 @@ static inline void TimingAdd(timing_t *t, const timing_t *val)
     t->tv_nsec -= TIMING_BILLION;
     t->tv_sec  += 1L;
   }
+}
+
+static inline void TimingDiff( timing_t *res, timing_t *start, timing_t *end)
+{
+  /* calculate elapsed time to t,
+   * assuming end > start and *.tv_nsec < TIMING_BILLION
+   */
+  *res = *start;
+  if (end->tv_nsec < start->tv_nsec) {
+    res->tv_nsec -= TIMING_BILLION;
+    res->tv_sec  += 1L;
+  }
+  res->tv_nsec = end->tv_nsec - res->tv_nsec;
+  res->tv_sec  = end->tv_sec  - res->tv_sec;
 }
 
 /**
@@ -143,9 +157,13 @@ static inline double TimingToMSec(const timing_t *t)
  */
 static inline void TimingPrint( const timing_t *t, FILE *file)
 {
-  (void) fprintf( file, "%lu%09lu ",
-      (unsigned long) t->tv_sec, t->tv_nsec
-      );
+  if (t->tv_sec == 0) {
+    (void) fprintf( file, "%lu ", t->tv_nsec );
+  } else {
+    (void) fprintf( file, "%lu%09lu ",
+        (unsigned long) t->tv_sec, t->tv_nsec
+        );
+  }
 }
 
 #endif /* _TIMING_H_ */

@@ -1,4 +1,9 @@
 
+#include "monitoring.h"
+
+
+#ifdef MONITORING_ENABLE
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -6,7 +11,6 @@
 
 #include "stream.h"
 
-#include "monitoring.h"
 #include "scheduler.h"
 #include "timing.h"
 #include "lpel.h"
@@ -81,12 +85,11 @@ void MonTaskEvent( task_t *t, const char *fmt, ...)
 
 
 
-void MonTaskPrint( lpelthread_t *env, task_t *t)
+void MonTaskPrint( monitoring_t *mon, struct schedctx *sc, struct task *t)
 {
 # define IS_FLAG(v)  ( (mon->flags & (v)) == (v) )
   timing_t ts;
   int flags = 0;
-  monitoring_t *mon = &env->mon;
   FILE *file = mon->outfile;
 
   if (( file == NULL) 
@@ -94,8 +97,12 @@ void MonTaskPrint( lpelthread_t *env, task_t *t)
     return;
   }
 
-  TIMESTAMP( &ts);
+  /* get task stop time */
+  ts = t->times.stop;
   TimingPrint( &ts, file);
+
+  //TODO check a flag
+  //SchedPrintContext( sc, file);
 
   if ( IS_FLAG( MONITORING_TIMES ) ) {
     flags |= TASK_PRINT_TIMES;
@@ -111,3 +118,4 @@ void MonTaskPrint( lpelthread_t *env, task_t *t)
 #endif
 }
 
+#endif /* MONITORING_ENABLE */

@@ -11,7 +11,9 @@
 #include "lpel.h"
 #include "scheduler.h"
 #include "timing.h"
+
 #include "monitoring.h"
+
 #include "atomic.h"
 #include "taskqueue.h"
 
@@ -116,10 +118,6 @@ void SchedWakeup( task_t *by, task_t *whom)
     pthread_cond_signal( &sc->cond );
   }
   pthread_mutex_unlock( &sc->lock );
-
-  MonDebug( by->sched_context->env,
-      "worker %d: task %u has woken up task %u\n",
-      by->sched_context->wid, by->uid, whom->uid );
 }
 
 
@@ -175,13 +173,16 @@ static void SchedWorker( lpelthread_t *env, void *arg)
   /* MAIN SCHEDULER LOOP */
   sc->loop=0;
   do {
-    MonDebug(env, "worker %d, loop %u\n", sc->wid, sc->loop);
-
     pthread_mutex_lock( &sc->lock );
     while( 0 == sc->queue.count &&
         (sc->num_tasks > 0 || !sc->terminate) ) {
-      MonDebug( env, "worker %d waiting (queue: %u, tasks: %u, term: %d)\n",
+#ifdef MONITORING_ENABLE
+      /* TODO only on flag */
+      /*
+      MonDebug( env, "wid %d waiting (queue: %u, tasks: %u, term: %d)\n",
           sc->wid, sc->queue.count, sc->num_tasks, sc->terminate);
+      */
+#endif
       pthread_cond_wait( &sc->cond, &sc->lock);
     }
     /* if queue is empty, t:=NULL */
@@ -207,7 +208,9 @@ static void SchedWorker( lpelthread_t *env, void *arg)
       assert( t->state != TASK_RUNNING);
 
       /* output accounting info */
-      MonTaskPrint( sc->env, t);
+#ifdef MONITORING_ENABLE
+      MonTaskPrint( &sc->env->mon, sc, t);
+#endif
 
       pthread_mutex_unlock( &t->lock);
       
@@ -240,8 +243,12 @@ static void SchedWorker( lpelthread_t *env, void *arg)
   assert( sc->num_tasks == 0);
   /* stop only if there are no more tasks in the system */
   /* MAIN SCHEDULER LOOP END */
+#ifdef MONITORING_ENABLE
+  /*
   MonDebug(env, "worker %d exited (queue: %u, tasks: %u, term: %d)\n",
       sc->wid, sc->queue.count, sc->num_tasks, sc->terminate);
+  */
+#endif
 }
 
 
@@ -272,7 +279,6 @@ void SchedWrapper( lpelthread_t *env, void *arg)
   /* MAIN SCHEDULER LOOP */
   sc->loop=0;
   do {
-    MonDebug(env, "loop %u\n", sc->loop);
     pthread_mutex_lock( &sc->lock );
     while( 0 == sc->queue.count ) {
       pthread_cond_wait( &sc->cond, &sc->lock);
@@ -294,7 +300,9 @@ void SchedWrapper( lpelthread_t *env, void *arg)
     assert( t->state != TASK_RUNNING);
 
     /* output accounting info */
-    MonTaskPrint( sc->env, t);
+#ifdef MONITORING_ENABLE
+    MonTaskPrint( &sc->env->mon, sc, t);
+#endif
 
     /* check state of task, place into appropriate queue */
     switch(t->state) {
@@ -320,12 +328,29 @@ void SchedWrapper( lpelthread_t *env, void *arg)
   } while ( !sc->terminate );
 
   assert( sc->num_tasks == 0);
+#ifdef MONITORING_ENABLE
+  /*
   MonDebug(env, "wrapper exited.\n");
+  */
+#endif
   
   /* free the scheduler context */
   free( sc);
 }
 
 
-/** PRIVATE FUNCTIONS *******************************************************/
+
+
+/****************************************************************************/
+/*  Printing, for monitoring output                                         */
+/****************************************************************************/
+
+void SchedPrintContext( schedctx_t *sc, FILE *file)
+{
+  if ( sc->wid < 0) {
+    (void) fprintf(file, "loop %u ", sc->loop);
+  } else {
+    (void) fprintf(file, "wid %d loop %u ", sc->wid, sc->loop);
+  }
+}
 
