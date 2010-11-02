@@ -39,9 +39,9 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
   }
 
   /* initialize reference counter to 1*/
-  atomic_set(&t->refcnt, 1);
-
-  atomic_set(&t->poll_token, 0);
+  atomic_init( &t->refcnt, 1);
+  /* initialize poll token to 0 */
+  atomic_init( &t->poll_token, 0);
   
   t->sched_context = NULL;
   t->sched_info = NULL;
@@ -81,6 +81,9 @@ int TaskDestroy(task_t *t)
 
 
     pthread_mutex_destroy( &t->lock);
+
+    atomic_destroy( &t->refcnt);
+    atomic_destroy( &t->poll_token);
 
     /* delete the coroutine */
     co_delete(t->ctx);

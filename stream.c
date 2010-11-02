@@ -86,8 +86,8 @@ stream_t *StreamCreate(void)
 #else
   pthread_mutex_init( &s->prod_lock, NULL);
 #endif
-  atomic_set( &s->n_sem, 0);
-  atomic_set( &s->e_sem, STREAM_BUFFER_SIZE);
+  atomic_init( &s->n_sem, 0);
+  atomic_init( &s->e_sem, STREAM_BUFFER_SIZE);
   s->is_poll = 0;
   s->prod_sd = NULL;
   s->cons_sd = NULL;
@@ -105,6 +105,8 @@ void StreamDestroy( stream_t *s)
 #else
   pthread_mutex_destroy( &s->prod_lock);
 #endif
+  atomic_destroy( &s->n_sem);
+  atomic_destroy( &s->e_sem);
   free( s);
 }
 
@@ -380,6 +382,11 @@ void StreamPoll( stream_list_t *list)
       } else {
         /* nothing in the buffer, register stream as activator */
         sd->stream->is_poll = 1;
+        sd->event_flags |= STDESC_WAITON;
+        /* TODO marking all streams does flood the log-files
+           - is it desired to have anyway?
+        MarkDirty( sd);
+        */
       }
     } /* CS END */
     /* unlock stream */
