@@ -27,19 +27,18 @@ static void TaskStartup(void *data);
 task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
 {
   task_t *t = (task_t *)malloc( sizeof(task_t) );
+
   t->uid = fetch_and_inc(&taskseq);
   t->state = TASK_INIT;
   t->prev = t->next = NULL;
   
-  /* task attributes */
+  /* copy task attributes */
   t->attr = *attr;
   /* fix attributes */
   if (t->attr.stacksize <= 0) {
     t->attr.stacksize = TASK_STACKSIZE_DEFAULT;
   }
 
-  /* initialize reference counter to 1*/
-  atomic_init( &t->refcnt, 1);
   /* initialize poll token to 0 */
   atomic_init( &t->poll_token, 0);
   
@@ -63,7 +62,6 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
   }
   pthread_mutex_init( &t->lock, NULL);
   t->inarg = inarg;
-  t->outarg = NULL;
  
   return t;
 }
@@ -71,29 +69,18 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
 
 /**
  * Destroy a task
- * @return 1 if the task was physically freed (refcnt reached 0)
  */
-int TaskDestroy(task_t *t)
+void TaskDestroy(task_t *t)
 {
-  /* only if nothing references the task anymore */
-  /* if ( fetch_and_dec(&t->refcnt) == 1) { */
-  if ( atomic_dec(&t->refcnt) == 0) {
+  pthread_mutex_destroy( &t->lock);
 
+  atomic_destroy( &t->poll_token);
 
-    pthread_mutex_destroy( &t->lock);
+  /* delete the coroutine */
+  co_delete(t->ctx);
 
-    atomic_destroy( &t->refcnt);
-    atomic_destroy( &t->poll_token);
-
-    /* delete the coroutine */
-    co_delete(t->ctx);
-
-    /* free the TCB itself*/
-    free(t);
-
-    return 1;
-  }
-  return 0;
+  /* free the TCB itself*/
+  free(t);
 }
 
 
@@ -121,16 +108,14 @@ void TaskCall(task_t *t)
  * Exit the current task
  *
  * @param ct  pointer to the current task
- * @param outarg  join argument
  * @pre ct->state == TASK_RUNNING
  */
-void TaskExit( task_t *ct, void *outarg)
+void TaskExit( task_t *ct)
 {
   assert( ct->state == TASK_RUNNING );
 
   ct->state = TASK_ZOMBIE;
   
-  ct->outarg = outarg;
   /* context switch */
   co_resume();
 
@@ -207,7 +192,7 @@ static void TaskStartup(void *data)
   func(t, t->inarg);
 
   /* if task function returns, exit properly */
-  TaskExit(t, NULL);
+  TaskExit(t);
 }
 
 

@@ -209,7 +209,9 @@ static void SchedWorker( lpelthread_t *env, void *arg)
 
       /* output accounting info */
 #ifdef MONITORING_ENABLE
-      MonTaskPrint( &sc->env->mon, sc, t);
+      if ( t->attr.flags & TASK_ATTR_MONITOR ) {
+        MonTaskPrint( &sc->env->mon, sc, t);
+      }
 #endif
 
       pthread_mutex_unlock( &t->lock);
@@ -301,7 +303,9 @@ void SchedWrapper( lpelthread_t *env, void *arg)
 
     /* output accounting info */
 #ifdef MONITORING_ENABLE
-    MonTaskPrint( &sc->env->mon, sc, t);
+      if ( t->attr.flags & TASK_ATTR_MONITOR ) {
+        MonTaskPrint( &sc->env->mon, sc, t);
+      }
 #endif
 
     /* check state of task, place into appropriate queue */

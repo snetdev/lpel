@@ -21,18 +21,9 @@
 
 #define TASK_ATTR_DEFAULT      (0)
 #define TASK_ATTR_MONITOR   (1<<0)
-#define TASK_ATTR_SYSTEM    (1<<8)
-
 
 #define TASK_PRINT_TIMES    (1<<0)
 #define TASK_PRINT_STREAMS  (1<<1)
-
-
-/**
- * Check if a task is a waitany-task
- * @param t   pointer to task_t
- */
-#define TASK_IS_WAITANY(t)  (BIT_IS_SET((t)->attr.flags, TASK_ATTR_WAITANY))
 
 
 struct stream_desc;
@@ -87,9 +78,6 @@ struct task {
   atomic_t poll_token;
   struct stream_desc *wakeup_sd;
 
-  /* reference counter */
-  atomic_t refcnt;
-
   schedctx_t *sched_context;
   void *sched_info;  /* scheduling information for this task */
 
@@ -107,16 +95,15 @@ struct task {
   coroutine_t ctx;
   taskfunc_t code;
   void *inarg;  /* input argument  */
-  void *outarg; /* output argument */
 };
 
 
 
 extern task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t *attr);
-extern int TaskDestroy(task_t *t);
+extern void TaskDestroy(task_t *t);
 
 extern void TaskCall(task_t *ct);
-extern void TaskExit(task_t *ct, void *outarg);
+extern void TaskExit(task_t *ct);
 extern void TaskYield(task_t *ct);
 
 
