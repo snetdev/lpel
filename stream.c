@@ -156,7 +156,7 @@ stream_t *StreamCreate(void)
  * Free the memory allocated for a stream.
  *
  * @param s   stream to be freed
- * @pre   stream must not be opened by any task!
+ * @pre       stream must not be opened by any task!
  */
 void StreamDestroy( stream_t *s)
 {
@@ -232,7 +232,7 @@ void StreamClose( stream_desc_t *sd, bool destroy_s)
  *
  * @param sd    stream descriptor for which the stream must be replaced
  * @param snew  the new stream
- * @pre snew must not be opened by same or other task
+ * @pre         snew must not be opened by same or other task
  */
 void StreamReplace( stream_desc_t *sd, stream_t *snew)
 {
@@ -282,8 +282,7 @@ void *StreamRead( stream_desc_t *sd)
 
   /* quasi P(n_sem) */
   if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
-    /* wait on write */
-    self->state = TASK_WAITING;
+    self->state = TASK_BLOCKED;
     self->wait_on = WAIT_ON_WRITE;
     /* wait on stream: */
     sd->event_flags |= STDESC_WAITON;
@@ -342,8 +341,7 @@ void StreamWrite( stream_desc_t *sd, void *item)
 
   /* quasi P(e_sem) */
   if ( fetch_and_dec( &sd->stream->e_sem)== 0) {
-    /* wait on write */
-    self->state = TASK_WAITING;
+    self->state = TASK_BLOCKED;
     self->wait_on = WAIT_ON_READ;
     /* wait on stream: */
     sd->event_flags |= STDESC_WAITON;
@@ -408,8 +406,16 @@ void StreamWrite( stream_desc_t *sd, void *item)
 /**
  * Poll a list of streams
  *
+ * This is a blocking function called by a consumer which wants to wait
+ * for arrival of data on any of a specified list of streams.
+ * The consumer task is suspended while there is no new data on all streams.
+ *
  * @param list    a stream descriptor list the task wants to poll
- * @pre   list must not be empty (*list != NULL)
+ * @pre           list must not be empty (*list != NULL)
+ *
+ * @post          The first element when iterating through the list after
+ *                StreamPoll() will be the one which caused the task to
+ *                wakeup, i.e., the first stream where data arrived.
  */
 void StreamPoll( stream_list_t *list)
 {
@@ -460,7 +466,7 @@ void StreamPoll( stream_list_t *list)
         /* nothing in the buffer, register stream as activator */
         sd->stream->is_poll = 1;
         sd->event_flags |= STDESC_WAITON;
-        /* TODO marking all streams does flood the log-files
+        /* TODO marking all streams does potentially flood the log-files
            - is it desired to have anyway?
         MarkDirty( sd);
         */
@@ -476,8 +482,8 @@ void StreamPoll( stream_list_t *list)
 
   /* context switch */
   if (do_ctx_switch) {
-    /* set task as waiting */
-    self->state = TASK_WAITING;
+    /* set task as blocked */
+    self->state = TASK_BLOCKED;
     self->wait_on = WAIT_ON_ANY;
     co_resume();
   }
@@ -523,7 +529,7 @@ void StreamPoll( stream_list_t *list)
  * @param t     the task of which the dirty list is to be printed
  * @param file  the file to which the dirty list should be printed,
  *              or NULL if only the dirty list should be cleared
- * @pre   if file != NULL, it must be open for writing
+ * @pre         if file != NULL, it must be open for writing
  */
 int StreamPrintDirty( task_t *t, FILE *file)
 {
@@ -623,6 +629,7 @@ static inline void MarkDirty( stream_desc_t *sd)
  *
  * @param lst   the stream descriptor list
  * @param node  the stream descriptor to be appended
+ *
  * @pre   it is NOT safe to append while iterating, i.e. if an SD should
  *        be appended while the list is iterated through, StreamIterAppend()
  *        must be used.
@@ -646,8 +653,8 @@ void StreamListAppend( stream_list_t *lst, stream_desc_t *node)
 /**
  * Test if a stream descriptor list is empty
  *
- * @param   lst   stream descriptor list
- * @return  1 if the list is empty, 0 otherwise
+ * @param lst   stream descriptor list
+ * @return      1 if the list is empty, 0 otherwise
  */
 int StreamListIsEmpty( stream_list_t *lst)
 {
@@ -666,7 +673,7 @@ int StreamListIsEmpty( stream_list_t *lst)
  *
  * @param lst   list to create an iterator from, can be NULL to only allocate
  *              the memory for the iterator
- * @return  the newly created iterator
+ * @return      the newly created iterator
  */
 stream_iter_t *StreamIterCreate( stream_list_t *lst)
 {
@@ -697,7 +704,7 @@ void StreamIterDestroy( stream_iter_t *iter)
  *
  * @param lst   list to be iterated through
  * @param iter  iterator to be resetted
- * @pre The stream list is not empty, i.e. *lst != NULL
+ * @pre         The stream list is not empty, i.e. *lst != NULL
  */
 void StreamIterReset( stream_list_t *lst, stream_iter_t *iter)
 {
@@ -712,7 +719,7 @@ void StreamIterReset( stream_list_t *lst, stream_iter_t *iter)
  * iterated through
  *
  * @param iter  the iterator
- * @return   1 if there are stream descriptors left, 0 otherwise
+ * @return      1 if there are stream descriptors left, 0 otherwise
  */
 int StreamIterHasNext( stream_iter_t *iter)
 {
@@ -725,9 +732,9 @@ int StreamIterHasNext( stream_iter_t *iter)
  * Get the next stream descriptor from the iterator
  *
  * @param iter  the iterator
- * @return  the next stream descriptor
- * @pre     there must be stream descriptors left for iteration,
- *          check with StreamIterHasNext()
+ * @return      the next stream descriptor
+ * @pre         there must be stream descriptors left for iteration,
+ *              check with StreamIterHasNext()
  */
 stream_desc_t *StreamIterNext( stream_iter_t *iter)
 {
@@ -791,7 +798,8 @@ void StreamIterAppend( stream_iter_t *iter, stream_desc_t *node)
  * Remove the current stream descriptor from list while iterating through
  *
  * @param iter  the iterator
- * @pre iter points to valid element
+ * @pre         iter points to valid element
+ *
  * @note StreamIterRemove() may only be called once after
  *       StreamIterNext(), as the current node is not a valid
  *       list node anymore. Iteration can be continued though.

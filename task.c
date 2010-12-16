@@ -29,7 +29,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
   task_t *t = (task_t *)malloc( sizeof(task_t) );
 
   t->uid = fetch_and_inc(&taskseq);
-  t->state = TASK_INIT;
+  t->state = TASK_READY;
   t->prev = t->next = NULL;
   
   /* copy task attributes */
@@ -43,7 +43,6 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
   atomic_init( &t->poll_token, 0);
   
   t->sched_context = NULL;
-  t->sched_info = NULL;
 
   TIMESTAMP(&t->times.creat);
 
@@ -54,14 +53,14 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
   
 
   t->code = func;
+  t->inarg = inarg;
   /* function, argument (data), stack base address, stacksize */
-  t->ctx = co_create(TaskStartup, (void *)t, NULL, t->attr.stacksize);
+  t->ctx = co_create( TaskStartup, (void *)t, NULL, t->attr.stacksize);
   if (t->ctx == NULL) {
     /*TODO throw error!*/
     assert(0);
   }
   pthread_mutex_init( &t->lock, NULL);
-  t->inarg = inarg;
  
   return t;
 }
@@ -73,12 +72,9 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
 void TaskDestroy(task_t *t)
 {
   pthread_mutex_destroy( &t->lock);
-
   atomic_destroy( &t->poll_token);
-
   /* delete the coroutine */
   co_delete(t->ctx);
-
   /* free the TCB itself*/
   free(t);
 }
@@ -94,14 +90,10 @@ void TaskCall(task_t *t)
 {
   assert( t->state != TASK_RUNNING);
   t->state = TASK_RUNNING;
-
   /* CAUTION: a coroutine must not run simultaneously in more than one thread! */
   /* CONTEXT SWITCH */
   co_call(t->ctx);
 }
-
-
-
 
 
 /**
@@ -113,12 +105,9 @@ void TaskCall(task_t *t)
 void TaskExit( task_t *ct)
 {
   assert( ct->state == TASK_RUNNING );
-
   ct->state = TASK_ZOMBIE;
-  
   /* context switch */
   co_resume();
-
   /* execution never comes back here */
   assert(0);
 }
@@ -133,7 +122,6 @@ void TaskExit( task_t *ct)
 void TaskYield( task_t *ct)
 {
   assert( ct->state == TASK_RUNNING );
-
   ct->state = TASK_READY;
   /* context switch */
   co_resume();
@@ -151,7 +139,8 @@ void TaskPrint( task_t *t, FILE *file, int flags)
   /* print general info: name, disp.cnt, state */
   fprintf( file,
       "tid %lu disp %lu st %c%c ",
-      t->uid, t->cnt_dispatch, t->state, (t->state==TASK_WAITING)? t->wait_on : ' '
+      t->uid, t->cnt_dispatch, t->state,
+      (t->state==TASK_BLOCKED)? t->wait_on : ' '
       );
 
   /* print times */
@@ -180,9 +169,10 @@ void TaskPrint( task_t *t, FILE *file, int flags)
 /****************************************************************************/
 
 /**
- * Hidden Startup function for user specified task function
+ * Startup function for user specified task,
+ * calls task function with proper signature
  *
- * Calls task function with proper signature
+ * @param data    the previously allocated task_t TCB
  */
 static void TaskStartup(void *data)
 {
@@ -190,7 +180,6 @@ static void TaskStartup(void *data)
   taskfunc_t func = t->code;
   /* call the task function with inarg as parameter */
   func(t, t->inarg);
-
   /* if task function returns, exit properly */
   TaskExit(t);
 }
