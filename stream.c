@@ -43,12 +43,16 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include "stream.h"
+#include "arch/atomic.h"
+
 #include "buffer.h"
-#include "atomic.h"
+#include "stream.h"
 #include "task.h"
 #include "scheduler.h"
 
+
+#include "stream_desc.h"
+#include "stream_list.h"
 
 /**
  * A stream which is shared between a
@@ -70,55 +74,7 @@ struct stream {
 };
 
 
-/**
- * A stream descriptor
- *
- * A producer/consumer must open a stream before using it, and by opening
- * a stream, a stream descriptor is created and returned. 
- */
-struct stream_desc {
-  task_t *task;       /** the task which opened the stream */
-  stream_t *stream;   /** pointer to the stream */
-  char mode;          /** either 'r' or 'w' */
-  char state;         /** one of IOCR, for monitoring */
-  unsigned long counter;      /** counts the number of items transmitted
-                                  over the stream descriptor */
-  int event_flags;            /** which events happened on that stream */
-  struct stream_desc *next;   /** for organizing in lists */
-  struct stream_desc *dirty;  /** for maintaining a list of 'dirty' items */
-};
 
-
-/**
- * An iterator for a stream descriptor list
- */
-struct stream_iter {
-  stream_desc_t *cur;
-  stream_desc_t *prev;
-  stream_list_t *list;
-};
-
-
-/**
- * The state of a stream descriptor
- */
-#define STDESC_INUSE    'I'
-#define STDESC_OPENED   'O'
-#define STDESC_CLOSED   'C'
-#define STDESC_REPLACED 'R'
-
-/**
- * The event_flags of a stream descriptor
- */
-#define STDESC_MOVED    (1<<0)
-#define STDESC_WOKEUP   (1<<1)
-#define STDESC_WAITON   (1<<2)
-
-/**
- * This special value indicates the end of the dirty list chain.
- * NULL cannot be used as NULL indicates that the SD is not dirty.
- */
-#define DIRTY_END   ((stream_desc_t *)-1)
 
 
 /* prototype of the function marking the stream descriptor as dirty*/
@@ -282,13 +238,10 @@ void *StreamRead( stream_desc_t *sd)
 
   /* quasi P(n_sem) */
   if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
-    self->state = TASK_BLOCKED;
-    self->wait_on = WAIT_ON_WRITE;
     /* wait on stream: */
     sd->event_flags |= STDESC_WAITON;
     MarkDirty( sd);
-    /* context switch */
-    co_resume();
+    TaskBlock( self, WAIT_ON_WRITE);
   }
 
 
@@ -341,13 +294,10 @@ void StreamWrite( stream_desc_t *sd, void *item)
 
   /* quasi P(e_sem) */
   if ( fetch_and_dec( &sd->stream->e_sem)== 0) {
-    self->state = TASK_BLOCKED;
-    self->wait_on = WAIT_ON_READ;
     /* wait on stream: */
     sd->event_flags |= STDESC_WAITON;
     MarkDirty( sd);
-    /* context switch */
-    co_resume();
+    TaskBlock( self, WAIT_ON_READ);
   }
 
   /* writing to the buffer and checking if consumer polls must be atomic */
@@ -483,9 +433,7 @@ void StreamPoll( stream_list_t *list)
   /* context switch */
   if (do_ctx_switch) {
     /* set task as blocked */
-    self->state = TASK_BLOCKED;
-    self->wait_on = WAIT_ON_ANY;
-    co_resume();
+    TaskBlock( self, WAIT_ON_ANY);
   }
 
   /* unregister activators
@@ -514,24 +462,17 @@ void StreamPoll( stream_list_t *list)
 
 
 
-/****************************************************************************/
-/*  Printing, for monitoring output                                         */
-/****************************************************************************/
-
-#define IS_FLAGS(vec,b) ( ((vec)&(b)) == (b))
 
 /**
- * Print the list of dirty stream descriptors of a task into a file.
- *
- * After printing, the dirty list is empty again and the state of each
- * stream descriptor is updated/resetted.
+ * Reset the list of dirty stream descriptors, and call a callback function for
+ * each stream descriptor.
  * 
- * @param t     the task of which the dirty list is to be printed
- * @param file  the file to which the dirty list should be printed,
- *              or NULL if only the dirty list should be cleared
- * @pre         if file != NULL, it must be open for writing
+ * @param t         the task of which the dirty list is to be printed
+ * @param callback  the callback function which is called for each stream descriptor.
+ *                  If it is NULL, only the dirty list is resetted.
+ * @param arg       additional parameter passed to the callback function
  */
-int StreamPrintDirty( task_t *t, FILE *file)
+int StreamResetDirty( task_t *t, void (*callback)(stream_desc_t *,void*), void *arg)
 {
   stream_desc_t *sd, *next;
   int close_cnt = 0;
@@ -539,23 +480,13 @@ int StreamPrintDirty( task_t *t, FILE *file)
   assert( t != NULL);
   sd = t->dirty_list;
 
-  if (file!=NULL) {
-    fprintf( file,"[" );
-  }
-
-  while (sd != DIRTY_END) {
+  while (sd != STDESC_DIRTY_END) {
     /* all elements in the dirty list must belong to same task */
     assert( sd->task == t );
 
-    /* print sd */
-    if (file!=NULL) {
-      fprintf( file,
-          "%p,%c,%c,%lu,%c%c%c;",
-          sd->stream, sd->mode, sd->state, sd->counter,
-          IS_FLAGS( sd->event_flags, STDESC_WAITON) ? '?':'-',
-          IS_FLAGS( sd->event_flags, STDESC_WOKEUP) ? '!':'-',
-          IS_FLAGS( sd->event_flags, STDESC_MOVED ) ? '*':'-'
-          );
+    /* callback function */
+    if (callback) {
+      callback( sd, arg);
     }
 
     /* get the next dirty entry, and clear the link in the current entry */
@@ -578,11 +509,9 @@ int StreamPrintDirty( task_t *t, FILE *file)
     }
     sd = next;
   }
-  if (file!=NULL) {
-    fprintf( file,"] " );
-  }
-  /* */
-  t->dirty_list = DIRTY_END;
+  
+  /* dirty list of task is empty */
+  t->dirty_list = STDESC_DIRTY_END;
   return close_cnt;
 }
 
@@ -600,232 +529,20 @@ int StreamPrintDirty( task_t *t, FILE *file)
  */
 static inline void MarkDirty( stream_desc_t *sd)
 {
-
-  /* only add if not dirty yet */
-  if (sd->dirty == NULL) {
+  task_t *t = sd->task;
+  /*
+   * only if task wants to collect stream info and
+   * only add if not dirty yet
+   */
+  if ( (t->attr.flags & TASK_ATTR_COLLECT_STREAMS) && (sd->dirty == NULL) ) {
     /*
      * Set the dirty ptr of sd to the dirty_list ptr of the task
      * and the dirty_list ptr of the task to sd, i.e.,
      * insert the sd at the front of the dirty_list.
-     * Initially, dirty_list of the tab is empty DIRTY_END (!= NULL)
+     * Initially, dirty_list of the tab is empty STDESC_DIRTY_END (!= NULL)
      */
-    sd->dirty = sd->task->dirty_list;
-    sd->task->dirty_list = sd;
-  }
-}
-
-
-
-
-
-/****************************************************************************/
-/* Functions for maintaining a list of stream descriptors                   */
-/****************************************************************************/
-
-
-
-/**
- * Append a stream descriptor to a stream descriptor list
- *
- * @param lst   the stream descriptor list
- * @param node  the stream descriptor to be appended
- *
- * @pre   it is NOT safe to append while iterating, i.e. if an SD should
- *        be appended while the list is iterated through, StreamIterAppend()
- *        must be used.
- */
-void StreamListAppend( stream_list_t *lst, stream_desc_t *node)
-{
-  if (*lst  == NULL) {
-    /* list is empty */
-    *lst = node;
-    node->next = node; /* selfloop */
-  } else { 
-    /* insert stream between last element=*lst
-       and first element=(*lst)->next */
-    node->next = (*lst)->next;
-    (*lst)->next = node;
-    *lst = node;
-  }
-}
-
-
-/**
- * Test if a stream descriptor list is empty
- *
- * @param lst   stream descriptor list
- * @return      1 if the list is empty, 0 otherwise
- */
-int StreamListIsEmpty( stream_list_t *lst)
-{
-  return (*lst == NULL);
-}
-
-
-/**
- * Create a stream iterator
- * 
- * Creates a stream descriptor iterator for a given stream descriptor list,
- * and, if the stream descriptor list is not empty, initialises the iterator
- * to point to the first element such that it is ready to be used.
- * If the list is empty, it must be resetted with StreamIterReset()
- * before usage.
- *
- * @param lst   list to create an iterator from, can be NULL to only allocate
- *              the memory for the iterator
- * @return      the newly created iterator
- */
-stream_iter_t *StreamIterCreate( stream_list_t *lst)
-{
-  stream_iter_t *iter = (stream_iter_t *) malloc( sizeof(stream_iter_t));
-  if (lst) {
-    iter->prev = *lst;
-    iter->list = lst;
-  }
-  iter->cur = NULL;
-  return iter;
-}
-
-/**
- * Destroy a stream descriptor iterator
- *
- * Free the memory for the specified iterator.
- *
- * @param iter  iterator to be destroyed
- */
-void StreamIterDestroy( stream_iter_t *iter)
-{
-  free(iter);
-}
-
-/**
- * Initialises the stream list iterator to point to the first element
- * of the stream list.
- *
- * @param lst   list to be iterated through
- * @param iter  iterator to be resetted
- * @pre         The stream list is not empty, i.e. *lst != NULL
- */
-void StreamIterReset( stream_list_t *lst, stream_iter_t *iter)
-{
-  assert( lst != NULL);
-  iter->prev = *lst;
-  iter->list = lst;
-  iter->cur = NULL;
-}
-
-/**
- * Test if there are more stream descriptors in the list to be
- * iterated through
- *
- * @param iter  the iterator
- * @return      1 if there are stream descriptors left, 0 otherwise
- */
-int StreamIterHasNext( stream_iter_t *iter)
-{
-  return (*iter->list != NULL) &&
-    ( (iter->cur != *iter->list) || (iter->cur == NULL) );
-}
-
-
-/**
- * Get the next stream descriptor from the iterator
- *
- * @param iter  the iterator
- * @return      the next stream descriptor
- * @pre         there must be stream descriptors left for iteration,
- *              check with StreamIterHasNext()
- */
-stream_desc_t *StreamIterNext( stream_iter_t *iter)
-{
-  assert( StreamIterHasNext(iter) );
-
-  if (iter->cur != NULL) {
-    /* this also does account for the state after deleting */
-    iter->prev = iter->cur;
-    iter->cur = iter->cur->next;
-  } else {
-    iter->cur = iter->prev->next;
-  }
-  return iter->cur;
-}
-
-/**
- * Append a stream descriptor to a list while iterating
- *
- * Appends the SD at the end of the list.
- * [Uncomment the source to insert the specified SD
- * after the current SD instead.]
- *
- * @param iter  iterator for the list currently in use
- * @param node  stream descriptor to be appended
- */
-void StreamIterAppend( stream_iter_t *iter, stream_desc_t *node)
-{
-#if 0
-  /* insert after cur */
-  node->next = iter->cur->next;
-  iter->cur->next = node;
-
-  /* if current node was last node, update list */
-  if (iter->cur == *iter->list) {
-    *iter->list = node;
-  }
-
-  /* handle case if current was single element */
-  if (iter->prev == iter->cur) {
-    iter->prev = node;
-  }
-#else
-  /* insert at end of list */
-  node->next = (*iter->list)->next;
-  (*iter->list)->next = node;
-
-  /* if current node was first node */
-  if (iter->prev == *iter->list) {
-    iter->prev = node;
-  }
-  *iter->list = node;
-
-  /* handle case if current was single element */
-  if (iter->prev == iter->cur) {
-    iter->prev = node;
-  }
-#endif
-}
-
-/**
- * Remove the current stream descriptor from list while iterating through
- *
- * @param iter  the iterator
- * @pre         iter points to valid element
- *
- * @note StreamIterRemove() may only be called once after
- *       StreamIterNext(), as the current node is not a valid
- *       list node anymore. Iteration can be continued though.
- */
-void StreamIterRemove( stream_iter_t *iter)
-{
-  /* handle case if there is only a single element */
-  if (iter->prev == iter->cur) {
-    assert( iter->prev == *iter->list );
-    iter->cur->next = NULL;
-    *iter->list = NULL;
-  } else {
-    /* remove cur */
-    iter->prev->next = iter->cur->next;
-    /* cur becomes invalid */
-    iter->cur->next = NULL;
-    /* if the first element was deleted, clear cur */
-    if (*iter->list == iter->prev) {
-      iter->cur = NULL;
-    } else {
-      /* if the last element was deleted, correct list */
-      if (*iter->list == iter->cur) {
-        *iter->list = iter->prev;
-      }
-      iter->cur = iter->prev;
-    }
+    sd->dirty =t->dirty_list;
+    t->dirty_list = sd;
   }
 }
 

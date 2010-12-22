@@ -2,30 +2,26 @@
 #define _TASKQUEUE_H_
 
 #include "bool.h"
-#include "task.h"
+
+struct task;
 
 typedef struct {
-  task_t *head;
-  task_t *tail;
+  struct task *head, *tail;
   unsigned int count;
 } taskqueue_t;
 
-extern void TaskqueueInit(taskqueue_t *tq);
+void TaskqueueInit(taskqueue_t *tq);
 
-extern void TaskqueuePushBack(taskqueue_t *tq, task_t *t);
-extern void TaskqueuePushFront(taskqueue_t *tq, task_t *t);
+void TaskqueuePushBack( taskqueue_t *tq, struct task *t);
+void TaskqueuePushFront( taskqueue_t *tq, struct task *t);
 
-extern task_t *TaskqueuePopBack(taskqueue_t *tq);
-extern task_t *TaskqueuePopFront(taskqueue_t *tq);
+struct task *TaskqueuePopBack(taskqueue_t *tq);
+struct task *TaskqueuePopFront(taskqueue_t *tq);
 
-/* = PushBack: */
-extern void TaskqueueEnqueue(taskqueue_t *tq, task_t *t);
+#define TaskqueueEnqueue    TaskqueuePushBack
+#define TaskqueueDequeue    TaskqueuePopFront
 
-/* = PopFront: */
-extern task_t *TaskqueueDequeue(taskqueue_t *tq);
-
-
-extern int TaskqueueIterateRemove(taskqueue_t *tq, 
-    bool (*cond)(task_t*,void*), void (*action)(task_t*,void*), void *arg );
+int TaskqueueIterateRemove(taskqueue_t *tq, 
+    bool (*cond)(struct task*,void*), void (*action)(struct task*,void*), void *arg );
 
 #endif /* _TASKQUEUE_H_ */

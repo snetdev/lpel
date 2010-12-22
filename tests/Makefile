@@ -4,12 +4,6 @@ LDFLAGS =
 all: lpel
 .PHONY: all
 
-hashtab:
-	gcc -c -DDEBUG -g check_hashtab.c
-	gcc -c -DDEBUG -g ../hashtab.c
-	gcc -o check_hashtab check_hashtab.o hashtab.o $(LDFLAGS)
-	./check_hashtab
-
 
 mpsctq:
 	gcc -c -g check_mpsctq.c

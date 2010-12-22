@@ -7,7 +7,7 @@
 #endif
 
 
-#include "sysdep.h"
+#include "arch/sysdep.h"
 
 /* 64bytes is the common size of a cache line */
 #define longxCacheLine  (64/sizeof(long))

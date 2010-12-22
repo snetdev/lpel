@@ -1,29 +1,29 @@
 #ifndef _TASK_H_
 #define _TASK_H_
 
-#include <stdio.h>
 #include <pthread.h>
 #include <pcl.h>    /* tasks are executed in user-space with help of
                        GNU Portable Coroutine Library  */
 
 #include "scheduler.h"
-#include "timing.h"
-#include "atomic.h"
+#include "arch/timing.h"
+#include "arch/atomic.h"
 
 
 /**
  * If a stacksize attribute <= 0 is specified,
  * use the default stacksize
  */
-#define TASK_STACKSIZE_DEFAULT  8192  /* 8k stacksize*/
+#define TASK_ATTR_STACKSIZE_DEFAULT  8192  /* 8k stacksize*/
 
 
 
-#define TASK_ATTR_DEFAULT      (0)
-#define TASK_ATTR_MONITOR   (1<<0)
-
-#define TASK_PRINT_TIMES    (1<<0)
-#define TASK_PRINT_STREAMS  (1<<1)
+#define TASK_ATTR_NONE             ( 0)
+#define TASK_ATTR_ALL              (-1)
+#define TASK_ATTR_MONITOR_OUTPUT   (1<<0)
+#define TASK_ATTR_COLLECT_TIMES    (1<<1)
+#define TASK_ATTR_COLLECT_STREAMS  (1<<2)
+#define TASK_ATTR_PRINT_EXTERNAL   (1<<4)
 
 
 struct stream_desc;
@@ -81,28 +81,29 @@ struct task {
   struct {
     timing_t creat, start, stop;
   } times;
-  /* dispatch counter */
+  /** dispatch counter */
   unsigned long cnt_dispatch;
-  /* streams marked as dirty */
+  /** streams marked as dirty */
   struct stream_desc *dirty_list;
 
+  /** external accounting information */
+  void *task_info;
+
   /* CODE */
-  coroutine_t ctx;
-  taskfunc_t code;
-  void *inarg;  /* input argument  */
+  coroutine_t ctx; /** context of the task*/
+  taskfunc_t code; /** function of the task */
+  void *inarg;  /** input argument  */
 };
 
 
 
 extern task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t *attr);
-
-extern void TaskCall(task_t *ct);
 extern void TaskExit(task_t *ct);
 extern void TaskYield(task_t *ct);
 
-
+extern void TaskCall(task_t *ct, schedctx_t *sc);
+extern void TaskBlock( task_t *ct, int wait_on);
 extern void TaskDestroy(task_t *t);
 
-extern void TaskPrint( task_t *t, FILE *file, int flags);
 
 #endif /* _TASK_H_ */

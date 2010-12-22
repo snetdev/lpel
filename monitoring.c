@@ -1,121 +1,203 @@
 
 #include "monitoring.h"
 
-
 #ifdef MONITORING_ENABLE
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 #include <assert.h>
 
-#include "stream.h"
+#include "arch/timing.h"
 
-#include "scheduler.h"
-#include "timing.h"
-#include "lpel.h"
 #include "task.h"
+#include "scheduler.h"
+#include "stream.h"
+#include "stream_desc.h"
+
+
+#define MON_NAME_MAXLEN 20
+
+struct monitoring {
+  FILE *outfile;
+  bool  print_schedctx;
+};
+
+
+#define FLAGS_TEST(vec,f)   (( (vec) & (f) ) == (f) )
+
+
+#define _MON_FNAME_MAXLEN   (MON_NAME_MAXLEN + 12)
+monitoring_t *MonitoringCreate( int node, char *name)
+{
+  monitoring_t *mon;
+  char monname[MON_NAME_MAXLEN+1];
+  char filename[_MON_FNAME_MAXLEN+1];
+
+  strncpy( monname, name, MON_NAME_MAXLEN+1);
+  monname[MON_NAME_MAXLEN]= '\0';
+
+
+  mon = (monitoring_t *) malloc( sizeof(monitoring_t));
+  if (node >= 0) {
+    (void) snprintf(filename, _MON_FNAME_MAXLEN+1, "mon_n%02d_%s.log", node, monname);
+  } else {
+    (void) snprintf(filename, _MON_FNAME_MAXLEN+1, "mon_%s.log", monname);
+  }
+  filename[_MON_FNAME_MAXLEN] = '\0';
+
+  /* open logfile */
+  mon->outfile = fopen(filename, "w");
+  assert( mon->outfile != NULL);
+
+  /* default values */
+  mon->print_schedctx = false;
+
+  return mon;
+}
+
+
+void MonitoringDestroy( monitoring_t *mon)
+{
+  if ( mon->outfile != NULL) {
+    int ret;
+    ret = fclose( mon->outfile);
+    assert(ret == 0);
+  }
+
+  free( mon);
+}
+
+
+
+
 
 
 
 /**
- * mon_n00_worker01.log
+ * Print a time in nsec
  */
-void MonInit( lpelthread_t *env, int flags)
+static inline void PrintTiming( const timing_t *t, FILE *file)
 {
-
-  if (env->name != NULL) {
-#   define FNAME_MAXLEN   (LPEL_THREADNAME_MAXLEN + 12)
-    char fname[FNAME_MAXLEN+1];
-    if (env->node >= 0) {
-      (void) snprintf(fname, FNAME_MAXLEN+1, "mon_n%02d_%s.log", env->node, env->name);
-    } else {
-      (void) snprintf(fname, FNAME_MAXLEN+1, "mon_%s.log", env->name);
-    }
-    fname[FNAME_MAXLEN] = '\0';
-
-    /* open logfile */
-    env->mon.outfile = fopen(fname, "w");
-    assert( env->mon.outfile != NULL);
+  if (t->tv_sec == 0) {
+    (void) fprintf( file, "%lu ", t->tv_nsec );
   } else {
-    env->mon.outfile = NULL;
+    (void) fprintf( file, "%lu%09lu ",
+        (unsigned long) t->tv_sec, t->tv_nsec
+        );
   }
-  /* copy flags */
-  env->mon.flags = flags;
-
 }
 
-void MonCleanup( lpelthread_t *env)
+static void DirtySDPrint( stream_desc_t *sd, void *arg)
 {
-  if ( env->mon.outfile != NULL) {
-    int ret;
-    ret = fclose( env->mon.outfile);
-    assert(ret == 0);
+  FILE *file = (FILE *)arg;
+
+  (void) fprintf( file,
+      "%p,%c,%c,%lu,%c%c%c;",
+      sd->stream, sd->mode, sd->state, sd->counter,
+      ( sd->event_flags & STDESC_WAITON) ? '?':'-',
+      ( sd->event_flags & STDESC_WOKEUP) ? '!':'-',
+      ( sd->event_flags & STDESC_MOVED ) ? '*':'-'
+      );
+}
+
+
+void PrintSchedCtx( schedctx_t *sc, FILE *file)
+{
+  if ( sc->wid < 0) {
+    (void) fprintf(file, "loop %u ", sc->loop);
+  } else {
+    (void) fprintf(file, "wid %d loop %u ", sc->wid, sc->loop);
   }
 }
 
 
 
-void MonDebug( lpelthread_t *env, const char *fmt, ...)
+
+
+
+
+void MonitoringDebug( monitoring_t *mon, const char *fmt, ...)
 {
   timing_t ts;
   va_list ap;
 
-  if ( env->mon.outfile == NULL) return;
+  if ( mon->outfile == NULL) return;
 
   /* print current timestamp */
   TIMESTAMP(&ts);
-  TimingPrint( &ts, env->mon.outfile);
+  PrintTiming( &ts, mon->outfile);
 
   va_start(ap, fmt);
-  vfprintf( env->mon.outfile, fmt, ap);
+  vfprintf( mon->outfile, fmt, ap);
+  fflush(mon->outfile);
   va_end(ap);
-
-#ifdef MON_DO_FLUSH
-  fflush( env->mon.outfile);
-#endif
 }
 
 
-/*
-void MonTaskEvent( task_t *t, const char *fmt, ...)
-{
-  //monitoring_t *mon = &t->sched_context->env.mon;
-}
-*/
 
 
-void MonTaskPrint( monitoring_t *mon, struct schedctx *sc, struct task *t)
+void MonitoringOutput( monitoring_t *mon, task_t *t)
 {
-# define IS_FLAG(v)  ( (mon->flags & (v)) == (v) )
-  timing_t ts;
-  int flags = 0;
   FILE *file = mon->outfile;
 
-  if (( file == NULL) 
-      || ( mon->flags == MONITORING_NONE )) {
-    return;
+  if ( file == NULL) return;
+  /*
+  if ( !FLAGS_TEST( t->attr.flags, TASK_ATTR_MONITOR_OUTPUT) ) return;
+  */
+
+  /* timestamp with task stop time */
+  PrintTiming( &t->times.stop, file);
+
+  if ( mon->print_schedctx) {
+    PrintSchedCtx( t->sched_context, file);
+  }
+  
+
+  /* print general info: name, disp.cnt, state */
+  fprintf( file,
+      "tid %lu disp %lu st %c%c ",
+      t->uid, t->cnt_dispatch, t->state,
+      (t->state==TASK_BLOCKED)? t->wait_on : ' '
+      );
+
+  /* print times */
+  if ( FLAGS_TEST( t->attr.flags, TASK_ATTR_COLLECT_TIMES) ) {
+    timing_t diff;
+    if ( t->state == TASK_ZOMBIE) {
+      fprintf( file, "creat ");
+      PrintTiming( &t->times.creat, file);
+    }
+    TimingDiff( &diff, &t->times.start, &t->times.stop);
+    fprintf( file, "et ");
+    PrintTiming( &diff , file);
   }
 
-  /* get task stop time */
-  ts = t->times.stop;
-  TimingPrint( &ts, file);
-
-  //TODO check a flag
-  //SchedPrintContext( sc, file);
-
-  if ( IS_FLAG( MONITORING_TIMES ) ) {
-    flags |= TASK_PRINT_TIMES;
+  /* print stream info */
+  if ( FLAGS_TEST( t->attr.flags, TASK_ATTR_COLLECT_STREAMS) ) {
+    fprintf( file,"[" );
+    StreamResetDirty( t, DirtySDPrint, file);
+    fprintf( file,"] " );
   }
-  if ( IS_FLAG( MONITORING_STREAMINFO ) ) {
-    flags |= TASK_PRINT_STREAMS;
+
+  /* callback function for printing external task accounting info*/
+  /*
+  if ((t->attr.flags & TASK_ATTR_PRINT_EXTERNAL) && (config.task_info_print)) {
+    config.task_info_print( t->task_info);
   }
-  TaskPrint( t, file, flags );
+  */
 
   fprintf( file, "\n");
-#ifdef MON_DO_FLUSH
-  fflush( file);
-#endif
 }
+
+
+
+
+
+
+
+
+
+
 
 #endif /* MONITORING_ENABLE */

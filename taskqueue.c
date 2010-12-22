@@ -4,7 +4,7 @@
 
 
 #include "taskqueue.h"
-
+#include "task.h"
 
 /**
  * A simple doubly linked list for task queues
@@ -135,17 +135,6 @@ task_t *TaskqueuePopBack(taskqueue_t *tq)
 }
 
 
-/** for convenience */
-void TaskqueueEnqueue(taskqueue_t *tq, task_t *t)
-{
-  TaskqueuePushBack(tq, t);
-}
-
-
-/** for convenience */
-task_t *TaskqueueDequeue(taskqueue_t *tq) {
-  return TaskqueuePopFront(tq);
-}
 
 
 /**
