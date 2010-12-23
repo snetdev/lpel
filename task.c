@@ -43,7 +43,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
   /* initialize poll token to 0 */
   atomic_init( &t->poll_token, 0);
   
-  t->sched_context = NULL;
+  t->worker_context = NULL;
   
   if (t->attr.flags & TASK_ATTR_COLLECT_TIMES) {
     TIMESTAMP(&t->times.creat);
@@ -62,7 +62,6 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
     /*TODO throw error!*/
     assert(0);
   }
-  pthread_mutex_init( &t->lock, NULL);
  
   return t;
 }
@@ -73,7 +72,6 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
  */
 void TaskDestroy(task_t *t)
 {
-  pthread_mutex_destroy( &t->lock);
   atomic_destroy( &t->poll_token);
   /* delete the coroutine */
   co_delete(t->ctx);
@@ -88,14 +86,10 @@ void TaskDestroy(task_t *t)
  *
  * @pre t->state == TASK_READY
  */
-void TaskCall( task_t *t, schedctx_t *sc)
+void TaskCall( task_t *t)
 {
-  /* aqiure TCB lock */
-  pthread_mutex_lock( &t->lock);
-
   assert( t->state != TASK_RUNNING);
   
-  t->sched_context = sc;
   t->cnt_dispatch++;
   t->state = TASK_RUNNING;
       
@@ -117,12 +111,9 @@ void TaskCall( task_t *t, schedctx_t *sc)
 #ifdef MONITORING_ENABLE
   if (t->attr.flags & TASK_ATTR_MONITOR_OUTPUT) {
     TIMESTAMP( &t->times.stop);
-    MonitoringOutput( sc->mon, t);
+    MonitoringOutput( t->worker_context->mon, t);
   }
 #endif
-  
-  /* unlock TCB */
-  pthread_mutex_unlock( &t->lock);
 }
 
 

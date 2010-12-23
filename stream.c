@@ -48,7 +48,7 @@
 #include "buffer.h"
 #include "stream.h"
 #include "task.h"
-#include "scheduler.h"
+#include "worker.h"
 
 
 #include "stream_desc.h"
@@ -257,7 +257,7 @@ void *StreamRead( stream_desc_t *sd)
     /* e_sem was -1 */
     task_t *prod = sd->stream->prod_sd->task;
     /* wakeup producer: make ready */
-    SchedWakeup( self, prod);
+    WorkerTaskWakeup( self, prod);
     sd->event_flags |= STDESC_WOKEUP;
   }
 
@@ -331,7 +331,7 @@ void StreamWrite( stream_desc_t *sd, void *item)
     /* n_sem was -1 */
     task_t *cons = sd->stream->cons_sd->task;
     /* wakeup consumer: make ready */
-    SchedWakeup( self, cons);
+    WorkerTaskWakeup( self, cons);
     sd->event_flags |= STDESC_WOKEUP;
   } else {
     /* we are the sole producer task waking the polling consumer up */
@@ -339,7 +339,7 @@ void StreamWrite( stream_desc_t *sd, void *item)
       task_t *cons = sd->stream->cons_sd->task;
       cons->wakeup_sd = sd->stream->cons_sd;
       
-      SchedWakeup( self, cons);
+      WorkerTaskWakeup( self, cons);
       sd->event_flags |= STDESC_WOKEUP;
     }
   }

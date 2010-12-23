@@ -11,7 +11,7 @@
 #include "arch/timing.h"
 
 #include "task.h"
-#include "scheduler.h"
+#include "worker.h"
 #include "stream.h"
 #include "stream_desc.h"
 
@@ -102,12 +102,12 @@ static void DirtySDPrint( stream_desc_t *sd, void *arg)
 }
 
 
-void PrintSchedCtx( schedctx_t *sc, FILE *file)
+static void PrintWorkerCtx( workerctx_t *wc, FILE *file)
 {
-  if ( sc->wid < 0) {
-    (void) fprintf(file, "loop %u ", sc->loop);
+  if ( wc->wid < 0) {
+    (void) fprintf(file, "loop %u ", wc->loop);
   } else {
-    (void) fprintf(file, "wid %d loop %u ", sc->wid, sc->loop);
+    (void) fprintf(file, "wid %d loop %u ", wc->wid, wc->loop);
   }
 }
 
@@ -150,7 +150,7 @@ void MonitoringOutput( monitoring_t *mon, task_t *t)
   PrintTiming( &t->times.stop, file);
 
   if ( mon->print_schedctx) {
-    PrintSchedCtx( t->sched_context, file);
+    PrintWorkerCtx( t->worker_context, file);
   }
   
 

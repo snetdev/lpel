@@ -5,7 +5,7 @@
 #include <pcl.h>    /* tasks are executed in user-space with help of
                        GNU Portable Coroutine Library  */
 
-#include "scheduler.h"
+#include "worker.h"
 #include "arch/timing.h"
 #include "arch/atomic.h"
 
@@ -53,7 +53,7 @@ typedef struct {
   int stacksize;
 } taskattr_t;
 
-/*
+/**
  * TASK CONTROL BLOCK
  */
 struct task {
@@ -64,11 +64,9 @@ struct task {
   taskattr_t attr;      /** attributes */
   taskstate_t state;    /** state */
   taskstate_wait_t wait_on; /** on which event the task is waiting */
-  /**
-   * lock to protect a task from concurrent execution and manipulation
-   */
-  pthread_mutex_t lock;
-  schedctx_t *sched_context;  /** scheduling context for this task */
+
+  workerctx_t *worker_context;  /** worker context for this task */
+
   /**
    * indicates the SD which points to the stream which has new data
    * and caused this task to be woken up
@@ -101,7 +99,7 @@ extern task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t *attr);
 extern void TaskExit(task_t *ct);
 extern void TaskYield(task_t *ct);
 
-extern void TaskCall(task_t *ct, schedctx_t *sc);
+extern void TaskCall(task_t *ct);
 extern void TaskBlock( task_t *ct, int wait_on);
 extern void TaskDestroy(task_t *t);
 

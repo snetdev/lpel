@@ -32,7 +32,7 @@
 
 
 #include "task.h"
-#include "scheduler.h"
+#include "worker.h"
 
 
 
@@ -226,7 +226,7 @@ static void CreateCpusetOthers( lpelconfig_t *cfg)
  */
 void LpelInit(lpelconfig_t *cfg)
 {
-  schedcfg_t sched_config;
+  workercfg_t worker_config;
 
   /* store a local copy of cfg */
   config = *cfg;
@@ -239,9 +239,9 @@ void LpelInit(lpelconfig_t *cfg)
   /* Init libPCL */
   co_thread_init();
  
-  sched_config.node = config.node;
-  /* initialise scheduler */
-  SchedInit( config.num_workers, &sched_config);
+  worker_config.node = config.node;
+  /* initialise workers */
+  WorkerInit( config.num_workers, &worker_config);
 
 }
 
@@ -253,7 +253,7 @@ void LpelInit(lpelconfig_t *cfg)
 void LpelCleanup(void)
 {
   /* Cleanup scheduler */
-  SchedCleanup();
+  WorkerCleanup();
 
   /* Cleanup libPCL */
   co_thread_cleanup();
