@@ -31,121 +31,33 @@ static workercfg_t config;
 
 static void *StartupThread( void *arg);
 
-static void MsgSend( workerctx_t *wc, workermsg_t *msg)
-{
-  pthread_mutex_lock( &wc->lock_inbox);
-  if ( wc->list_inbox == NULL) {
-    /* list is empty */
-    wc->list_inbox = msg;
-    msg->next = msg; /* self-loop */
-
-    pthread_cond_signal( &wc->notempty);
-
-  } else { 
-    /* insert stream between last msg=list_inbox
-       and first msg=list_inbox->next */
-    msg->next = wc->list_inbox->next;
-    wc->list_inbox->next = msg;
-    wc->list_inbox = msg;
-  }
-  pthread_mutex_unlock( &wc->lock_inbox);
-}
-
-
-static workermsg_t *MsgRecv( workerctx_t *wc)
-{
-  workermsg_t *msg;
-
-  pthread_mutex_lock( &wc->lock_inbox);
-  while( wc->list_inbox == NULL) {
-      pthread_cond_wait( &wc->notempty, &wc->lock_inbox);
-  }
-
-  assert( wc->list_inbox != NULL);
-
-  msg = wc->list_inbox->next;
-  if ( msg == wc->list_inbox) {
-    /* self-loop, just single msg*/
-    wc->list_inbox = NULL;
-  } else {
-    wc->list_inbox->next = msg->next;
-  }
-  pthread_mutex_unlock( &wc->lock_inbox);
-
-  return msg;
-}
-
-/**
- * @note: does not need to be locked as a 'missed' msg 
- *        will be eventually fetched in the next worker loop
- */
-static inline bool MsgHasIncoming( workerctx_t *wc)
-{
-  return ( wc->list_inbox != NULL);
-}
-
-
-static workermsg_t *MsgGetFree( workerctx_t *wc)
-{
-  workermsg_t *msg;
-
-  pthread_mutex_lock( &wc->lock_free);
-  if (wc->list_free != NULL) {
-    /* pop free message off */
-    msg = wc->list_free;
-    wc->list_free = msg->next; /* can be NULL */
-  } else {
-    msg = (workermsg_t *)malloc( sizeof( workermsg_t));
-  }
-  pthread_mutex_unlock( &wc->lock_free);
-
-  return msg;
-}
-
-static void MsgPutFree( workerctx_t *wc, workermsg_t *msg)
-{
-  pthread_mutex_lock( &wc->lock_free);
-  if ( wc->list_free == NULL) {
-    msg->next = NULL;
-  } else {
-    msg->next = wc->list_free;
-  }
-  wc->list_free = msg;
-  pthread_mutex_unlock( &wc->lock_free);
-}
-
-
-
 static inline void SendTerminate( workerctx_t *target)
 {
-  /* get message from free list */
-  workermsg_t *msg = MsgGetFree( target);
+  workermsg_t msg;
   /* compose a task term message */
-  msg->type = WORKER_MSG_TERMINATE;
+  msg.type = WORKER_MSG_TERMINATE;
   /* send */
-  MsgSend( target, msg);
+  MailboxSend( &target->mailbox, &msg);
 }
 
 static inline void SendWakeup( workerctx_t *target, task_t *t)
 {
-  /* get message from free list */
-  workermsg_t *msg = MsgGetFree( target);
+  workermsg_t msg;
   /* compose a task wakeup message */
-  msg->type = WORKER_MSG_WAKEUP;
-  msg->task = t;
+  msg.type = WORKER_MSG_WAKEUP;
+  msg.task = t;
   /* send */
-  MsgSend( target, msg);
+  MailboxSend( &target->mailbox, &msg);
 }
 
 static inline void SendAssign( workerctx_t *target, task_t *t)
 {
-  /* get message from free list */
-  workermsg_t *msg = MsgGetFree( target);
+  workermsg_t msg;
   /* compose a task assign message */
-  msg->type = WORKER_MSG_ASSIGN;
-  msg->task = t;
+  msg.type = WORKER_MSG_ASSIGN;
+  msg.task = t;
   /* send */
-  MsgSend( target, msg);
+  MailboxSend( &target->mailbox, &msg);
 }
 
 
@@ -197,11 +109,7 @@ void WorkerInit(int size, workercfg_t *cfg)
     wc->mon = MonitoringCreate( config.node, wname);
 
     /* mailbox */
-    pthread_mutex_init( &wc->lock_free,  NULL);
-    pthread_mutex_init( &wc->lock_inbox, NULL);
-    pthread_cond_init(  &wc->notempty,   NULL);
-    wc->list_free  = NULL;
-    wc->list_inbox = NULL;
+    MailboxInit( &wc->mailbox);
 
     /* spawn joinable thread */
     (void) pthread_create( &wc->thread, NULL, StartupThread, wc);
@@ -228,11 +136,7 @@ void WorkerWrapperCreate(task_t *t, char *name)
   wc->mon = MonitoringCreate( config.node, name);
 
   /* mailbox */
-  pthread_mutex_init( &wc->lock_free,  NULL);
-  pthread_mutex_init( &wc->lock_inbox, NULL);
-  pthread_cond_init(  &wc->notempty,   NULL);
-  wc->list_free  = NULL;
-  wc->list_inbox = NULL;
+  MailboxInit( &wc->mailbox);
 
   /* send assign message for the task */
   SendAssign( wc, t);
@@ -346,15 +250,14 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       break;
     default: assert(0);
   }
-  MsgPutFree( wc, msg);
 }
 
 static void FetchAllMessages( workerctx_t *wc)
 {
-  workermsg_t *msg;
-  while( MsgHasIncoming( wc) ) {
-    msg = MsgRecv( wc);
-    ProcessMessage( wc, msg);
+  workermsg_t msg;
+  while( MailboxHasIncoming( &wc->mailbox) ) {
+    MailboxRecv( &wc->mailbox, &msg);
+    ProcessMessage( wc, &msg);
   }
 }
 
@@ -380,14 +283,15 @@ static void WorkerLoop( workerctx_t *wc)
       RescheduleTask( wc, t);
     } else {
       /* wait for a new message and process */
-      workermsg_t *msg = MsgRecv( wc);
-      ProcessMessage( wc, msg);
+      workermsg_t msg;
+      MailboxRecv( &wc->mailbox, &msg);
+      ProcessMessage( wc, &msg);
     }
     /* fetch (remaining) messages */
     FetchAllMessages( wc);
   } while ( !(wc->num_tasks==0 && wc->terminate) );
 
-  MonitoringDebug( wc->mon, "Worker exited.");
+  //MonitoringDebug( wc->mon, "Worker exited.\n");
 }
 
 
@@ -415,9 +319,7 @@ static void *StartupThread( void *arg)
   SchedDestroy( wc->sched);
 
   /* clean up the mailbox for the worker */
-  pthread_mutex_destroy( &wc->lock_free);
-  pthread_mutex_destroy( &wc->lock_inbox);
-  pthread_cond_destroy(  &wc->notempty);
+  MailboxCleanup( &wc->mailbox);
   
   /* free the worker context */
   if (wc->wid < 0) free( wc);

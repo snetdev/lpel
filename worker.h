@@ -5,6 +5,7 @@
 #include "bool.h"
 #include "scheduler.h"
 #include "monitoring.h"
+#include "mailbox.h"
 
 struct task;
 
@@ -19,36 +20,16 @@ struct workercfg {
 };
 
 
-typedef struct workermsg workermsg_t;
-
-
-typedef enum {
-  WORKER_MSG_TERMINATE,
-  WORKER_MSG_WAKEUP,
-  WORKER_MSG_ASSIGN,
-} workermsg_type_t;
-
-struct workermsg {
-  struct workermsg *next;
-  workermsg_type_t type;
-  struct task *task;
-};
 
 struct workerctx {
   int wid; 
-  unsigned int     num_tasks;
-  unsigned int     loop;
-  bool             terminate;  
-  pthread_t        thread;
-  schedctx_t      *sched;
-  monitoring_t    *mon;
-
-  /* messaging */
-  pthread_mutex_t  lock_free;
-  pthread_mutex_t  lock_inbox;
-  pthread_cond_t   notempty;
-  workermsg_t     *list_free;
-  workermsg_t     *list_inbox;
+  pthread_t     thread;
+  unsigned int  num_tasks;
+  unsigned int  loop;
+  bool          terminate;  
+  mailbox_t     mailbox;
+  schedctx_t   *sched;
+  monitoring_t *mon;
 };
 
 void WorkerInit(int size, workercfg_t *cfg);
