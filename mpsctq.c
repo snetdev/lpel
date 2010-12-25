@@ -23,9 +23,9 @@ void MpscTqCleanup(mpsctq_t *q)
  * Concurrent enqueuers synchronize with atomic
  * swap operation.
  */
-void MpscTqEnqueue(mpsctq_t *q, task_t *t)
+void MpscTqEnqueue(mpsctq_t *q, lpel_task_t *t)
 {
-  task_t *prev;
+  lpel_task_t *prev;
   
   assert( t->next == NULL );
 
@@ -37,7 +37,7 @@ void MpscTqEnqueue(mpsctq_t *q, task_t *t)
    *       (e.g. xchgl in x86_64, but xchgq required for ptr)
    */
   __sync_synchronize();
-  prev = (task_t *) __sync_lock_test_and_set(&q->head,t);
+  prev = (lpel_task_t *) __sync_lock_test_and_set(&q->head,t);
 
   /*** (point where list is disconnected)***/
 
@@ -52,9 +52,9 @@ void MpscTqEnqueue(mpsctq_t *q, task_t *t)
  *
  * @return NULL if no task in the queue
  */
-task_t *MpscTqDequeue(mpsctq_t *q)
+lpel_task_t *MpscTqDequeue(mpsctq_t *q)
 {
-  task_t *tail, *next;
+  lpel_task_t *tail, *next;
 
   tail = q->tail;
   next = tail->next;

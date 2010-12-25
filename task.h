@@ -45,9 +45,9 @@ typedef enum {
 } taskstate_wait_t;
 
 
-typedef struct task task_t;
+typedef struct task lpel_task_t;
 
-typedef void (*taskfunc_t)(task_t *self, void *inarg);
+typedef void (*taskfunc_t)(lpel_task_t *self, void *inarg);
 
 typedef struct {
   int flags;
@@ -58,9 +58,9 @@ typedef struct {
  * TASK CONTROL BLOCK
  */
 struct task {
-  task_t *prev, *next;  /** intrinsic pointers for organizing tasks in a list*/
-  /*task_t *volatile prev;*/
-  /*task_t *volatile next;*/
+  lpel_task_t *prev, *next;  /** intrinsic pointers for organizing tasks in a list*/
+  /*lpel_task_t *volatile prev;*/
+  /*lpel_task_t *volatile next;*/
   unsigned long uid;    /** unique identifier */
   taskattr_t attr;      /** attributes */
   taskstate_t state;    /** state */
@@ -93,13 +93,13 @@ struct task {
 
 
 
-task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t *attr);
-void TaskExit( task_t *ct);
-void TaskYield( task_t *ct);
+lpel_task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t *attr);
+void TaskExit( lpel_task_t *ct);
+void TaskYield( lpel_task_t *ct);
 
-void TaskCall( task_t *ct);
-void TaskBlock( task_t *ct, int wait_on);
-void TaskDestroy( task_t *t);
+void TaskCall( lpel_task_t *ct);
+void TaskBlock( lpel_task_t *ct, int wait_on);
+void TaskDestroy( lpel_task_t *t);
 
 
 #endif /* _TASK_H_ */

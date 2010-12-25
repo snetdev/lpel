@@ -137,7 +137,7 @@ void StreamDestroy( stream_t *s)
  * @pre         only one task may open it for reading resp. writing
  *              at any given point in time
  */
-stream_desc_t *StreamOpen( task_t *ct, stream_t *s, char mode)
+stream_desc_t *StreamOpen( lpel_task_t *ct, stream_t *s, char mode)
 {
   stream_desc_t *sd;
 
@@ -232,7 +232,7 @@ void *StreamPeek( stream_desc_t *sd)
 void *StreamRead( stream_desc_t *sd)
 {
   void *item;
-  task_t *self = sd->task;
+  lpel_task_t *self = sd->task;
 
   assert( sd->mode == 'r');
 
@@ -255,7 +255,7 @@ void *StreamRead( stream_desc_t *sd)
   /* quasi V(e_sem) */
   if ( fetch_and_inc( &sd->stream->e_sem) < 0) {
     /* e_sem was -1 */
-    task_t *prod = sd->stream->prod_sd->task;
+    lpel_task_t *prod = sd->stream->prod_sd->task;
     /* wakeup producer: make ready */
     WorkerTaskWakeup( self, prod);
     sd->event_flags |= STDESC_WOKEUP;
@@ -285,7 +285,7 @@ void *StreamRead( stream_desc_t *sd)
  */
 void StreamWrite( stream_desc_t *sd, void *item)
 {
-  task_t *self = sd->task;
+  lpel_task_t *self = sd->task;
   int poll_wakeup = 0;
 
   /* check if opened for writing */
@@ -329,14 +329,14 @@ void StreamWrite( stream_desc_t *sd, void *item)
   /* quasi V(n_sem) */
   if ( fetch_and_inc( &sd->stream->n_sem) < 0) {
     /* n_sem was -1 */
-    task_t *cons = sd->stream->cons_sd->task;
+    lpel_task_t *cons = sd->stream->cons_sd->task;
     /* wakeup consumer: make ready */
     WorkerTaskWakeup( self, cons);
     sd->event_flags |= STDESC_WOKEUP;
   } else {
     /* we are the sole producer task waking the polling consumer up */
     if (poll_wakeup) {
-      task_t *cons = sd->stream->cons_sd->task;
+      lpel_task_t *cons = sd->stream->cons_sd->task;
       cons->wakeup_sd = sd->stream->cons_sd;
       
       WorkerTaskWakeup( self, cons);
@@ -369,7 +369,7 @@ void StreamWrite( stream_desc_t *sd, void *item)
  */
 void StreamPoll( stream_list_t *list)
 {
-  task_t *self;
+  lpel_task_t *self;
   stream_iter_t *iter;
   int do_ctx_switch = 1;
 
@@ -472,7 +472,7 @@ void StreamPoll( stream_list_t *list)
  *                  If it is NULL, only the dirty list is resetted.
  * @param arg       additional parameter passed to the callback function
  */
-int StreamResetDirty( task_t *t, void (*callback)(stream_desc_t *,void*), void *arg)
+int StreamResetDirty( lpel_task_t *t, void (*callback)(stream_desc_t *,void*), void *arg)
 {
   stream_desc_t *sd, *next;
   int close_cnt = 0;
@@ -529,7 +529,7 @@ int StreamResetDirty( task_t *t, void (*callback)(stream_desc_t *,void*), void *
  */
 static inline void MarkDirty( stream_desc_t *sd)
 {
-  task_t *t = sd->task;
+  lpel_task_t *t = sd->task;
   /*
    * only if task wants to collect stream info and
    * only add if not dirty yet

@@ -27,9 +27,9 @@ static void TaskStartup(void *data);
 /**
  * Create a task
  */
-task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
+lpel_task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
 {
-  task_t *t = (task_t *)malloc( sizeof(task_t) );
+  lpel_task_t *t = (lpel_task_t *)malloc( sizeof(lpel_task_t) );
 
   t->uid = fetch_and_inc( &taskseq);
   t->state = TASK_READY;
@@ -72,7 +72,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
 /**
  * Destroy a task
  */
-void TaskDestroy(task_t *t)
+void TaskDestroy(lpel_task_t *t)
 {
   atomic_destroy( &t->poll_token);
   /* delete the coroutine */
@@ -88,7 +88,7 @@ void TaskDestroy(task_t *t)
  *
  * @pre t->state == TASK_READY
  */
-void TaskCall( task_t *t)
+void TaskCall( lpel_task_t *t)
 {
   assert( t->state == TASK_READY);
   
@@ -126,7 +126,7 @@ void TaskCall( task_t *t)
 /**
  * Block a task
  */
-void TaskBlock( task_t *ct, int wait_on)
+void TaskBlock( lpel_task_t *ct, int wait_on)
 {
   ct->state = TASK_BLOCKED;
   ct->wait_on = wait_on;
@@ -141,7 +141,7 @@ void TaskBlock( task_t *ct, int wait_on)
  * @param ct  pointer to the current task
  * @pre ct->state == TASK_RUNNING
  */
-void TaskExit( task_t *ct)
+void TaskExit( lpel_task_t *ct)
 {
   assert( ct->state == TASK_RUNNING );
   ct->state = TASK_ZOMBIE;
@@ -158,7 +158,7 @@ void TaskExit( task_t *ct)
  * @param ct  pointer to the current task
  * @pre ct->state == TASK_RUNNING
  */
-void TaskYield( task_t *ct)
+void TaskYield( lpel_task_t *ct)
 {
   assert( ct->state == TASK_RUNNING );
   ct->state = TASK_READY;
@@ -177,11 +177,11 @@ void TaskYield( task_t *ct)
  * Startup function for user specified task,
  * calls task function with proper signature
  *
- * @param data    the previously allocated task_t TCB
+ * @param data    the previously allocated lpel_task_t TCB
  */
 static void TaskStartup(void *data)
 {
-  task_t *t = (task_t *)data;
+  lpel_task_t *t = (lpel_task_t *)data;
   taskfunc_t func = t->code;
   /* call the task function with inarg as parameter */
   func(t, t->inarg);

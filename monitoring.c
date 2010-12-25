@@ -137,7 +137,7 @@ void MonitoringDebug( monitoring_t *mon, const char *fmt, ...)
 
 
 
-void MonitoringOutput( monitoring_t *mon, task_t *t)
+void MonitoringOutput( monitoring_t *mon, lpel_task_t *t)
 {
   FILE *file = mon->outfile;
 

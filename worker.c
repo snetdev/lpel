@@ -46,7 +46,7 @@ static inline void SendTerminate( workerctx_t *target)
   MailboxSend( &target->mailbox, &msg);
 }
 
-static inline void SendWakeup( workerctx_t *target, task_t *t)
+static inline void SendWakeup( workerctx_t *target, lpel_task_t *t)
 {
   workermsg_t msg;
   /* compose a task wakeup message */
@@ -56,7 +56,7 @@ static inline void SendWakeup( workerctx_t *target, task_t *t)
   MailboxSend( &target->mailbox, &msg);
 }
 
-static inline void SendAssign( workerctx_t *target, task_t *t)
+static inline void SendAssign( workerctx_t *target, lpel_task_t *t)
 {
   workermsg_t msg;
   /* compose a task assign message */
@@ -126,7 +126,7 @@ void WorkerInit(int size, workercfg_t *cfg)
 /**
  * Create a wrapper thread for a single task
  */
-void WorkerWrapperCreate(task_t *t, char *name)
+void WorkerWrapperCreate(lpel_task_t *t, char *name)
 {
   assert(name != NULL);
 
@@ -201,7 +201,7 @@ void WorkerCleanup(void)
  * Wakeup a task from within another task - this internal function
  * is used from within StreamRead/Write/Poll
  */
-void WorkerTaskWakeup( task_t *by, task_t *whom)
+void WorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
 {
   workerctx_t *wc = whom->worker_context;
   if ( wc == by->worker_context) {
@@ -218,7 +218,7 @@ void WorkerTaskWakeup( task_t *by, task_t *whom)
 /**
  * Assign a task to the worker
  */
-void WorkerTaskAssign( task_t *t, int wid)
+void WorkerTaskAssign( lpel_task_t *t, int wid)
 {
   workerctx_t *wc = &workers[wid];
 
@@ -228,7 +228,7 @@ void WorkerTaskAssign( task_t *t, int wid)
 
 
 
-static void RescheduleTask( workerctx_t *wc, task_t *t)
+static void RescheduleTask( workerctx_t *wc, lpel_task_t *t)
 {
   /* reschedule task */
   switch(t->state) {
@@ -284,7 +284,7 @@ static void FetchAllMessages( workerctx_t *wc)
  */
 static void WorkerLoop( workerctx_t *wc)
 {
-  task_t *t;
+  lpel_task_t *t;
 
   wc->loop = 0;
   do {

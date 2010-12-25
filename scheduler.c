@@ -42,13 +42,13 @@ void SchedDestroy( schedctx_t *sc)
 
 
 
-void SchedMakeReady( schedctx_t* sc, task_t *t)
+void SchedMakeReady( schedctx_t* sc, lpel_task_t *t)
 {
   TaskqueueEnqueue( &sc->queue, t);
 }
 
 
-task_t *SchedFetchReady( schedctx_t *sc)
+lpel_task_t *SchedFetchReady( schedctx_t *sc)
 {
   return TaskqueueDequeue( &sc->queue);
 }
