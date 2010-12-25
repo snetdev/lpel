@@ -5,7 +5,6 @@
 #include <pcl.h>    /* tasks are executed in user-space with help of
                        GNU Portable Coroutine Library  */
 
-#include "worker.h"
 #include "arch/timing.h"
 #include "arch/atomic.h"
 
@@ -23,11 +22,13 @@
 #define TASK_ATTR_MONITOR_OUTPUT   (1<<0)
 #define TASK_ATTR_COLLECT_TIMES    (1<<1)
 #define TASK_ATTR_COLLECT_STREAMS  (1<<2)
-#define TASK_ATTR_PRINT_EXTERNAL   (1<<4)
 
 
 struct stream_desc;
 struct stream;
+
+struct workerctx;
+
 
 
 typedef enum {
@@ -65,7 +66,7 @@ struct task {
   taskstate_t state;    /** state */
   taskstate_wait_t wait_on; /** on which event the task is waiting */
 
-  workerctx_t *worker_context;  /** worker context for this task */
+  struct workerctx *worker_context;  /** worker context for this task */
 
   /**
    * indicates the SD which points to the stream which has new data
@@ -84,9 +85,6 @@ struct task {
   /** streams marked as dirty */
   struct stream_desc *dirty_list;
 
-  /** external accounting information */
-  void *task_info;
-
   /* CODE */
   coroutine_t ctx; /** context of the task*/
   taskfunc_t code; /** function of the task */
@@ -95,13 +93,13 @@ struct task {
 
 
 
-extern task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t *attr);
-extern void TaskExit(task_t *ct);
-extern void TaskYield(task_t *ct);
+task_t *TaskCreate( taskfunc_t, void *inarg, taskattr_t *attr);
+void TaskExit( task_t *ct);
+void TaskYield( task_t *ct);
 
-extern void TaskCall(task_t *ct);
-extern void TaskBlock( task_t *ct, int wait_on);
-extern void TaskDestroy(task_t *t);
+void TaskCall( task_t *ct);
+void TaskBlock( task_t *ct, int wait_on);
+void TaskDestroy( task_t *t);
 
 
 #endif /* _TASK_H_ */

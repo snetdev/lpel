@@ -2,15 +2,17 @@
 #include <malloc.h>
 #include <assert.h>
 
-#include "lpel.h"
-#include "task.h"
-
 #include "arch/atomic.h"
 #include "arch/timing.h"
 
+#include "lpel.h"
+#include "task.h"
+
+#include "worker.h"
 #include "stream.h"
 #include "stream_desc.h"
 
+#include "monitoring.h"
 
 
 
@@ -29,7 +31,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
 {
   task_t *t = (task_t *)malloc( sizeof(task_t) );
 
-  t->uid = fetch_and_inc(&taskseq);
+  t->uid = fetch_and_inc( &taskseq);
   t->state = TASK_READY;
   t->prev = t->next = NULL;
   
@@ -50,7 +52,7 @@ task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
   }
   t->cnt_dispatch = 0;
 
-  /* init streamset to write */
+  /* empty dirty list */
   t->dirty_list = STDESC_DIRTY_END;
   
 
@@ -88,29 +90,33 @@ void TaskDestroy(task_t *t)
  */
 void TaskCall( task_t *t)
 {
-  assert( t->state != TASK_RUNNING);
+  assert( t->state == TASK_READY);
   
   t->cnt_dispatch++;
   t->state = TASK_RUNNING;
       
   if (t->attr.flags & TASK_ATTR_COLLECT_TIMES) {
-    TIMESTAMP(&t->times.start);
+    TIMESTAMP( &t->times.start);
   }
 
   /*
+   * CONTEXT SWITCH
+   *
    * CAUTION: A coroutine must not run simultaneously in more than one thread!
-   *          Therefore the whole call is protected by a lock.
    */
-  /* CONTEXT SWITCH */
   co_call( t->ctx);
 
   /* task returns in every case in a different state */
   assert( t->state != TASK_RUNNING);
 
-  /* output accounting info */
-#ifdef MONITORING_ENABLE
-  if (t->attr.flags & TASK_ATTR_MONITOR_OUTPUT) {
+  if (t->attr.flags & (TASK_ATTR_MONITOR_OUTPUT | TASK_ATTR_COLLECT_TIMES)) {
+    /* if monitor output, we need a timestamp */
     TIMESTAMP( &t->times.stop);
+  }
+
+#ifdef MONITORING_ENABLE
+  /* output accounting info */
+  if (t->attr.flags & TASK_ATTR_MONITOR_OUTPUT) {
     MonitoringOutput( t->worker_context->mon, t);
   }
 #endif

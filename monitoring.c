@@ -10,8 +10,8 @@
 
 #include "arch/timing.h"
 
-#include "task.h"
 #include "worker.h"
+#include "task.h"
 #include "stream.h"
 #include "stream_desc.h"
 

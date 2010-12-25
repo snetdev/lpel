@@ -9,7 +9,6 @@
 
 #include "bool.h"
 
-#include "monitoring.h"
 
 /**
  * Specification for configuration:
@@ -30,7 +29,7 @@ typedef struct {
   int proc_others;
   int flags;
   int node;
-} lpelconfig_t;
+} lpel_config_t;
 
 #define LPEL_FLAG_AUTO     (1<<0)
 #define LPEL_FLAG_AUTO2    (1<<1)
@@ -38,9 +37,9 @@ typedef struct {
 
 
 
-typedef struct lpelthread lpelthread_t;
+typedef struct lpel_thread lpel_thread_t;
 
-struct lpelthread {
+struct lpel_thread {
   pthread_t pthread;
   bool detached;
   void (*func)(void *);
@@ -48,17 +47,17 @@ struct lpelthread {
 };
 
 
-extern void LpelInit(lpelconfig_t *cfg);
+extern void LpelInit(lpel_config_t *cfg);
 extern void LpelCleanup(void);
 
 
 extern int LpelNumWorkers(void);
 
 
-extern lpelthread_t *LpelThreadCreate( void (*func)(void *),
+extern lpel_thread_t *LpelThreadCreate( void (*func)(void *),
     void *arg, bool detached);
 
-extern void LpelThreadJoin( lpelthread_t *env);
+extern void LpelThreadJoin( lpel_thread_t *env);
 extern void LpelThreadAssign( int core);
 
 

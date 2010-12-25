@@ -37,14 +37,14 @@
 
 
 /* Keep copy of the (checked) configuration provided at LpelInit() */
-static lpelconfig_t config;
+static lpel_config_t config;
 
 /* cpuset for others-threads */
 static cpu_set_t cpuset_others;
 static int proc_avail = -1;
 
 
-static void CleanupEnv( lpelthread_t *env)
+static void CleanupEnv( lpel_thread_t *env)
 {
   //TODO
   free( env);
@@ -77,7 +77,7 @@ static int CanSetRealtime(void)
  */
 static void *ThreadStartup( void *arg)
 {
-  lpelthread_t *env = (lpelthread_t *)arg;
+  lpel_thread_t *env = (lpel_thread_t *)arg;
 
   LpelThreadAssign(-1);
 
@@ -104,7 +104,7 @@ static void *ThreadStartup( void *arg)
 
 /* test only for a single flag in CheckConfig */
 #define LPEL_ICFG(f)   (( cfg->flags & (f) ) != 0 )
-static void CheckConfig( lpelconfig_t *cfg)
+static void CheckConfig( lpel_config_t *cfg)
 {
 
   /* query the number of CPUs */
@@ -170,7 +170,7 @@ static void CheckConfig( lpelconfig_t *cfg)
 }
 
 
-static void CreateCpusetOthers( lpelconfig_t *cfg)
+static void CreateCpusetOthers( lpel_config_t *cfg)
 {
   int  i;
   /* create the cpu_set for other threads */
@@ -224,7 +224,7 @@ static void CreateCpusetOthers( lpelconfig_t *cfg)
  *       num_workers == proc_workers 
  *
  */
-void LpelInit(lpelconfig_t *cfg)
+void LpelInit(lpel_config_t *cfg)
 {
   workercfg_t worker_config;
 
@@ -303,13 +303,13 @@ void LpelThreadAssign( int core)
 /**
  * Aquire a thread from the LPEL
  */
-lpelthread_t *LpelThreadCreate( void (*func)(void *),
+lpel_thread_t *LpelThreadCreate( void (*func)(void *),
     void *arg, bool detached)
 {
   int res;
   pthread_attr_t attr;
 
-  lpelthread_t *env = (lpelthread_t *) malloc( sizeof( lpelthread_t));
+  lpel_thread_t *env = (lpel_thread_t *) malloc( sizeof( lpel_thread_t));
 
   env->func = func;
   env->arg = arg;
@@ -335,7 +335,7 @@ lpelthread_t *LpelThreadCreate( void (*func)(void *),
  * @pre  thread must not have been created detached
  * @post lt is freed and the reference is invalidated
  */
-void LpelThreadJoin( lpelthread_t *env)
+void LpelThreadJoin( lpel_thread_t *env)
 {
   int res;
   assert( env->detached == false);

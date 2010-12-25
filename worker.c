@@ -20,7 +20,6 @@
 #include "task.h"
 
 
-#include "monitoring.h"
 
 
 static int num_workers = -1;
@@ -28,8 +27,15 @@ static workerctx_t *workers;
 static workercfg_t config;
 
 
+/* worker thread function declaration */
+static void *WorkerThread( void *arg);
 
-static void *StartupThread( void *arg);
+
+
+/******************************************************************************/
+/*  Convenience functions for sending messages between workers                */
+/******************************************************************************/
+
 
 static inline void SendTerminate( workerctx_t *target)
 {
@@ -112,7 +118,7 @@ void WorkerInit(int size, workercfg_t *cfg)
     MailboxInit( &wc->mailbox);
 
     /* spawn joinable thread */
-    (void) pthread_create( &wc->thread, NULL, StartupThread, wc);
+    (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
   }
 }
 
@@ -145,12 +151,14 @@ void WorkerWrapperCreate(task_t *t, char *name)
   SendTerminate( wc);
 
 
- (void) pthread_create( &wc->thread, NULL, StartupThread, wc);
+ (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
  (void) pthread_detach( wc->thread);
 }
 
 
-
+/**
+ * Send termination message to all workers
+ */
 void WorkerTerminate(void)
 {
   int i;
@@ -189,11 +197,15 @@ void WorkerCleanup(void)
 }
 
 
-
+/**
+ * Wakeup a task from within another task - this internal function
+ * is used from within StreamRead/Write/Poll
+ */
 void WorkerTaskWakeup( task_t *by, task_t *whom)
 {
   workerctx_t *wc = whom->worker_context;
   if ( wc == by->worker_context) {
+    whom->state = TASK_READY;
     SchedMakeReady( wc->sched, whom);
   } else {
     SendWakeup( wc, whom);
@@ -218,7 +230,7 @@ void WorkerTaskAssign( task_t *t, int wid)
 
 static void RescheduleTask( workerctx_t *wc, task_t *t)
 {
-  /* reworkerule task */
+  /* reschedule task */
   switch(t->state) {
     case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
       TaskDestroy( t);
@@ -228,6 +240,7 @@ static void RescheduleTask( workerctx_t *wc, task_t *t)
       /* do nothing */
       break;
     case TASK_READY: /* task yielded execution  */
+      t->state = TASK_READY;
       SchedMakeReady( wc->sched, t);
       break;
     default: assert(0); /* should not be reached */
@@ -246,6 +259,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       /* set worker context of task */
       msg->task->worker_context = wc;
     case WORKER_MSG_WAKEUP:
+      msg->task->state = TASK_READY;
       SchedMakeReady( wc->sched, msg->task);
       break;
     default: assert(0);
@@ -265,7 +279,9 @@ static void FetchAllMessages( workerctx_t *wc)
 /*  WORKER                                                                    */
 /******************************************************************************/
 
-
+/**
+ * Worker loop
+ */
 static void WorkerLoop( workerctx_t *wc)
 {
   task_t *t;
@@ -294,13 +310,10 @@ static void WorkerLoop( workerctx_t *wc)
   //MonitoringDebug( wc->mon, "Worker exited.\n");
 }
 
-
-
-
 /**
- * Startup thread for workers and wrappers
+ * Thread function for workers (and wrappers)
  */
-static void *StartupThread( void *arg)
+static void *WorkerThread( void *arg)
 {
   workerctx_t *wc = (workerctx_t *)arg;
   
@@ -310,7 +323,7 @@ static void *StartupThread( void *arg)
   /* assign to cores */
   LpelThreadAssign( wc->wid);
 
-  /* call worker function */
+  /* call worker loop */
   WorkerLoop( wc);
   
   /* cleanup monitoring */
@@ -329,5 +342,4 @@ static void *StartupThread( void *arg)
 
   return NULL;
 }
-
 
