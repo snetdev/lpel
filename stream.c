@@ -89,7 +89,7 @@ static inline void MarkDirty( lpel_stream_desc_t *sd);
 lpel_stream_t *LpelStreamCreate(void)
 {
   lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof( lpel_stream_t));
-  BufferReset( &s->buffer);
+  _LpelBufferReset( &s->buffer);
 #ifdef STREAM_POLL_SPINLOCK
   pthread_spin_init( &s->prod_lock, PTHREAD_PROCESS_PRIVATE);
 #else
@@ -213,7 +213,7 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
 void *LpelStreamPeek( lpel_stream_desc_t *sd)
 { 
   assert( sd->mode == 'r');
-  return BufferTop( &sd->stream->buffer);
+  return _LpelBufferTop( &sd->stream->buffer);
 }    
 
 
@@ -244,10 +244,10 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
 
 
   /* read the top element */
-  item = BufferTop( &sd->stream->buffer);
+  item = _LpelBufferTop( &sd->stream->buffer);
   assert( item != NULL);
   /* pop off the top element */
-  BufferPop( &sd->stream->buffer);
+  _LpelBufferPop( &sd->stream->buffer);
 
 
   /* quasi V(e_sem) */
@@ -306,9 +306,9 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 #endif
   {
     /* there must be space now in buffer */
-    assert( BufferIsSpace( &sd->stream->buffer) );
+    assert( _LpelBufferIsSpace( &sd->stream->buffer) );
     /* put item into buffer */
-    BufferPut( &sd->stream->buffer, item);
+    _LpelBufferPut( &sd->stream->buffer, item);
 
     if ( sd->stream->is_poll) {
       /* get consumer's poll token */
@@ -391,7 +391,7 @@ void LpelStreamPoll( lpel_stream_list_t *list)
 #endif
     { /* CS BEGIN */
       /* check if there is something in the buffer */
-      if ( BufferTop( &sd->stream->buffer) != NULL) {
+      if ( _LpelBufferTop( &sd->stream->buffer) != NULL) {
         /* yes, we can stop iterating through streams.
          * determine, if we have been woken up by another producer: 
          */
