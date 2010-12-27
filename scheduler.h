@@ -2,16 +2,18 @@
 #define _SCHEDULER_H_
 
 
-typedef struct schedctx schedctx_t;
+#include "lpel.h"
 
-struct task;
+
+typedef struct schedctx schedctx_t;
 
 void SchedInit( int num_workers);
 void SchedCleanup( void);
 schedctx_t *SchedCreate( int wid);
 void SchedDestroy( schedctx_t *sc);
-void SchedMakeReady( schedctx_t* sc, struct task *t);
-struct task *SchedFetchReady( schedctx_t *sc);
+
+void SchedMakeReady( schedctx_t* sc, lpel_task_t *t);
+lpel_task_t *SchedFetchReady( schedctx_t *sc);
 
 
 

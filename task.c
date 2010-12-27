@@ -10,7 +10,6 @@
 
 #include "worker.h"
 #include "stream.h"
-#include "stream_desc.h"
 
 #include "monitoring.h"
 
@@ -27,9 +26,10 @@ static void TaskStartup(void *data);
 /**
  * Create a task
  */
-lpel_task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
+lpel_task_t *LpelTaskCreate( lpel_taskfunc_t func,
+    void *inarg, lpel_taskattr_t *attr)
 {
-  lpel_task_t *t = (lpel_task_t *)malloc( sizeof(lpel_task_t) );
+  lpel_task_t *t = (lpel_task_t *) malloc( sizeof( lpel_task_t));
 
   t->uid = fetch_and_inc( &taskseq);
   t->state = TASK_READY;
@@ -47,7 +47,7 @@ lpel_task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
   
   t->worker_context = NULL;
   
-  if (t->attr.flags & TASK_ATTR_COLLECT_TIMES) {
+  if (t->attr.flags & LPEL_TASK_ATTR_COLLECT_TIMES) {
     TIMESTAMP(&t->times.creat);
   }
   t->cnt_dispatch = 0;
@@ -56,7 +56,7 @@ lpel_task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
   t->dirty_list = STDESC_DIRTY_END;
   
 
-  t->code = func;
+  t->code  = func;
   t->inarg = inarg;
   /* function, argument (data), stack base address, stacksize */
   t->ctx = co_create( TaskStartup, (void *)t, NULL, t->attr.stacksize);
@@ -69,71 +69,6 @@ lpel_task_t *TaskCreate( taskfunc_t func, void *inarg, taskattr_t *attr)
 }
 
 
-/**
- * Destroy a task
- */
-void TaskDestroy(lpel_task_t *t)
-{
-  atomic_destroy( &t->poll_token);
-  /* delete the coroutine */
-  co_delete(t->ctx);
-  /* free the TCB itself*/
-  free(t);
-}
-
-
-
-/**
- * Call a task (context switch to a task)
- *
- * @pre t->state == TASK_READY
- */
-void TaskCall( lpel_task_t *t)
-{
-  assert( t->state == TASK_READY);
-  
-  t->cnt_dispatch++;
-  t->state = TASK_RUNNING;
-      
-  if (t->attr.flags & TASK_ATTR_COLLECT_TIMES) {
-    TIMESTAMP( &t->times.start);
-  }
-
-  /*
-   * CONTEXT SWITCH
-   *
-   * CAUTION: A coroutine must not run simultaneously in more than one thread!
-   */
-  co_call( t->ctx);
-
-  /* task returns in every case in a different state */
-  assert( t->state != TASK_RUNNING);
-
-  if (t->attr.flags & (TASK_ATTR_MONITOR_OUTPUT | TASK_ATTR_COLLECT_TIMES)) {
-    /* if monitor output, we need a timestamp */
-    TIMESTAMP( &t->times.stop);
-  }
-
-#ifdef MONITORING_ENABLE
-  /* output accounting info */
-  if (t->attr.flags & TASK_ATTR_MONITOR_OUTPUT) {
-    MonitoringOutput( t->worker_context->mon, t);
-  }
-#endif
-}
-
-
-/**
- * Block a task
- */
-void TaskBlock( lpel_task_t *ct, int wait_on)
-{
-  ct->state = TASK_BLOCKED;
-  ct->wait_on = wait_on;
-  /* context switch */
-  co_resume();
-}
-
 
 /**
  * Exit the current task
@@ -141,7 +76,7 @@ void TaskBlock( lpel_task_t *ct, int wait_on)
  * @param ct  pointer to the current task
  * @pre ct->state == TASK_RUNNING
  */
-void TaskExit( lpel_task_t *ct)
+void LpelTaskExit( lpel_task_t *ct)
 {
   assert( ct->state == TASK_RUNNING );
   ct->state = TASK_ZOMBIE;
@@ -158,7 +93,7 @@ void TaskExit( lpel_task_t *ct)
  * @param ct  pointer to the current task
  * @pre ct->state == TASK_RUNNING
  */
-void TaskYield( lpel_task_t *ct)
+void LpelTaskYield( lpel_task_t *ct)
 {
   assert( ct->state == TASK_RUNNING );
   ct->state = TASK_READY;
@@ -169,24 +104,96 @@ void TaskYield( lpel_task_t *ct)
 
 
 
-/****************************************************************************/
-/* Private functions                                                        */
-/****************************************************************************/
+/******************************************************************************/
+/* HIDDEN FUNCTIONS                                                           */
+/******************************************************************************/
+
+/**
+ * Destroy a task
+ */
+void _LpelTaskDestroy( lpel_task_t *t)
+{
+  atomic_destroy( &t->poll_token);
+  /* delete the coroutine */
+  co_delete(t->ctx);
+  /* free the TCB itself*/
+  free(t);
+}
+
+
+
+/**
+ * Call a task (context switch to a task)
+ *
+ * @pre t->state == TASK_READY
+ */
+void _LpelTaskCall( lpel_task_t *t)
+{
+  assert( t->state == TASK_READY);
+  
+  t->cnt_dispatch++;
+  t->state = TASK_RUNNING;
+      
+  if (t->attr.flags & LPEL_TASK_ATTR_COLLECT_TIMES) {
+    TIMESTAMP( &t->times.start);
+  }
+
+  /*
+   * CONTEXT SWITCH
+   *
+   * CAUTION: A coroutine must not run simultaneously in more than one thread!
+   */
+  co_call( t->ctx);
+
+  /* task returns in every case in a different state */
+  assert( t->state != TASK_RUNNING);
+
+  if (t->attr.flags & 
+      (LPEL_TASK_ATTR_MONITOR_OUTPUT | LPEL_TASK_ATTR_COLLECT_TIMES)) {
+    /* if monitor output, we need a timestamp */
+    TIMESTAMP( &t->times.stop);
+  }
+
+#ifdef MONITORING_ENABLE
+  /* output accounting info */
+  if (t->attr.flags & LPEL_TASK_ATTR_MONITOR_OUTPUT) {
+    _LpelMonitoringOutput( t->worker_context->mon, t);
+  }
+#endif
+}
+
+
+/**
+ * Block a task
+ */
+void _LpelTaskBlock( lpel_task_t *ct, int wait_on)
+{
+  ct->state = TASK_BLOCKED;
+  ct->wait_on = wait_on;
+  /* context switch */
+  co_resume();
+}
+
+
+
+/******************************************************************************/
+/* PRIVATE FUNCTIONS                                                          */
+/******************************************************************************/
 
 /**
  * Startup function for user specified task,
  * calls task function with proper signature
  *
- * @param data    the previously allocated lpel_task_t TCB
+ * @param data  the previously allocated lpel_task_t TCB
  */
-static void TaskStartup(void *data)
+static void TaskStartup( void *data)
 {
   lpel_task_t *t = (lpel_task_t *)data;
-  taskfunc_t func = t->code;
+  lpel_taskfunc_t func = t->code;
   /* call the task function with inarg as parameter */
   func(t, t->inarg);
   /* if task function returns, exit properly */
-  TaskExit(t);
+  LpelTaskExit(t);
 }
 
 

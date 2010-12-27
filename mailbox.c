@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include "mailbox.h"
-#include "workermsg.h"
 
 
 

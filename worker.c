@@ -14,10 +14,8 @@
 
 #include "worker.h"
 
-#include "bool.h"
-#include "lpel.h"
-
 #include "task.h"
+#include "threading.h"
 
 
 
@@ -69,7 +67,9 @@ static inline void SendAssign( workerctx_t *target, lpel_task_t *t)
 
 
 
-
+/******************************************************************************/
+/*  HIDDEN FUNCTIONS                                                          */
+/******************************************************************************/
 
 
 /**
@@ -79,7 +79,7 @@ static inline void SendAssign( workerctx_t *target, lpel_task_t *t)
  * @param size  size of the worker set, i.e., the total number of workers
  * @param cfg   additional configuration
  */
-void WorkerInit(int size, workercfg_t *cfg)
+void _LpelWorkerInit(int size, workercfg_t *cfg)
 {
   int i;
 
@@ -93,7 +93,6 @@ void WorkerInit(int size, workercfg_t *cfg)
   } else {
     config.node = -1;
     config.do_print_workerinfo = false;
-    config.task_info_print = NULL;
   }
 
   SchedInit( num_workers);
@@ -112,7 +111,7 @@ void WorkerInit(int size, workercfg_t *cfg)
     wc->sched = SchedCreate( i);
 
     snprintf( wname, 11, "worker%02d", i);
-    wc->mon = MonitoringCreate( config.node, wname);
+    wc->mon = _LpelMonitoringCreate( config.node, wname);
 
     /* mailbox */
     MailboxInit( &wc->mailbox);
@@ -126,7 +125,7 @@ void WorkerInit(int size, workercfg_t *cfg)
 /**
  * Create a wrapper thread for a single task
  */
-void WorkerWrapperCreate(lpel_task_t *t, char *name)
+void _LpelWorkerWrapperCreate(lpel_task_t *t, char *name)
 {
   assert(name != NULL);
 
@@ -139,7 +138,7 @@ void WorkerWrapperCreate(lpel_task_t *t, char *name)
 
   wc->sched = SchedCreate( -1);
 
-  wc->mon = MonitoringCreate( config.node, name);
+  wc->mon = _LpelMonitoringCreate( config.node, name);
 
   /* mailbox */
   MailboxInit( &wc->mailbox);
@@ -159,7 +158,7 @@ void WorkerWrapperCreate(lpel_task_t *t, char *name)
 /**
  * Send termination message to all workers
  */
-void WorkerTerminate(void)
+void _LpelWorkerTerminate(void)
 {
   int i;
   workerctx_t *wc;
@@ -178,7 +177,7 @@ void WorkerTerminate(void)
  * Cleanup worker contexts
  *
  */
-void WorkerCleanup(void)
+void _LpelWorkerCleanup(void)
 {
   int i;
 
@@ -201,7 +200,7 @@ void WorkerCleanup(void)
  * Wakeup a task from within another task - this internal function
  * is used from within StreamRead/Write/Poll
  */
-void WorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
+void _LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
 {
   workerctx_t *wc = whom->worker_context;
   if ( wc == by->worker_context) {
@@ -218,7 +217,7 @@ void WorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
 /**
  * Assign a task to the worker
  */
-void WorkerTaskAssign( lpel_task_t *t, int wid)
+void _LpelWorkerTaskAssign( lpel_task_t *t, int wid)
 {
   workerctx_t *wc = &workers[wid];
 
@@ -228,12 +227,20 @@ void WorkerTaskAssign( lpel_task_t *t, int wid)
 
 
 
+
+
+
+/******************************************************************************/
+/*  PRIVATE FUNCTIONS                                                         */
+/******************************************************************************/
+
+
 static void RescheduleTask( workerctx_t *wc, lpel_task_t *t)
 {
   /* reschedule task */
   switch(t->state) {
     case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
-      TaskDestroy( t);
+      _LpelTaskDestroy( t);
       wc->num_tasks -= 1;
       break;
     case TASK_BLOCKED: /* task returned from a blocking call*/
@@ -275,9 +282,6 @@ static void FetchAllMessages( workerctx_t *wc)
   }
 }
 
-/******************************************************************************/
-/*  WORKER                                                                    */
-/******************************************************************************/
 
 /**
  * Worker loop
@@ -294,7 +298,7 @@ static void WorkerLoop( workerctx_t *wc)
       wc->loop++;
 
       /* execute task */
-      TaskCall(t);
+      _LpelTaskCall(t);
       
       RescheduleTask( wc, t);
     } else {
@@ -307,8 +311,10 @@ static void WorkerLoop( workerctx_t *wc)
     FetchAllMessages( wc);
   } while ( !(wc->num_tasks==0 && wc->terminate) );
 
-  //MonitoringDebug( wc->mon, "Worker exited.\n");
+  //_LpelMonitoringDebug( wc->mon, "Worker exited.\n");
 }
+
+
 
 /**
  * Thread function for workers (and wrappers)
@@ -321,13 +327,13 @@ static void *WorkerThread( void *arg)
   co_thread_init();
 
   /* assign to cores */
-  LpelThreadAssign( wc->wid);
+  _LpelThreadAssign( wc->wid);
 
   /* call worker loop */
   WorkerLoop( wc);
   
   /* cleanup monitoring */
-  MonitoringDestroy( wc->mon);
+  _LpelMonitoringDestroy( wc->mon);
   
   SchedDestroy( wc->sched);
 

@@ -8,20 +8,18 @@
 #ifdef MONITORING_ENABLE
 
 #include <stdio.h>
+#include "lpel.h"
 
-typedef struct monitoring monitoring_t;
-
-
-struct task;
+typedef struct monitoring_t monitoring_t;
 
 
-monitoring_t *MonitoringCreate(int node, char *name);
-void MonitoringDestroy( monitoring_t *mon);
+monitoring_t *_LpelMonitoringCreate(int node, char *name);
+void _LpelMonitoringDestroy( monitoring_t *mon);
 
 
-void MonitoringDebug( monitoring_t *mon, const char *fmt, ...);
+void _LpelMonitoringDebug( monitoring_t *mon, const char *fmt, ...);
 
-void MonitoringOutput( monitoring_t *mon, struct task *t);
+void _LpelMonitoringOutput( monitoring_t *mon, lpel_task_t *t);
 
 
 #endif /* MONITORING_ENABLE */

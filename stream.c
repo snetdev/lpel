@@ -24,9 +24,9 @@
  * lock-free manner.
  *
  * For synchronization between tasks, three blocking functions are provided:
- * StreamRead() suspends the consumer trying to read from an empty stream,
- * StreamWrite() suspends the producer trying to write to a full stream,
- * and a consumer can use StreamPoll() to wait for the arrival of data
+ * LpelStreamRead() suspends the consumer trying to read from an empty stream,
+ * LpelStreamWrite() suspends the producer trying to write to a full stream,
+ * and a consumer can use LpelStreamPoll() to wait for the arrival of data
  * on any of the streams specified in a list.
  *
  *TODO describe stream descriptor lists, iterators
@@ -46,19 +46,17 @@
 #include "arch/atomic.h"
 
 #include "buffer.h"
-#include "stream.h"
 #include "task.h"
 #include "worker.h"
 
 
-#include "stream_desc.h"
-#include "stream_list.h"
+#include "stream.h"
 
 /**
  * A stream which is shared between a
  * (single) producer and a (single) consumer.
  */
-struct stream {
+struct lpel_stream_t {
   buffer_t buffer;          /** buffer holding the actual data */
 #ifdef STREAM_POLL_SPINLOCK /** to support polling a lock is needed */
   pthread_spinlock_t prod_lock;
@@ -67,8 +65,8 @@ struct stream {
 #endif
   int is_poll;              /** indicates if a consumer polls this stream,
                                 is_poll is protected by the prod_lock */
-  stream_desc_t *prod_sd;   /** points to the sd of the producer */
-  stream_desc_t *cons_sd;   /** points to the sd of the consumer */
+  lpel_stream_desc_t *prod_sd;   /** points to the sd of the producer */
+  lpel_stream_desc_t *cons_sd;   /** points to the sd of the consumer */
   atomic_t n_sem;           /** counter for elements in the stream */
   atomic_t e_sem;           /** counter for empty space in the stream */
 };
@@ -78,7 +76,7 @@ struct stream {
 
 
 /* prototype of the function marking the stream descriptor as dirty*/
-static inline void MarkDirty( stream_desc_t *sd);
+static inline void MarkDirty( lpel_stream_desc_t *sd);
 
 
 /**
@@ -88,9 +86,9 @@ static inline void MarkDirty( stream_desc_t *sd);
  *
  * @return pointer to the created stream
  */
-stream_t *StreamCreate(void)
+lpel_stream_t *LpelStreamCreate(void)
 {
-  stream_t *s = (stream_t *) malloc( sizeof( stream_t));
+  lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof( lpel_stream_t));
   BufferReset( &s->buffer);
 #ifdef STREAM_POLL_SPINLOCK
   pthread_spin_init( &s->prod_lock, PTHREAD_PROCESS_PRIVATE);
@@ -114,7 +112,7 @@ stream_t *StreamCreate(void)
  * @param s   stream to be freed
  * @pre       stream must not be opened by any task!
  */
-void StreamDestroy( stream_t *s)
+void LpelStreamDestroy( lpel_stream_t *s)
 {
 #ifdef STREAM_POLL_SPINLOCK
   pthread_spin_destroy( &s->prod_lock);
@@ -137,13 +135,13 @@ void StreamDestroy( stream_t *s)
  * @pre         only one task may open it for reading resp. writing
  *              at any given point in time
  */
-stream_desc_t *StreamOpen( lpel_task_t *ct, stream_t *s, char mode)
+lpel_stream_desc_t *LpelStreamOpen( lpel_task_t *ct, lpel_stream_t *s, char mode)
 {
-  stream_desc_t *sd;
+ lpel_stream_desc_t *sd;
 
   assert( mode == 'r' || mode == 'w' );
 
-  sd = (stream_desc_t *) malloc( sizeof( stream_desc_t));
+  sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
   sd->task = ct;
   sd->stream = s;
   sd->mode = mode;
@@ -168,14 +166,14 @@ stream_desc_t *StreamOpen( lpel_task_t *ct, stream_t *s, char mode)
  * @param sd          stream descriptor
  * @param destroy_s   if true, destroy the stream as well
  */
-void StreamClose( stream_desc_t *sd, bool destroy_s)
+void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
 {
   sd->state = STDESC_CLOSED;
   /* mark dirty */
   MarkDirty( sd);
 
   if (destroy_s) {
-    StreamDestroy( sd->stream);
+    LpelStreamDestroy( sd->stream);
   }
   /* do not free sd, as it will be kept until its state
      has been output via dirty list */
@@ -190,11 +188,11 @@ void StreamClose( stream_desc_t *sd, bool destroy_s)
  * @param snew  the new stream
  * @pre         snew must not be opened by same or other task
  */
-void StreamReplace( stream_desc_t *sd, stream_t *snew)
+void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
 {
   assert( sd->mode == 'r');
   /* destroy old stream */
-  StreamDestroy( sd->stream);
+  LpelStreamDestroy( sd->stream);
   /* assign new stream */
   sd->stream = snew;
   /* new consumer sd of stream */
@@ -212,7 +210,7 @@ void StreamReplace( stream_desc_t *sd, stream_t *snew)
  * @param sd  stream descriptor
  * @return    the top item of the stream, or NULL if stream is empty
  */
-void *StreamPeek( stream_desc_t *sd)
+void *LpelStreamPeek( lpel_stream_desc_t *sd)
 { 
   assert( sd->mode == 'r');
   return BufferTop( &sd->stream->buffer);
@@ -229,7 +227,7 @@ void *StreamPeek( stream_desc_t *sd)
  * @return    the next item of the stream
  * @pre       current task is single reader
  */
-void *StreamRead( stream_desc_t *sd)
+void *LpelStreamRead( lpel_stream_desc_t *sd)
 {
   void *item;
   lpel_task_t *self = sd->task;
@@ -241,7 +239,7 @@ void *StreamRead( stream_desc_t *sd)
     /* wait on stream: */
     sd->event_flags |= STDESC_WAITON;
     MarkDirty( sd);
-    TaskBlock( self, WAIT_ON_WRITE);
+    _LpelTaskBlock( self, WAIT_ON_WRITE);
   }
 
 
@@ -257,7 +255,7 @@ void *StreamRead( stream_desc_t *sd)
     /* e_sem was -1 */
     lpel_task_t *prod = sd->stream->prod_sd->task;
     /* wakeup producer: make ready */
-    WorkerTaskWakeup( self, prod);
+    _LpelWorkerTaskWakeup( self, prod);
     sd->event_flags |= STDESC_WOKEUP;
   }
 
@@ -283,7 +281,7 @@ void *StreamRead( stream_desc_t *sd)
  * @pre         current task is single writer
  * @pre         item != NULL
  */
-void StreamWrite( stream_desc_t *sd, void *item)
+void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 {
   lpel_task_t *self = sd->task;
   int poll_wakeup = 0;
@@ -297,7 +295,7 @@ void StreamWrite( stream_desc_t *sd, void *item)
     /* wait on stream: */
     sd->event_flags |= STDESC_WAITON;
     MarkDirty( sd);
-    TaskBlock( self, WAIT_ON_READ);
+    _LpelTaskBlock( self, WAIT_ON_READ);
   }
 
   /* writing to the buffer and checking if consumer polls must be atomic */
@@ -331,7 +329,7 @@ void StreamWrite( stream_desc_t *sd, void *item)
     /* n_sem was -1 */
     lpel_task_t *cons = sd->stream->cons_sd->task;
     /* wakeup consumer: make ready */
-    WorkerTaskWakeup( self, cons);
+    _LpelWorkerTaskWakeup( self, cons);
     sd->event_flags |= STDESC_WOKEUP;
   } else {
     /* we are the sole producer task waking the polling consumer up */
@@ -339,7 +337,7 @@ void StreamWrite( stream_desc_t *sd, void *item)
       lpel_task_t *cons = sd->stream->cons_sd->task;
       cons->wakeup_sd = sd->stream->cons_sd;
       
-      WorkerTaskWakeup( self, cons);
+      _LpelWorkerTaskWakeup( self, cons);
       sd->event_flags |= STDESC_WOKEUP;
     }
   }
@@ -364,27 +362,27 @@ void StreamWrite( stream_desc_t *sd, void *item)
  * @pre           list must not be empty (*list != NULL)
  *
  * @post          The first element when iterating through the list after
- *                StreamPoll() will be the one which caused the task to
+ *                LpelStreamPoll() will be the one which caused the task to
  *                wakeup, i.e., the first stream where data arrived.
  */
-void StreamPoll( stream_list_t *list)
+void LpelStreamPoll( lpel_stream_list_t *list)
 {
   lpel_task_t *self;
-  stream_iter_t *iter;
+  lpel_stream_iter_t *iter;
   int do_ctx_switch = 1;
 
   assert( *list != NULL);
 
-  /* get 'self', i.e. the task calling StreamPoll() */
+  /* get 'self', i.e. the task calling LpelStreamPoll() */
   self = (*list)->task;
 
   /* place a poll token */
   atomic_set( &self->poll_token, 1);
 
   /* for each stream in the list */
-  iter = StreamIterCreate( list);
-  while( StreamIterHasNext( iter)) {
-    stream_desc_t *sd = StreamIterNext( iter);
+  iter = LpelStreamIterCreate( list);
+  while( LpelStreamIterHasNext( iter)) {
+   lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
     /* lock stream (prod-side) */
 #ifdef STREAM_POLL_SPINLOCK
     pthread_spin_lock( &sd->stream->prod_lock);
@@ -433,7 +431,7 @@ void StreamPoll( stream_list_t *list)
   /* context switch */
   if (do_ctx_switch) {
     /* set task as blocked */
-    TaskBlock( self, WAIT_ON_ANY);
+    _LpelTaskBlock( self, WAIT_ON_ANY);
   }
 
   /* unregister activators
@@ -443,13 +441,13 @@ void StreamPoll( stream_list_t *list)
    *   is trying to dereference sd->stream->cons_sd
    * - a consumer closes the stream if it reads
    *   a terminate record or a sync record, and between reading the record
-   *   and closing the stream the consumer issues no StreamPoll()
+   *   and closing the stream the consumer issues no LpelStreamPoll()
    *   and no entity writes a record on the stream after these records.
    */
   /*
-  iter = StreamIterCreate( list);
-  while( StreamIterHasNext( iter)) {
-    stream_desc_t *sd = StreamIterNext( iter);
+  iter = LpelStreamIterCreate( list);
+  while( LpelStreamIterHasNext( iter)) {
+   lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
     pthread_spin_lock( &sd->stream->prod_lock);
     sd->stream->is_poll = 0;
     pthread_spin_unlock( &sd->stream->prod_lock);
@@ -462,6 +460,10 @@ void StreamPoll( stream_list_t *list)
 
 
 
+/******************************************************************************/
+/* HIDDEN FUNCTIONS                                                           */
+/******************************************************************************/
+
 
 /**
  * Reset the list of dirty stream descriptors, and call a callback function for
@@ -472,9 +474,10 @@ void StreamPoll( stream_list_t *list)
  *                  If it is NULL, only the dirty list is resetted.
  * @param arg       additional parameter passed to the callback function
  */
-int StreamResetDirty( lpel_task_t *t, void (*callback)(stream_desc_t *,void*), void *arg)
+int _LpelStreamResetDirty( lpel_task_t *t,
+    void (*callback)( lpel_stream_desc_t *,void*), void *arg)
 {
-  stream_desc_t *sd, *next;
+ lpel_stream_desc_t *sd, *next;
   int close_cnt = 0;
 
   assert( t != NULL);
@@ -516,9 +519,9 @@ int StreamResetDirty( lpel_task_t *t, void (*callback)(stream_desc_t *,void*), v
 }
 
 
-/****************************************************************************/
-/* Private functions                                                        */
-/****************************************************************************/
+/******************************************************************************/
+/* PRIVATE FUNCTIONS                                                          */
+/******************************************************************************/
 
 /**
  * Add a stream descriptor to the dirty list of its task.
@@ -527,14 +530,15 @@ int StreamResetDirty( lpel_task_t *t, void (*callback)(stream_desc_t *,void*), v
  *
  * @param sd  stream descriptor to be marked as dirty
  */
-static inline void MarkDirty( stream_desc_t *sd)
+static inline void MarkDirty( lpel_stream_desc_t *sd)
 {
   lpel_task_t *t = sd->task;
   /*
    * only if task wants to collect stream info and
    * only add if not dirty yet
    */
-  if ( (t->attr.flags & TASK_ATTR_COLLECT_STREAMS) && (sd->dirty == NULL) ) {
+  if ( (t->attr.flags & LPEL_TASK_ATTR_COLLECT_STREAMS)
+      && (sd->dirty == NULL) ) {
     /*
      * Set the dirty ptr of sd to the dirty_list ptr of the task
      * and the dirty_list ptr of the task to sd, i.e.,

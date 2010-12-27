@@ -20,7 +20,7 @@
 #include <pcl.h>     /* tasks are executed in user-space with help of
                         GNU Portable Coroutine Library  */
 
-#include "lpel.h"
+#include "threading.h"
 
 /*!! link with -lcap */
 #ifdef LPEL_USE_CAPABILITIES
@@ -79,7 +79,7 @@ static void *ThreadStartup( void *arg)
 {
   lpel_thread_t *env = (lpel_thread_t *)arg;
 
-  LpelThreadAssign(-1);
+  _LpelThreadAssign(-1);
 
   /* Init libPCL */
   co_thread_init();
@@ -241,7 +241,7 @@ void LpelInit(lpel_config_t *cfg)
  
   worker_config.node = config.node;
   /* initialise workers */
-  WorkerInit( config.num_workers, &worker_config);
+  _LpelWorkerInit( config.num_workers, &worker_config);
 
 }
 
@@ -253,7 +253,7 @@ void LpelInit(lpel_config_t *cfg)
 void LpelCleanup(void)
 {
   /* Cleanup scheduler */
-  WorkerCleanup();
+  _LpelWorkerCleanup();
 
   /* Cleanup libPCL */
   co_thread_cleanup();
@@ -265,7 +265,7 @@ void LpelCleanup(void)
 /**
  * @pre core in [0, procs_avail] or -1
  */
-void LpelThreadAssign( int core)
+void _LpelThreadAssign( int core)
 {
   int res;
   pid_t tid;

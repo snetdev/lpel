@@ -6,16 +6,16 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "stream_list.h"
+#include "stream.h"
 
 
 /**
  * An iterator for a stream descriptor list
  */
-struct stream_iter {
-  stream_desc_t *cur;
-  stream_desc_t *prev;
-  stream_list_t *list;
+struct lpel_stream_iter_t {
+  lpel_stream_desc_t *cur;
+  lpel_stream_desc_t *prev;
+  lpel_stream_list_t *list;
 };
 
 
@@ -30,7 +30,7 @@ struct stream_iter {
  *        be appended while the list is iterated through, StreamIterAppend()
  *        must be used.
  */
-void StreamListAppend( stream_list_t *lst, stream_desc_t *node)
+void LpelStreamListAppend( lpel_stream_list_t *lst,lpel_stream_desc_t *node)
 {
   if (*lst  == NULL) {
     /* list is empty */
@@ -52,7 +52,7 @@ void StreamListAppend( stream_list_t *lst, stream_desc_t *node)
  * @param lst   stream descriptor list
  * @return      1 if the list is empty, 0 otherwise
  */
-int StreamListIsEmpty( stream_list_t *lst)
+int LpelStreamListIsEmpty( lpel_stream_list_t *lst)
 {
   return (*lst == NULL);
 }
@@ -71,9 +71,11 @@ int StreamListIsEmpty( stream_list_t *lst)
  *              the memory for the iterator
  * @return      the newly created iterator
  */
-stream_iter_t *StreamIterCreate( stream_list_t *lst)
+lpel_stream_iter_t *LpelStreamIterCreate( lpel_stream_list_t *lst)
 {
-  stream_iter_t *iter = (stream_iter_t *) malloc( sizeof(stream_iter_t));
+  lpel_stream_iter_t *iter =
+    (lpel_stream_iter_t *) malloc( sizeof( lpel_stream_iter_t));
+
   if (lst) {
     iter->prev = *lst;
     iter->list = lst;
@@ -82,6 +84,7 @@ stream_iter_t *StreamIterCreate( stream_list_t *lst)
   return iter;
 }
 
+
 /**
  * Destroy a stream descriptor iterator
  *
@@ -89,10 +92,11 @@ stream_iter_t *StreamIterCreate( stream_list_t *lst)
  *
  * @param iter  iterator to be destroyed
  */
-void StreamIterDestroy( stream_iter_t *iter)
+void LpelStreamIterDestroy( lpel_stream_iter_t *iter)
 {
   free(iter);
 }
+
 
 /**
  * Initialises the stream list iterator to point to the first element
@@ -102,13 +106,14 @@ void StreamIterDestroy( stream_iter_t *iter)
  * @param iter  iterator to be resetted
  * @pre         The stream list is not empty, i.e. *lst != NULL
  */
-void StreamIterReset( stream_list_t *lst, stream_iter_t *iter)
+void LpelStreamIterReset( lpel_stream_list_t *lst, lpel_stream_iter_t *iter)
 {
   assert( lst != NULL);
   iter->prev = *lst;
   iter->list = lst;
   iter->cur = NULL;
 }
+
 
 /**
  * Test if there are more stream descriptors in the list to be
@@ -117,7 +122,7 @@ void StreamIterReset( stream_list_t *lst, stream_iter_t *iter)
  * @param iter  the iterator
  * @return      1 if there are stream descriptors left, 0 otherwise
  */
-int StreamIterHasNext( stream_iter_t *iter)
+int LpelStreamIterHasNext( lpel_stream_iter_t *iter)
 {
   return (*iter->list != NULL) &&
     ( (iter->cur != *iter->list) || (iter->cur == NULL) );
@@ -132,9 +137,9 @@ int StreamIterHasNext( stream_iter_t *iter)
  * @pre         there must be stream descriptors left for iteration,
  *              check with StreamIterHasNext()
  */
-stream_desc_t *StreamIterNext( stream_iter_t *iter)
+lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter)
 {
-  assert( StreamIterHasNext(iter) );
+  assert( LpelStreamIterHasNext(iter) );
 
   if (iter->cur != NULL) {
     /* this also does account for the state after deleting */
@@ -156,7 +161,8 @@ stream_desc_t *StreamIterNext( stream_iter_t *iter)
  * @param iter  iterator for the list currently in use
  * @param node  stream descriptor to be appended
  */
-void StreamIterAppend( stream_iter_t *iter, stream_desc_t *node)
+void LpelStreamIterAppend( lpel_stream_iter_t *iter,
+    lpel_stream_desc_t *node)
 {
 #if 0
   /* insert after cur */
@@ -200,7 +206,7 @@ void StreamIterAppend( stream_iter_t *iter, stream_desc_t *node)
  *       StreamIterNext(), as the current node is not a valid
  *       list node anymore. Iteration can be continued though.
  */
-void StreamIterRemove( stream_iter_t *iter)
+void LpelStreamIterRemove( lpel_stream_iter_t *iter)
 {
   /* handle case if there is only a single element */
   if (iter->prev == iter->cur) {

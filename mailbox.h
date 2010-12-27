@@ -3,16 +3,33 @@
 
 #include <pthread.h>
 
+#include "lpel.h"
+
 #include "bool.h"
-#include "workermsg.h"
 
-typedef struct mailbox_node mailbox_node_t;
 
-struct mailbox_node {
-  struct mailbox_node *next;
+/*
+ * worker msg body
+ */
+typedef enum {
+  WORKER_MSG_TERMINATE,
+  WORKER_MSG_WAKEUP,
+  WORKER_MSG_ASSIGN,
+} workermsg_type_t;
+
+typedef struct {
+  workermsg_type_t  type;
+  lpel_task_t      *task;
+} workermsg_t;
+
+
+
+/* mailbox structures */
+
+typedef struct mailbox_node_t {
+  struct mailbox_node_t *next;
   workermsg_t body;
-};
-
+} mailbox_node_t;
 
 typedef struct {
   pthread_mutex_t  lock_free;

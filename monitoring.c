@@ -13,12 +13,11 @@
 #include "worker.h"
 #include "task.h"
 #include "stream.h"
-#include "stream_desc.h"
 
 
 #define MON_NAME_MAXLEN 20
 
-struct monitoring {
+struct monitoring_t {
   FILE *outfile;
   bool  print_schedctx;
 };
@@ -28,7 +27,7 @@ struct monitoring {
 
 
 #define _MON_FNAME_MAXLEN   (MON_NAME_MAXLEN + 12)
-monitoring_t *MonitoringCreate( int node, char *name)
+monitoring_t *_LpelMonitoringCreate( int node, char *name)
 {
   monitoring_t *mon;
   char monname[MON_NAME_MAXLEN+1];
@@ -57,7 +56,7 @@ monitoring_t *MonitoringCreate( int node, char *name)
 }
 
 
-void MonitoringDestroy( monitoring_t *mon)
+void _LpelMonitoringDestroy( monitoring_t *mon)
 {
   if ( mon->outfile != NULL) {
     int ret;
@@ -88,7 +87,7 @@ static inline void PrintTiming( const timing_t *t, FILE *file)
   }
 }
 
-static void DirtySDPrint( stream_desc_t *sd, void *arg)
+static void DirtySDPrint( lpel_stream_desc_t *sd, void *arg)
 {
   FILE *file = (FILE *)arg;
 
@@ -117,7 +116,7 @@ static void PrintWorkerCtx( workerctx_t *wc, FILE *file)
 
 
 
-void MonitoringDebug( monitoring_t *mon, const char *fmt, ...)
+void _LpelMonitoringDebug( monitoring_t *mon, const char *fmt, ...)
 {
   timing_t ts;
   va_list ap;
@@ -137,7 +136,7 @@ void MonitoringDebug( monitoring_t *mon, const char *fmt, ...)
 
 
 
-void MonitoringOutput( monitoring_t *mon, lpel_task_t *t)
+void _LpelMonitoringOutput( monitoring_t *mon, lpel_task_t *t)
 {
   FILE *file = mon->outfile;
 
@@ -162,7 +161,7 @@ void MonitoringOutput( monitoring_t *mon, lpel_task_t *t)
       );
 
   /* print times */
-  if ( FLAGS_TEST( t->attr.flags, TASK_ATTR_COLLECT_TIMES) ) {
+  if ( FLAGS_TEST( t->attr.flags, LPEL_TASK_ATTR_COLLECT_TIMES) ) {
     timing_t diff;
     if ( t->state == TASK_ZOMBIE) {
       fprintf( file, "creat ");
@@ -174,28 +173,14 @@ void MonitoringOutput( monitoring_t *mon, lpel_task_t *t)
   }
 
   /* print stream info */
-  if ( FLAGS_TEST( t->attr.flags, TASK_ATTR_COLLECT_STREAMS) ) {
+  if ( FLAGS_TEST( t->attr.flags, LPEL_TASK_ATTR_COLLECT_STREAMS) ) {
     fprintf( file,"[" );
-    StreamResetDirty( t, DirtySDPrint, file);
+    _LpelStreamResetDirty( t, DirtySDPrint, file);
     fprintf( file,"] " );
   }
 
-  /* callback function for printing external task accounting info*/
-  /*
-  if ((t->attr.flags & TASK_ATTR_PRINT_EXTERNAL) && (config.task_info_print)) {
-    config.task_info_print( t->task_info);
-  }
-  */
-
   fprintf( file, "\n");
 }
-
-
-
-
-
-
-
 
 
 
