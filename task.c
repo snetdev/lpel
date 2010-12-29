@@ -32,7 +32,7 @@ lpel_task_t *LpelTaskCreate( lpel_taskfunc_t func,
   lpel_task_t *t = (lpel_task_t *) malloc( sizeof( lpel_task_t));
 
   t->uid = fetch_and_inc( &taskseq);
-  t->state = TASK_READY;
+  t->state = TASK_CREATED;
   t->prev = t->next = NULL;
   
   /* copy task attributes */
@@ -58,13 +58,7 @@ lpel_task_t *LpelTaskCreate( lpel_taskfunc_t func,
 
   t->code  = func;
   t->inarg = inarg;
-  /* function, argument (data), stack base address, stacksize */
-  t->ctx = co_create( TaskStartup, (void *)t, NULL, t->attr.stacksize);
-  if (t->ctx == NULL) {
-    /*TODO throw error!*/
-    assert(0);
-  }
- 
+  /* creation of ctx will be done on assignment */
   return t;
 }
 
@@ -101,6 +95,10 @@ void LpelTaskYield( lpel_task_t *ct)
   co_resume();
 }
 
+unsigned int LpelTaskGetUID( lpel_task_t *t)
+{
+  return t->uid;
+}
 
 
 
@@ -121,6 +119,23 @@ void _LpelTaskDestroy( lpel_task_t *t)
 }
 
 
+/**
+ * @param wc  current worker context
+ */
+void _LpelTaskAssign( lpel_task_t *t, workerctx_t *wc)
+{
+  assert( t->state == TASK_CREATED);
+
+  /* function, argument (data), stack base address, stacksize */
+  t->ctx = co_create( TaskStartup, (void *)t, NULL, t->attr.stacksize);
+  if (t->ctx == NULL) {
+    /*TODO throw error!*/
+    assert(0);
+  }
+
+  t->worker_context = wc;
+  t->state = TASK_READY;
+}
 
 /**
  * Call a task (context switch to a task)
@@ -166,10 +181,10 @@ void _LpelTaskCall( lpel_task_t *t)
 /**
  * Block a task
  */
-void _LpelTaskBlock( lpel_task_t *ct, int wait_on)
+void _LpelTaskBlock(lpel_task_t *ct, taskstate_blocked_t block_on)
 {
   ct->state = TASK_BLOCKED;
-  ct->wait_on = wait_on;
+  ct->blocked_on = block_on;
   /* context switch */
   co_resume();
 }

@@ -70,9 +70,6 @@ void _LpelMonitoringDestroy( monitoring_t *mon)
 
 
 
-
-
-
 /**
  * Print a time in nsec
  */
@@ -92,8 +89,8 @@ static void DirtySDPrint( lpel_stream_desc_t *sd, void *arg)
   FILE *file = (FILE *)arg;
 
   (void) fprintf( file,
-      "%p,%c,%c,%lu,%c%c%c;",
-      sd->stream, sd->mode, sd->state, sd->counter,
+      "%u,%c,%c,%lu,%c%c%c;",
+      sd->sid, sd->mode, sd->state, sd->counter,
       ( sd->event_flags & STDESC_WAITON) ? '?':'-',
       ( sd->event_flags & STDESC_WOKEUP) ? '!':'-',
       ( sd->event_flags & STDESC_MOVED ) ? '*':'-'
@@ -155,21 +152,21 @@ void _LpelMonitoringOutput( monitoring_t *mon, lpel_task_t *t)
 
   /* print general info: name, disp.cnt, state */
   fprintf( file,
-      "tid %lu disp %lu st %c%c ",
+      "tid %u disp %lu st %c%c ",
       t->uid, t->cnt_dispatch, t->state,
-      (t->state==TASK_BLOCKED)? t->wait_on : ' '
+      (t->state==TASK_BLOCKED)? t->blocked_on : ' '
       );
 
   /* print times */
   if ( FLAGS_TEST( t->attr.flags, LPEL_TASK_ATTR_COLLECT_TIMES) ) {
     timing_t diff;
+    TimingDiff( &diff, &t->times.start, &t->times.stop);
+    fprintf( file, "et ");
+    PrintTiming( &diff , file);
     if ( t->state == TASK_ZOMBIE) {
       fprintf( file, "creat ");
       PrintTiming( &t->times.creat, file);
     }
-    TimingDiff( &diff, &t->times.start, &t->times.stop);
-    fprintf( file, "et ");
-    PrintTiming( &diff , file);
   }
 
   /* print stream info */

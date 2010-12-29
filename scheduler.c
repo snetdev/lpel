@@ -13,18 +13,6 @@ struct schedctx {
 };
 
 
-
-void SchedInit( int num_workers)
-{
-  /* NOP */
-}
-
-void SchedCleanup( void)
-{
-  /* NOP */
-}
-
-
 schedctx_t *SchedCreate( int wid)
 {
   schedctx_t *sc = (schedctx_t *) malloc( sizeof(schedctx_t));

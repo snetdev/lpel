@@ -22,7 +22,7 @@
 
 static int num_workers = -1;
 static workerctx_t *workers;
-static workercfg_t config;
+static workercfg_t  config;
 
 
 /* worker thread function declaration */
@@ -95,8 +95,6 @@ void _LpelWorkerInit(int size, workercfg_t *cfg)
     config.do_print_workerinfo = false;
   }
 
-  SchedInit( num_workers);
-
   /* allocate the array of worker contexts */
   workers = (workerctx_t *) malloc( num_workers * sizeof(workerctx_t) );
 
@@ -125,7 +123,7 @@ void _LpelWorkerInit(int size, workercfg_t *cfg)
 /**
  * Create a wrapper thread for a single task
  */
-void _LpelWorkerWrapperCreate(lpel_task_t *t, char *name)
+void _LpelWorkerWrapperCreate( lpel_task_t *t, char *name)
 {
   assert(name != NULL);
 
@@ -138,7 +136,12 @@ void _LpelWorkerWrapperCreate(lpel_task_t *t, char *name)
 
   wc->sched = SchedCreate( -1);
 
-  wc->mon = _LpelMonitoringCreate( config.node, name);
+  
+  if (t->attr.flags & LPEL_TASK_ATTR_MONITOR_OUTPUT) {
+    wc->mon = _LpelMonitoringCreate( config.node, name);
+  } else {
+    wc->mon = NULL;
+  }
 
   /* mailbox */
   MailboxInit( &wc->mailbox);
@@ -188,9 +191,6 @@ void _LpelWorkerCleanup(void)
     (void) pthread_join( wc->thread, NULL);
   }
 
-  /* cleanup scheduler */
-  SchedCleanup();
-
   /* free memory */
   free( workers);
 }
@@ -199,6 +199,9 @@ void _LpelWorkerCleanup(void)
 /**
  * Wakeup a task from within another task - this internal function
  * is used from within StreamRead/Write/Poll
+ * TODO: wakeup from without a task, i.e. from kernel by an asynchronous
+ *       interrupt for a completed request?
+ *       -> by == NULL, at least there is no valid by->worker_context
  */
 void _LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
 {
@@ -235,8 +238,9 @@ void _LpelWorkerTaskAssign( lpel_task_t *t, int wid)
 /******************************************************************************/
 
 
-static void RescheduleTask( workerctx_t *wc, lpel_task_t *t)
+static void RescheduleTask( lpel_task_t *t)
 {
+  workerctx_t *wc = t->worker_context;
   /* reschedule task */
   switch(t->state) {
     case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
@@ -264,7 +268,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
     case WORKER_MSG_ASSIGN:
       wc->num_tasks += 1;
       /* set worker context of task */
-      msg->task->worker_context = wc;
+      _LpelTaskAssign( msg->task, wc);
     case WORKER_MSG_WAKEUP:
       msg->task->state = TASK_READY;
       SchedMakeReady( wc->sched, msg->task);
@@ -298,9 +302,9 @@ static void WorkerLoop( workerctx_t *wc)
       wc->loop++;
 
       /* execute task */
-      _LpelTaskCall(t);
+      _LpelTaskCall( t);
       
-      RescheduleTask( wc, t);
+      RescheduleTask( t);
     } else {
       /* wait for a new message and process */
       workermsg_t msg;
@@ -333,7 +337,7 @@ static void *WorkerThread( void *arg)
   WorkerLoop( wc);
   
   /* cleanup monitoring */
-  _LpelMonitoringDestroy( wc->mon);
+  if (wc->mon) _LpelMonitoringDestroy( wc->mon);
   
   SchedDestroy( wc->sched);
 

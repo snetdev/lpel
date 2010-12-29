@@ -7,8 +7,6 @@
 
 typedef struct schedctx schedctx_t;
 
-void SchedInit( int num_workers);
-void SchedCleanup( void);
 schedctx_t *SchedCreate( int wid);
 void SchedDestroy( schedctx_t *sc);
 
