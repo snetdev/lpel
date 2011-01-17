@@ -9,33 +9,79 @@
 
 
 #define NUM_TASKS   20
-#define NUM_WORKERS  4
+#define NUM_WORKERS  2
 
 
+typedef struct {
+  int num;
+  coroutine_t caller;
+} taskarg_t;
 
-struct queue_el {
-  struct queue_el *next;
+struct node {
+  struct node *next;
   coroutine_t task;
+  taskarg_t *arg;
 };
 
-
+typedef struct node node_t;
 
 static pthread_mutex_t listlock = PTHREAD_MUTEX_INITIALIZER;
 
-static struct queue_el *head;
+void lock(void) {
+  if (pthread_mutex_lock(&listlock) != 0) {
+    perror("pthread_mutex_lock error");
+    exit(-1);
+  }
+}
 
-void increment(int *val) {
-  *val++;
+void unlock(void) {
+  if (pthread_mutex_unlock(&listlock) != 0) {
+    perror("pthread_mutex_unlock error");
+    exit(-1);
+  }
+}
+
+
+static node_t *handle;
+
+void append_node( node_t *n)
+{
+  lock();
+  if (handle == NULL) {
+    handle = n;
+    n->next = n;
+  } else {
+    n->next = handle->next;
+    handle->next = n;
+    handle = n;
+  }
+  unlock();
+}
+
+node_t *remove_node( void)
+{
+  node_t *n = NULL;
+
+  lock();
+  if (handle != NULL) {
+    n = handle->next;
+    if (n == handle) {
+      handle = NULL;
+    } else {
+      handle->next = n->next;
+    }
+  }
+  unlock();
+  return n;
 }
 
 
 void task(void *arg)
 {
-  int num = *(int *)arg;
+  taskarg_t *a = (taskarg_t *)arg;
   for (;;) {
-    printf("Number: %d\n", num);
-    //increment(&num);
-    co_resume();
+    printf("(%d) ", a->num);
+    co_call(a->caller);
   }
 }
 
@@ -44,45 +90,37 @@ void task(void *arg)
 void *worker(void *arg)
 {
   int term = 0;
-  struct queue_el *item;
+  node_t *item;
+  coroutine_t wctx;
 
   int id = *(int *)arg;
-  /*
   if (co_thread_init() < 0) {
     perror("co_thread_init failed in worker\n");
     exit(-1);
   }
-  */
   printf("Created worker %d\n", id);
 
+  wctx = co_current();
   do {
-    // mutual exclusion pull task from queue
-    if (pthread_mutex_lock(&listlock) != 0) {
-      perror("pthread_mutex_lock error");
-      exit(-1);
-    }
-    // BEGIN CRITICAL SECTION
-    item = head;
+    item = remove_node();
+
     if (item != NULL) {
-      head = item->next;
-    }
-    // END CRITICAL SECTION
-    if (pthread_mutex_unlock(&listlock) != 0) {
-      perror("pthread_mutex_unlock error");
-      exit(-1);
-    }
-    if (item != NULL) {
-      printf("Worker %d: ", id);
+      printf("\nWorker %d: ", id);
+      item->arg->caller = wctx;
       co_call(item->task);
-      co_delete(item->task);
-      free(item);
+
+      append_node(item);
+
+      //co_delete(item->task);
+      //free(item);
     } else {
-      term = 1;
+      //term = 1;
     }
-    sleep(id+1);
+    //sleep(id+1);
     // if NULL, then exit thread
   } while (term==0);
   
+  printf("Worker exited %d\n", id);
   
   co_thread_cleanup();
 
@@ -100,14 +138,18 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
+  handle = NULL;
+
   // create tasks and put in list
   for( i=0; i<NUM_TASKS; i++) {
-    struct queue_el *newel = (struct queue_el *) malloc( sizeof(struct queue_el) );
-    int *arg = (int *) malloc( sizeof(int) );
-    *arg = i;
-    newel->task = co_create(task, arg, NULL, 4096);
-    newel->next = head;
-    head = newel;
+    node_t *n = (node_t *) malloc( sizeof( node_t) );
+    taskarg_t *arg = (taskarg_t *) malloc( sizeof(taskarg_t) );
+    arg->num = i;
+
+    n->task = co_create(task, arg, NULL, 4096);
+    n->arg  = arg;
+
+    append_node( n);
   }
 
   // launch worker threads
