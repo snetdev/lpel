@@ -16,7 +16,7 @@
 #include "task.h"
 #include "threading.h"
 
-
+//#define DIRECT_MAKE_READY
 
 
 static int num_workers = -1;
@@ -46,21 +46,6 @@ static inline void SendTerminate( workerctx_t *target)
   MailboxSend( &target->mailbox, node);
 }
 
-static inline void SendWakeup( workerctx_t *target, workerctx_t *waker, lpel_task_t *t)
-{
-  mailbox_node_t *node = NULL;
-
-  /* get a free node from own mbox */
-  node = MailboxGetFree( &waker->mailbox);
-  if (!node) node = MailboxGetFree( &target->mailbox);
-  if (!node) node = MailboxAllocateNode();
-  /* compose a task wakeup message */
-  node->msg.type = WORKER_MSG_WAKEUP;
-  node->msg.body.task = t;
-  /* send */
-  MailboxSend( &target->mailbox, node);
-}
-
 static inline void SendAssign( workerctx_t *target, lpel_taskreq_t *req)
 {
   mailbox_node_t *node = NULL;
@@ -77,13 +62,31 @@ static inline void SendAssign( workerctx_t *target, lpel_taskreq_t *req)
   MailboxSend( &target->mailbox, node);
 }
 
+
+
+static inline void SendWakeup( workerctx_t *target, workerctx_t *waker, lpel_task_t *t)
+{
+  mailbox_node_t *node = NULL;
+
+  /* get a free node from own mbox */
+  //node = MailboxGetFree( &waker->mailbox); if (!node) 
+  node = MailboxGetFree( &target->mailbox);
+  if (!node) node = MailboxAllocateNode();
+  /* compose a task wakeup message */
+  node->msg.type = WORKER_MSG_WAKEUP;
+  node->msg.body.task = t;
+  /* send */
+  MailboxSend( &target->mailbox, node);
+}
+
+
 static inline void SendRequestTask( workerctx_t *target, workerctx_t *from)
 {
   mailbox_node_t *node = NULL;
 
   /* get a free node from own mbox */
-  node = MailboxGetFree( &from->mailbox);
-  if (!node) node = MailboxGetFree( &target->mailbox);
+  //node = MailboxGetFree( &from->mailbox); if (!node)
+  node = MailboxGetFree( &target->mailbox);
   if (!node) node = MailboxAllocateNode();
 
   /* compose a request task message */
@@ -98,8 +101,8 @@ static inline void SendTaskMigrate( workerctx_t *target, workerctx_t *from, lpel
   mailbox_node_t *node = NULL;
 
   /* get a free node from own mbox */
-  node = MailboxGetFree( &from->mailbox);
-  if (!node) node = MailboxGetFree( &target->mailbox);
+  //node = MailboxGetFree( &from->mailbox); if (!node)
+  node = MailboxGetFree( &target->mailbox);
   if (!node) node = MailboxAllocateNode();
 
   /* compose a task migrate message */
@@ -108,6 +111,9 @@ static inline void SendTaskMigrate( workerctx_t *target, workerctx_t *from, lpel
   /* send */
   MailboxSend( &target->mailbox, node);
 }
+
+
+
 
 /******************************************************************************/
 /*  PUBLIC FUNCTIONS                                                          */
@@ -289,14 +295,14 @@ void _LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
 {
   /* worker context of the task to be woken up */
   workerctx_t *wc = whom->worker_context;
-
+#ifndef DIRECT_MAKE_READY
   if (  !by || (wc != by->worker_context)) {
     SendWakeup( wc, by->worker_context, whom);
   } else {
     assert( wc == by->worker_context);
-    SchedMakeReady( wc->sched, whom);
+    (void) SchedMakeReady( wc->sched, whom);
   }
-#if 0
+#else
   /* NOTE: do NEVER whom->state = TASK_READY;
    * as the state is private to that task, and only needed for Reschedule()
    * to determine what to do with it. It can happen that the task has not
@@ -310,7 +316,7 @@ void _LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
    * the task to be woken belongs to a different thread
    */
   if ( was_empty && ( !by || (wc != by->worker_context))) {
-    SendWakeup( wc, whom);
+    SendWakeup( wc, by->worker_context, whom);
     //TODO this happens within a task!
     //_LpelMonitoringDebug( wc->mon, "worker wokeup %d\n", wc->wid);
   }
@@ -416,8 +422,10 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       /* worker has new ready tasks,
        * just wakeup to continue loop
        */
+#ifndef DIRECT_MAKE_READY
       task = msg->body.task;
       (void) SchedMakeReady( wc->sched, task);
+#endif
       break;
     case WORKER_MSG_TERMINATE:
       wc->terminate = true;
