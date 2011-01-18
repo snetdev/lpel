@@ -2,35 +2,38 @@
 #include <stdlib.h>
 #include <assert.h>
 
-
+#include "arch/atomic.h"
 #include "mailbox-lf.h"
 
-#include "arch/atomic.h"
+
 
 
 /******************************************************************************/
 /* Free node pool management functions                                        */
 /******************************************************************************/
 
-static mailbox_node_t *GetFree( mailbox_t *mbox)
+mailbox_node_t *MailboxGetFree( mailbox_t *mbox)
 {
   mailbox_node_t * volatile top;
   do {
     top = mbox->list_free;
     if (!top) break;
   } while( !compare_and_swap( (void**) &mbox->list_free, top, top->next));
-
-  if (!top) {
-    /* allocate new node */
-    top = (mailbox_node_t *)malloc( sizeof( mailbox_node_t));
-  }
   top->next = NULL;
   return top;
 }
 
-static void PutFree( mailbox_t *mbox, mailbox_node_t *node)
+mailbox_node_t *MailboxAllocateNode( void)
 {
-  mailbox_node_t * volatile  top;
+  /* allocate new node */
+  mailbox_node_t *n = (mailbox_node_t *)malloc( sizeof( mailbox_node_t));
+  n->next = NULL;
+  return n;
+}
+
+void MailboxPutFree( mailbox_t *mbox, mailbox_node_t *node)
+{
+  mailbox_node_t * volatile top;
   do {
     top = mbox->list_free;
     node->next = top;
@@ -59,10 +62,9 @@ void MailboxInit( mailbox_t *mbox)
     n->next = mbox->list_free;
     mbox->list_free = n;
   }
-  
+
   /* dummy node */
-  n = GetFree( mbox);
-  n->next = NULL;
+  n = MailboxAllocateNode();
     
   mbox->in_head = n;
   mbox->in_tail = n;
@@ -80,10 +82,10 @@ void MailboxCleanup( mailbox_t *mbox)
   }
   /* inbox  empty */
   assert( mbox->in_head->next == NULL );
-  /* free dummy */
-  PutFree( mbox, mbox->in_head);
-  
 
+  /* free dummy */
+  MailboxPutFree( mbox, mbox->in_head);
+  
   /* free list_free */
   do {
     do {
@@ -103,13 +105,9 @@ void MailboxCleanup( mailbox_t *mbox)
 
 
 
-
-void MailboxSend( mailbox_t *mbox, workermsg_t *msg)
+void MailboxSend( mailbox_t *mbox, mailbox_node_t *node)
 {
-  /* get a free node from recepient */
-  mailbox_node_t *node = GetFree( mbox);
-  /* copy the message */
-  node->msg = *msg;
+  assert( node != NULL);
 
   /* aquire tail lock */
   pthread_mutex_lock( &mbox->lock_inbox);
@@ -152,7 +150,7 @@ void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
   mbox->in_head = new_head;
 
   /* put node into free pool */
-  PutFree( mbox, node);
+  MailboxPutFree( mbox, node);
 }
 
 /**

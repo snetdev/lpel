@@ -41,17 +41,23 @@ typedef struct mailbox_node_t {
 typedef struct {
   pthread_mutex_t  lock_inbox;
   sem_t            counter;
-  mailbox_node_t  *volatile list_free;
   mailbox_node_t  *in_head;
   mailbox_node_t  *in_tail;
+  mailbox_node_t  *volatile list_free;
 } mailbox_t;
 
 
 void MailboxInit( mailbox_t *mbox);
 void MailboxCleanup( mailbox_t *mbox);
-void MailboxSend( mailbox_t *mbox, workermsg_t *msg);
+
+mailbox_node_t *MailboxGetFree( mailbox_t *mbox);
+mailbox_node_t *MailboxAllocateNode( void);
+void MailboxSend( mailbox_t *mbox, mailbox_node_t *node);
+
 void MailboxRecv( mailbox_t *mbox, workermsg_t *msg);
+
 bool MailboxHasIncoming( mailbox_t *mbox);
+
 
 
 #endif /* _MAILBOX_H_ */
