@@ -7,7 +7,6 @@
 #include "lpel.h"
 
 #include "bool.h"
-#include "arch/atomic.h"
 
 
 /*
@@ -43,9 +42,8 @@ typedef struct {
   pthread_mutex_t  lock_inbox;
   sem_t            counter;
   mailbox_node_t  *volatile list_free;
-  mailbox_node_t  *volatile in_head;
-  mailbox_node_t  *volatile in_tail;
-  atomic_t         in_count;
+  mailbox_node_t  *in_head;
+  mailbox_node_t  *in_tail;
 } mailbox_t;
 
 

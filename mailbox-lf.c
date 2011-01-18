@@ -2,9 +2,10 @@
 #include <stdlib.h>
 #include <assert.h>
 
+
 #include "mailbox-lf.h"
 
-
+#include "arch/atomic.h"
 
 
 /******************************************************************************/
@@ -45,7 +46,7 @@ static void PutFree( mailbox_t *mbox, mailbox_node_t *node)
 
 void MailboxInit( mailbox_t *mbox)
 {
-  mailbox_node_t * volatile n;
+  mailbox_node_t *n;
   int i;
 
   (void) pthread_mutex_init( &mbox->lock_inbox, NULL);
@@ -65,8 +66,6 @@ void MailboxInit( mailbox_t *mbox)
     
   mbox->in_head = n;
   mbox->in_tail = n;
-  atomic_init( &mbox->in_count, 0);
-
 }
 
 
@@ -81,7 +80,6 @@ void MailboxCleanup( mailbox_t *mbox)
   }
   /* inbox  empty */
   assert( mbox->in_head->next == NULL );
-  //assert( atomic_read( &mbox->in_count) == 0);
   /* free dummy */
   PutFree( mbox, mbox->in_head);
   
@@ -124,15 +122,11 @@ void MailboxSend( mailbox_t *mbox, workermsg_t *msg)
 
   /* signal semaphore */
   (void) sem_post( &mbox->counter);
-
-  /* update counter */
-  atomic_inc( &mbox->in_count);
 }
 
 
 void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
 {
-  //mailbox_node_t *volatile node, *volatile new_head;
   mailbox_node_t *node, *new_head;
 
   /* wait semaphore */
@@ -153,7 +147,6 @@ void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
 
   /* queue is not empty, copy message */
   *msg = new_head->msg;
-  atomic_dec( &mbox->in_count);
 
   /* swing head to next node (becomes new dummy) */
   mbox->in_head = new_head;
@@ -168,5 +161,5 @@ void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
  */
 bool MailboxHasIncoming( mailbox_t *mbox)
 {
-  return ( atomic_read( &mbox->in_count) > 0 );
+  return ( mbox->in_head->next != NULL );
 }
