@@ -19,7 +19,8 @@ mailbox_node_t *MailboxGetFree( mailbox_t *mbox)
     top = mbox->list_free;
     if (!top) break;
   } while( !compare_and_swap( (void**) &mbox->list_free, top, top->next));
-  top->next = NULL;
+  
+  if (top) top->next = NULL;
   return top;
 }
 
