@@ -44,6 +44,7 @@ typedef struct {
   mailbox_node_t  *in_head;
   mailbox_node_t  *in_tail;
   mailbox_node_t  *volatile list_free;
+  unsigned long    volatile out_cnt;
 } mailbox_t;
 
 

@@ -15,10 +15,12 @@
 mailbox_node_t *MailboxGetFree( mailbox_t *mbox)
 {
   mailbox_node_t * volatile top;
+  volatile unsigned long ocnt;
   do {
+    ocnt = mbox->out_cnt;
     top = mbox->list_free;
     if (!top) break;
-  } while( !compare_and_swap( (void**) &mbox->list_free, top, top->next));
+  } while( !CAS2( (void**) &mbox->list_free, top, ocnt, top->next, ocnt+1));
   
   if (top) top->next = NULL;
   return top;
@@ -56,6 +58,7 @@ void MailboxInit( mailbox_t *mbox)
   (void) pthread_mutex_init( &mbox->lock_inbox, NULL);
   (void) sem_init( &mbox->counter, 0, 0);
   mbox->list_free  = NULL;
+  mbox->out_cnt = 0;
 
   /* pre-create free nodes */
   for (i=0; i<100; i++) {
