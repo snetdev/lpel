@@ -16,7 +16,6 @@
 #include "task.h"
 #include "threading.h"
 
-//#define DIRECT_MAKE_READY
 
 
 static int num_workers = -1;
@@ -96,18 +95,46 @@ static inline void SendRequestTask( workerctx_t *target, workerctx_t *from)
   MailboxSend( &target->mailbox, node);
 }
 
-static inline void SendTaskMigrate( workerctx_t *target, workerctx_t *from, lpel_task_t *t)
+static inline void SendTaskMigrate( workerctx_t *target, workerctx_t *from)
 {
   mailbox_node_t *node = NULL;
+  lpel_task_t *t;
+  taskqueue_t *tq;
+  int cnt = 0;
 
   /* get a free node from own mbox */
   //node = MailboxGetFree( &from->mailbox); if (!node)
   node = MailboxGetFree( &target->mailbox);
   if (!node) node = MailboxAllocateNode();
 
+  tq = &node->msg.body.tqueue;
+  TaskqueueInit( tq);
+  
+  for(cnt=0; cnt<4; cnt++) {
+    t = SchedFetchReady( from->sched);
+    if (t!=NULL) {
+      assert( t->state != TASK_RUNNING);
+      from->num_tasks -= 1;
+      TaskqueuePushBack( tq, t);
+    } else break;
+  }
+
+  if (cnt > 0) {
+    _LpelMonitoringDebug( from->mon,
+        "worker %d sending %d tasks to worker %d\n",
+        from->wid, cnt, target->wid
+        );
+
+  } else {
+    _LpelMonitoringDebug( from->mon,
+        "worker %d sending no tasks to worker %d\n",
+        from->wid, target->wid
+        );
+  }
+
+
   /* compose a task migrate message */
   node->msg.type = WORKER_MSG_TASKMIG;
-  node->msg.body.task = t;
   /* send */
   MailboxSend( &target->mailbox, node);
 }
@@ -295,14 +322,6 @@ void _LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
 {
   /* worker context of the task to be woken up */
   workerctx_t *wc = whom->worker_context;
-#ifndef DIRECT_MAKE_READY
-  if (  !by || (wc != by->worker_context)) {
-    SendWakeup( wc, by->worker_context, whom);
-  } else {
-    assert( wc == by->worker_context);
-    (void) SchedMakeReady( wc->sched, whom);
-  }
-#else
   /* NOTE: do NEVER whom->state = TASK_READY;
    * as the state is private to that task, and only needed for Reschedule()
    * to determine what to do with it. It can happen that the task has not
@@ -310,17 +329,12 @@ void _LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
    * then TASK_READY and effectively we end up trying to put the task in
    * in the sched structure twice.
    */
-  int was_empty = SchedMakeReady( wc->sched, whom);
-  /*
-   * if the runqueue (sched) was empty AND
-   * the task to be woken belongs to a different thread
-   */
-  if ( was_empty && ( !by || (wc != by->worker_context))) {
+  if (  !by || (wc != by->worker_context)) {
     SendWakeup( wc, by->worker_context, whom);
-    //TODO this happens within a task!
-    //_LpelMonitoringDebug( wc->mon, "worker wokeup %d\n", wc->wid);
+  } else {
+    assert( wc == by->worker_context);
+    (void) SchedMakeReady( wc->sched, whom);
   }
-#endif
 }
 
 
@@ -413,7 +427,7 @@ static void RequestTask( workerctx_t *wc)
 
 static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 {
-  lpel_task_t *task;
+  lpel_task_t *t;
   
   //_LpelMonitoringDebug( wc->mon, "worker %d processing msg %d\n", wc->wid, msg->type);
 
@@ -422,10 +436,8 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       /* worker has new ready tasks,
        * just wakeup to continue loop
        */
-#ifndef DIRECT_MAKE_READY
-      task = msg->body.task;
-      (void) SchedMakeReady( wc->sched, task);
-#endif
+      t = msg->body.task;
+      SchedMakeReady( wc->sched, t);
       break;
     case WORKER_MSG_TERMINATE:
       wc->terminate = true;
@@ -433,41 +445,34 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
     case WORKER_MSG_ASSIGN:
       wc->num_tasks += 1;
       /* assign task to worker */
-      task = AssignTask( wc, msg->body.treq);
-      (void) SchedMakeReady( wc->sched, task);
+      t = AssignTask( wc, msg->body.treq);
+      SchedMakeReady( wc->sched, t);
       break;
+
     case WORKER_MSG_TASKMIG:
       wc->req_pending = 0;
-      task = msg->body.task;
-      if (task != NULL) {
-        assert( task->state != TASK_RUNNING);
+
+      if (msg->body.tqueue.count > 0) {
+        _LpelMonitoringDebug( wc->mon,
+            "worker %d received %d tasks\n",
+            wc->wid, msg->body.tqueue.count
+            );
+      } // esle received no task
+
+      t = TaskqueuePopFront( &msg->body.tqueue);
+      while (t != NULL) {
+        assert( t->state != TASK_RUNNING);
         wc->num_tasks += 1;
         /* reassign new worker_context */
-        task->worker_context = wc;
-        (void) SchedMakeReady( wc->sched, task);
-        _LpelMonitoringDebug( wc->mon,
-            "worker %d received task %u\n",
-            wc->wid, task->uid
-            );
+        t->worker_context = wc;
+        (void) SchedMakeReady( wc->sched, t);
+
+        t = TaskqueuePopFront( &msg->body.tqueue);
       }
       break;
     case WORKER_MSG_REQUEST:
-      task = SchedFetchReady( wc->sched);
-      if (task != NULL) {
-        assert( task->state != TASK_RUNNING);
-        wc->num_tasks -= 1;
-        _LpelMonitoringDebug( wc->mon,
-            "worker %d sending task %u to worker %d\n",
-            wc->wid, task->uid, msg->body.from_worker
-            );
-      } else {
-        _LpelMonitoringDebug( wc->mon,
-            "worker %d sending no task to worker %d\n",
-            wc->wid, msg->body.from_worker
-            );
-      }
       /* send a task to requesting worker */
-      SendTaskMigrate( &workers[msg->body.from_worker], wc, task);
+      SendTaskMigrate( &workers[msg->body.from_worker], wc);
       break;
     default: assert(0);
   }
@@ -519,7 +524,7 @@ static void WorkerLoop( workerctx_t *wc)
        * Investigate, why #VCSes rockets to sky.
        */
       /* request a task if a real worker (no wrapper)*/
-      //if ( wc->wid >= 0 && !wc->req_pending ) RequestTask( wc);
+      //if ( wc->wid>=0 && wc->req_pending==0 ) RequestTask( wc);
 //XXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
       /* wait for a new message and process */
       wc->wait_cnt += 1;

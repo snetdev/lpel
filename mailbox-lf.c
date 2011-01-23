@@ -19,10 +19,10 @@ mailbox_node_t *MailboxGetFree( mailbox_t *mbox)
   do {
     ocnt = mbox->out_cnt;
     top = mbox->list_free;
-    if (!top) break;
+    if (!top) return NULL;
   } while( !CAS2( (void**) &mbox->list_free, top, ocnt, top->next, ocnt+1));
   
-  if (top) top->next = NULL;
+  top->next = NULL;
   return top;
 }
 
@@ -55,8 +55,13 @@ void MailboxInit( mailbox_t *mbox)
   mailbox_node_t *n;
   int i;
 
+#ifdef MAILBOX_USE_SPINLOCK
+  (void) pthread_spin_init( &mbox->lock_inbox, PTHREAD_PROCESS_PRIVATE);
+#else
   (void) pthread_mutex_init( &mbox->lock_inbox, NULL);
+#endif
   (void) sem_init( &mbox->counter, 0, 0);
+
   mbox->list_free  = NULL;
   mbox->out_cnt = 0;
 
@@ -101,7 +106,11 @@ void MailboxCleanup( mailbox_t *mbox)
   } while(top);
 
   /* destroy sync primitives */
+#ifdef MAILBOX_USE_SPINLOCK
+  (void) pthread_spin_destroy( &mbox->lock_inbox);
+#else
   (void) pthread_mutex_destroy( &mbox->lock_inbox);
+#endif
   (void) sem_destroy( &mbox->counter);
 }
 
@@ -114,13 +123,21 @@ void MailboxSend( mailbox_t *mbox, mailbox_node_t *node)
   assert( node != NULL);
 
   /* aquire tail lock */
+#ifdef MAILBOX_USE_SPINLOCK
+  pthread_spin_lock( &mbox->lock_inbox);
+#else
   pthread_mutex_lock( &mbox->lock_inbox);
+#endif
   /* link node at the end of the linked list */
   mbox->in_tail->next = node;
   /* swing tail to node */
   mbox->in_tail = node;
   /* release tail lock */
+#ifdef MAILBOX_USE_SPINLOCK
+  pthread_spin_unlock( &mbox->lock_inbox);
+#else
   pthread_mutex_unlock( &mbox->lock_inbox);
+#endif
 
   /* signal semaphore */
   (void) sem_post( &mbox->counter);

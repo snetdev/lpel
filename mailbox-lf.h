@@ -7,7 +7,9 @@
 #include "lpel.h"
 
 #include "bool.h"
+#include "taskqueue.h"
 
+#define MAILBOX_USE_SPINLOCK
 
 /*
  * worker msg body
@@ -25,7 +27,8 @@ typedef struct {
   union {
     lpel_taskreq_t *treq;
     lpel_task_t    *task;
-    int            from_worker;
+    taskqueue_t     tqueue;
+    int             from_worker;
   } body;
 } workermsg_t;
 
@@ -39,7 +42,12 @@ typedef struct mailbox_node_t {
 } mailbox_node_t;
 
 typedef struct {
+#ifdef MAILBOX_USE_SPINLOCK
+  pthread_spinlock_t
+                   lock_inbox;
+#else
   pthread_mutex_t  lock_inbox;
+#endif
   sem_t            counter;
   mailbox_node_t  *in_head;
   mailbox_node_t  *in_tail;
