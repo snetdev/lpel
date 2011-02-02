@@ -37,6 +37,7 @@ typedef struct {
   mailbox_t     mailbox;
   schedctx_t   *sched;
   monitoring_t *mon;
+  //char          padding[64];
 } workerctx_t;
 
 
