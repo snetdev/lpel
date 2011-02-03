@@ -35,50 +35,37 @@ static void *WorkerThread( void *arg);
 
 static inline void SendTerminate( workerctx_t *target)
 {
-  /* get a free node from target */
-  mailbox_node_t *node = MailboxGetFree( &target->mailbox);
-  if (!node) node = MailboxAllocateNode();
-
+  workermsg_t msg;
   /* compose a task term message */
-  node->msg.type = WORKER_MSG_TERMINATE;
+  msg.type = WORKER_MSG_TERMINATE;
   /* send */
-  MailboxSend( &target->mailbox, node);
+  MailboxSend( &target->mailbox, &msg);
 }
 
 static inline void SendAssign( workerctx_t *target, lpel_taskreq_t *req)
 {
-  mailbox_node_t *node = NULL;
-
-  /* get a free node from recepient */
-  node = MailboxGetFree( &target->mailbox);
-  if (!node) node = MailboxAllocateNode();
-
+  workermsg_t msg;
   /* compose a task assign message */
-  node->msg.type = WORKER_MSG_ASSIGN;
-  node->msg.body.treq = req;
+  msg.type = WORKER_MSG_ASSIGN;
+  msg.body.treq = req;
 
   /* send */
-  MailboxSend( &target->mailbox, node);
+  MailboxSend( &target->mailbox, &msg);
 }
 
 
 
 static inline void SendWakeup( workerctx_t *target, workerctx_t *waker, lpel_task_t *t)
 {
-  mailbox_node_t *node = NULL;
-
-  /* get a free node from own mbox */
-  //node = MailboxGetFree( &waker->mailbox); if (!node) 
-  node = MailboxGetFree( &target->mailbox);
-  if (!node) node = MailboxAllocateNode();
+  workermsg_t msg;
   /* compose a task wakeup message */
-  node->msg.type = WORKER_MSG_WAKEUP;
-  node->msg.body.task = t;
+  msg.type = WORKER_MSG_WAKEUP;
+  msg.body.task = t;
   /* send */
-  MailboxSend( &target->mailbox, node);
+  MailboxSend( &target->mailbox, &msg);
 }
 
-
+#if 0
 static inline void SendRequestTask( workerctx_t *target, workerctx_t *from)
 {
   mailbox_node_t *node = NULL;
@@ -138,7 +125,7 @@ static inline void SendTaskMigrate( workerctx_t *target, workerctx_t *from)
   /* send */
   MailboxSend( &target->mailbox, node);
 }
-
+#endif
 
 
 
@@ -152,7 +139,6 @@ static inline void SendTaskMigrate( workerctx_t *target, workerctx_t *from)
 void LpelWorkerTaskAssign( lpel_taskreq_t *t, int wid)
 {
   workerctx_t *wc = &workers[wid];
-
   SendAssign( wc, t);
 }
 
@@ -395,7 +381,7 @@ static void RescheduleTask( lpel_task_t *t)
     default: assert(0); /* should not be reached */
   }
 }
-
+#if 0
 static void RequestTask( workerctx_t *wc)
 {
   unsigned int i;
@@ -423,7 +409,7 @@ static void RequestTask( workerctx_t *wc)
     wc->req_pending = 1;
   }
 }
-
+#endif
 
 static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 {
@@ -448,7 +434,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       t = AssignTask( wc, msg->body.treq);
       SchedMakeReady( wc->sched, t);
       break;
-
+#if 0
     case WORKER_MSG_TASKMIG:
       wc->req_pending = 0;
 
@@ -474,6 +460,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       /* send a task to requesting worker */
       SendTaskMigrate( &workers[msg->body.from_worker], wc);
       break;
+#endif
     default: assert(0);
   }
 }

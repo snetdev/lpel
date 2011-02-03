@@ -7,7 +7,6 @@
 #include "lpel.h"
 
 #include "bool.h"
-#include "taskqueue.h"
 
 #define MAILBOX_USE_SPINLOCK
 
@@ -22,24 +21,22 @@ typedef enum {
   WORKER_MSG_TASKMIG,
 } workermsg_type_t;
 
+/* mailbox structures */
+
 typedef struct {
   workermsg_type_t  type;
   union {
     lpel_taskreq_t *treq;
     lpel_task_t    *task;
-    taskqueue_t     tqueue;
-    int             from_worker;
+    int             from;
   } body;
 } workermsg_t;
 
-
-
-/* mailbox structures */
-
 typedef struct mailbox_node_t {
-  struct mailbox_node_t * volatile next;
+  struct mailbox_node_t *next;
   workermsg_t msg;
 } mailbox_node_t;
+
 
 typedef struct {
 #ifdef MAILBOX_USE_SPINLOCK
@@ -56,15 +53,11 @@ typedef struct {
 } mailbox_t;
 
 
+
 void MailboxInit( mailbox_t *mbox);
 void MailboxCleanup( mailbox_t *mbox);
-
-mailbox_node_t *MailboxGetFree( mailbox_t *mbox);
-mailbox_node_t *MailboxAllocateNode( void);
-void MailboxSend( mailbox_t *mbox, mailbox_node_t *node);
-
+void MailboxSend( mailbox_t *mbox, workermsg_t *msg);
 void MailboxRecv( mailbox_t *mbox, workermsg_t *msg);
-
 bool MailboxHasIncoming( mailbox_t *mbox);
 
 

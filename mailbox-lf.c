@@ -12,7 +12,7 @@
 /* Free node pool management functions                                        */
 /******************************************************************************/
 
-mailbox_node_t *MailboxGetFree( mailbox_t *mbox)
+static mailbox_node_t *MailboxGetFree( mailbox_t *mbox)
 {
   mailbox_node_t * volatile top;
   volatile unsigned long ocnt;
@@ -26,7 +26,7 @@ mailbox_node_t *MailboxGetFree( mailbox_t *mbox)
   return top;
 }
 
-mailbox_node_t *MailboxAllocateNode( void)
+static mailbox_node_t *MailboxAllocateNode( void)
 {
   /* allocate new node */
   mailbox_node_t *n = (mailbox_node_t *)malloc( sizeof( mailbox_node_t));
@@ -34,7 +34,7 @@ mailbox_node_t *MailboxAllocateNode( void)
   return n;
 }
 
-void MailboxPutFree( mailbox_t *mbox, mailbox_node_t *node)
+static void MailboxPutFree( mailbox_t *mbox, mailbox_node_t *node)
 {
   mailbox_node_t * volatile top;
   do {
@@ -116,11 +116,17 @@ void MailboxCleanup( mailbox_t *mbox)
 
 
 
-
-
-void MailboxSend( mailbox_t *mbox, mailbox_node_t *node)
+void MailboxSend( mailbox_t *mbox, workermsg_t *msg)
 {
+  /* get a free node from recepient */
+  mailbox_node_t *node = MailboxGetFree( mbox);
+  if (node == NULL) {
+    node = MailboxAllocateNode();
+  }
   assert( node != NULL);
+
+  /* copy the message */
+  node->msg = *msg;
 
   /* aquire tail lock */
 #ifdef MAILBOX_USE_SPINLOCK
