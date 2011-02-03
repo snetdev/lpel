@@ -23,24 +23,46 @@ static workerctx_t *workers;
 static workercfg_t  config;
 
 
+
+static atomic_t glob_task_count = ATOMIC_INIT(0);
+
+
+
 /* worker thread function declaration */
 static void *WorkerThread( void *arg);
 
 
 
+
+static inline void TaskAdd( void)
+{
+  (void) fetch_and_inc( &glob_task_count);
+}
+
+static inline void TaskRemove( void)
+{
+  int i;
+  workerctx_t *wc;
+  workermsg_t msg;
+
+  /* compose a task term message */
+  msg.type = WORKER_MSG_TERMINATE;
+
+  if (1 == fetch_and_dec( &glob_task_count)) {
+    /* signal the workers to terminate */
+    for( i=0; i<num_workers; i++) {
+      wc = &workers[i];
+      
+      /* send */
+      MailboxSend( &wc->mailbox, &msg);
+    }
+  }
+}
+
 /******************************************************************************/
 /*  Convenience functions for sending messages between workers                */
 /******************************************************************************/
 
-
-static inline void SendTerminate( workerctx_t *target)
-{
-  workermsg_t msg;
-  /* compose a task term message */
-  msg.type = WORKER_MSG_TERMINATE;
-  /* send */
-  MailboxSend( &target->mailbox, &msg);
-}
 
 static inline void SendAssign( workerctx_t *target, lpel_taskreq_t *req)
 {
@@ -48,6 +70,8 @@ static inline void SendAssign( workerctx_t *target, lpel_taskreq_t *req)
   /* compose a task assign message */
   msg.type = WORKER_MSG_ASSIGN;
   msg.body.treq = req;
+
+  TaskAdd();
 
   /* send */
   MailboxSend( &target->mailbox, &msg);
@@ -140,6 +164,7 @@ void LpelWorkerTaskAssign( lpel_taskreq_t *t, int wid)
 {
   workerctx_t *wc = &workers[wid];
   SendAssign( wc, t);
+
 }
 
 /**
@@ -154,7 +179,9 @@ void LpelWorkerWrapperCreate( lpel_taskreq_t *t, char *name)
 
   wc->wid = -1;
   wc->num_tasks = 0;
-  wc->terminate = false;
+
+  /* TODO send terminate message? */
+  wc->terminate = true;
 
   wc->wait_cnt = 0;
   TimingZero( &wc->wait_time);
@@ -177,8 +204,7 @@ void LpelWorkerWrapperCreate( lpel_taskreq_t *t, char *name)
   /* send assign message for the task */
   SendAssign( wc, t);
 
-  /* send terminate message afterwards, as this is the only task */
-  SendTerminate( wc);
+  //SendTerminate( wc);
 
 
  (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
@@ -191,16 +217,6 @@ void LpelWorkerWrapperCreate( lpel_taskreq_t *t, char *name)
  */
 void LpelWorkerTerminate(void)
 {
-  int i;
-  workerctx_t *wc;
-
-  /* signal the workers to terminate */
-  for( i=0; i<num_workers; i++) {
-    wc = &workers[i];
-    
-    /* send a termination message */
-    SendTerminate( wc);
-  }
 
 }
 
@@ -371,6 +387,7 @@ static void RescheduleTask( lpel_task_t *t)
     case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
       ReturnTask( wc, t);
       wc->num_tasks -= 1;
+      TaskRemove();
       break;
     case TASK_BLOCKED: /* task returned from a blocking call*/
       /* do nothing */
@@ -529,7 +546,7 @@ static void WorkerLoop( workerctx_t *wc)
     }
     /* fetch (remaining) messages */
     FetchAllMessages( wc);
-  } while ( !(wc->num_tasks==0 && wc->terminate) );
+  } while ( !( 0==atomic_read(&glob_task_count) && wc->terminate) );
 
   _LpelMonitoringDebug( wc->mon,
     "Worker %d exited. wait_cnt %u, wait_time %lu.%09lu\n",
