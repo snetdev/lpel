@@ -63,9 +63,8 @@ void LpelTaskExit( lpel_task_t *ct, void *joinarg)
       _LpelWorkerTaskWakeup( ct, whom);
     }
   }
-  ct->state = TASK_ZOMBIE;
-  /* context switch */
-  co_call( ct->worker_context->mctx);
+
+  TaskBlock( ct, TASK_ZOMBIE);
   /* execution never comes back here */
   assert(0);
 }
@@ -104,10 +103,7 @@ void* LpelTaskJoin( lpel_task_t *ct, lpel_taskreq_t *child)
  */
 void LpelTaskYield( lpel_task_t *ct)
 {
-  assert( ct->state == TASK_RUNNING );
-  ct->state = TASK_READY;
-  /* context switch */
-  co_call( ct->worker_context->mctx);
+  TaskBlock( ct, TASK_READY);
 }
 
 unsigned int LpelTaskGetUID( lpel_task_t *t)
@@ -125,6 +121,65 @@ unsigned int LpelTaskReqGetUID( lpel_taskreq_t *t)
 /* HIDDEN FUNCTIONS                                                           */
 /******************************************************************************/
 
+
+void TaskLock( lpel_task_t *t)
+{
+  pthread_mutex_lock( &t->lock);
+}
+
+void TaskUnlock( lpel_task_t *t)
+{
+  pthread_mutex_unlock( &t->lock);
+}
+
+
+void TaskStart( lpel_task_t *t)
+{
+  /* start timestamp, dispatch counter, state */
+  t->cnt_dispatch++;
+  t->state = TASK_RUNNING;
+      
+  if ( TASK_FLAGS( t, LPEL_TASK_ATTR_MONITOR_TIMES)) {
+    TIMESTAMP( &t->times.start);
+  }
+}
+
+void TaskStop( lpel_task_t *t)
+{
+  workerctx_t *wc = t->worker_context;
+  assert( t->state != TASK_RUNNING);
+
+  /* stop timestamp */
+  if ( TASK_FLAGS( t, LPEL_TASK_ATTR_MONITOR_TIMES) ) {
+    /* if monitor output, we need a timestamp */
+    TIMESTAMP( &t->times.stop);
+  }
+
+  /* output accounting info */
+  if ( TASK_FLAGS(t, LPEL_TASK_ATTR_MONITOR_OUTPUT)) {
+    _LpelMonitoringOutput( wc->mon, t);
+  }
+
+}
+
+
+void TaskBlock( lpel_task_t *t, taskstate_t state)
+{
+
+  assert( t->state == TASK_RUNNING);
+  assert( state == TASK_READY || state == TASK_ZOMBIE || state == TASK_BLOCKED);
+
+  /* set new state */
+  t->state = state;
+
+  TaskStop( t);
+  Dispatcher( t);
+  TaskStart( t);
+}
+
+
+
+
 /**
  * Create a task
  */
@@ -134,6 +189,9 @@ lpel_task_t *_LpelTaskCreate( void)
   
   /* initialize poll token to 0 */
   atomic_init( &t->poll_token, 0);
+
+  pthread_mutex_init( &t->lock, NULL);
+
   t->state = TASK_CREATED;
 
   return t;
@@ -184,8 +242,8 @@ void _LpelTaskReset( lpel_task_t *t, lpel_taskreq_t *req)
   atomic_set( &t->poll_token, 0); /* reset poll token to 0 */
   
   /* function, argument (data), stack base address, stacksize */
-  t->ctx = co_create( TaskStartup, (void *)t, NULL, t->stacksize);
-  if (t->ctx == NULL) {
+  t->mctx = co_create( TaskStartup, (void *)t, NULL, t->stacksize);
+  if (t->mctx == NULL) {
     /*TODO throw error!*/
     assert(0);
   }
@@ -201,7 +259,7 @@ void _LpelTaskUnset( lpel_task_t *t)
 {
   assert( t->state == TASK_ZOMBIE);
   /* delete the coroutine */
-  co_delete(t->ctx);
+  co_delete(t->mctx);
   t->state = TASK_CREATED;
 }
 
@@ -215,6 +273,9 @@ void _LpelTaskDestroy( lpel_task_t *t)
 {
   assert( t->state == TASK_ZOMBIE);
   atomic_destroy( &t->poll_token);
+
+  pthread_mutex_destroy( &t->lock);
+
   /* free the TCB itself*/
   free(t);
 }
@@ -224,48 +285,12 @@ void _LpelTaskDestroy( lpel_task_t *t)
 
 
 /**
- * Call a task (context switch to a task)
- *
- */
-void _LpelTaskCall( lpel_task_t *t)
-{
-  t->cnt_dispatch++;
-  t->state = TASK_RUNNING;
-      
-  if ( TASK_FLAGS( t, LPEL_TASK_ATTR_MONITOR_TIMES)) {
-    TIMESTAMP( &t->times.start);
-  }
-
-
-  /*
-   * CONTEXT SWITCH
-   *
-   * CAUTION: A coroutine must not run simultaneously in more than one thread!
-   */
-  co_call( t->ctx);
-
-  /* task returns in every case in a different state */
-  assert( t->state != TASK_RUNNING);
-
-  if ( TASK_FLAGS( t, 
-      LPEL_TASK_ATTR_MONITOR_OUTPUT | LPEL_TASK_ATTR_MONITOR_TIMES) ) {
-    /* if monitor output, we need a timestamp */
-    TIMESTAMP( &t->times.stop);
-  }
-
-}
-
-
-/**
  * Block a task
  */
 void _LpelTaskBlock(lpel_task_t *ct, taskstate_blocked_t block_on)
 {
-  assert( ct->state == TASK_RUNNING);
-  ct->state = TASK_BLOCKED;
   ct->blocked_on = block_on;
-  /* context switch */
-  co_call( ct->worker_context->mctx);
+  TaskBlock( ct, TASK_BLOCKED);
 }
 
 
@@ -284,6 +309,10 @@ static void TaskStartup( void *data)
 {
   lpel_task_t *t = (lpel_task_t *)data;
   lpel_taskfunc_t func = t->code;
+
+  TaskFinalize( t->worker_context);
+  TaskStart( t);
+
   /* call the task function with inarg as parameter */
   func(t, t->inarg);
   /* if task function returns, exit properly */

@@ -1,7 +1,7 @@
 #ifndef _TASK_H_
 #define _TASK_H_
 
-
+#include <pthread.h>
 #include <pcl.h>    /* tasks are executed in user-space with help of
                        GNU Portable Coroutine Library  */
 
@@ -87,7 +87,8 @@ struct lpel_task_t {
   lpel_stream_desc_t *dirty_list;
 
   /* CODE */
-  coroutine_t ctx;      /** context of the task*/
+  pthread_mutex_t lock; /** mutex */
+  coroutine_t mctx;     /** context of the task*/
   lpel_taskfunc_t code; /** function of the task */
   void *inarg;          /** input argument  */
 };
@@ -103,5 +104,10 @@ void _LpelTaskUnset( lpel_task_t *t);
 void _LpelTaskCall(  lpel_task_t *t);
 void _LpelTaskBlock( lpel_task_t *ct, taskstate_blocked_t block_on);
 
+void TaskStart( lpel_task_t *t);
+void TaskStop( lpel_task_t *t);
+void TaskBlock( lpel_task_t *t, taskstate_t state);
+void TaskLock( lpel_task_t *t);
+void TaskUnlock( lpel_task_t *t);
 
 #endif /* _TASK_H_ */
