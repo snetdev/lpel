@@ -273,7 +273,6 @@ void _LpelWorkerInit(int size, workercfg_t *cfg)
 
     wc->wait_cnt = 0;
     TimingZero( &wc->wait_time);
-    wc->req_pending = 0;
 
     wc->terminate = false;
 
@@ -518,8 +517,8 @@ static void WorkerLoop( workerctx_t *wc)
     }
     /* fetch (remaining) messages */
     FetchAllMessages( wc);
-  //} while ( !( 0==atomic_read(&glob_task_count) && wc->terminate) );
-  } while ( !wc->terminate);
+  } while ( !( 0==atomic_read(&glob_task_count) && wc->terminate) );
+  //} while ( !wc->terminate);
 
 }
 
