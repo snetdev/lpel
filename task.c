@@ -122,18 +122,7 @@ unsigned int LpelTaskReqGetUID( lpel_taskreq_t *t)
 /******************************************************************************/
 
 
-void TaskLock( lpel_task_t *t)
-{
-  pthread_mutex_lock( &t->lock);
-}
-
-void TaskUnlock( lpel_task_t *t)
-{
-  pthread_mutex_unlock( &t->lock);
-}
-
-
-void TaskStart( lpel_task_t *t)
+static inline void TaskStart( lpel_task_t *t)
 {
   /* start timestamp, dispatch counter, state */
   t->cnt_dispatch++;
@@ -144,7 +133,7 @@ void TaskStart( lpel_task_t *t)
   }
 }
 
-void TaskStop( lpel_task_t *t)
+static inline void TaskStop( lpel_task_t *t)
 {
   workerctx_t *wc = t->worker_context;
   assert( t->state != TASK_RUNNING);
@@ -190,7 +179,11 @@ lpel_task_t *_LpelTaskCreate( void)
   /* initialize poll token to 0 */
   atomic_init( &t->poll_token, 0);
 
+#ifdef TASK_USE_SPINLOCK
+  pthread_spin_init( &t->lock, PTHREAD_PROCESS_PRIVATE);
+#else
   pthread_mutex_init( &t->lock, NULL);
+#endif
 
   t->state = TASK_CREATED;
 
@@ -274,7 +267,11 @@ void _LpelTaskDestroy( lpel_task_t *t)
   assert( t->state == TASK_ZOMBIE);
   atomic_destroy( &t->poll_token);
 
+#ifdef TASK_USE_SPINLOCK
+  pthread_spin_destroy( &t->lock);
+#else
   pthread_mutex_destroy( &t->lock);
+#endif
 
   /* free the TCB itself*/
   free(t);

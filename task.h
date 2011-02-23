@@ -16,6 +16,7 @@
 
 #define TASK_FLAGS(t, f)  (((t)->flags & (f)) == (f))
 
+#define TASK_USE_SPINLOCK
 
 typedef enum {
   TASK_CREATED = 'C',
@@ -87,7 +88,11 @@ struct lpel_task_t {
   lpel_stream_desc_t *dirty_list;
 
   /* CODE */
+#ifdef TASK_USE_SPINLOCK
+  pthread_spinlock_t lock;   /** spinlock */
+#else
   pthread_mutex_t lock; /** mutex */
+#endif
   coroutine_t mctx;     /** context of the task*/
   lpel_taskfunc_t code; /** function of the task */
   void *inarg;          /** input argument  */
@@ -104,10 +109,29 @@ void _LpelTaskUnset( lpel_task_t *t);
 void _LpelTaskCall(  lpel_task_t *t);
 void _LpelTaskBlock( lpel_task_t *ct, taskstate_blocked_t block_on);
 
-void TaskStart( lpel_task_t *t);
-void TaskStop( lpel_task_t *t);
 void TaskBlock( lpel_task_t *t, taskstate_t state);
-void TaskLock( lpel_task_t *t);
-void TaskUnlock( lpel_task_t *t);
+
+
+
+
+static inline void TaskLock( lpel_task_t *t)
+{
+#ifdef TASK_USE_SPINLOCK
+  pthread_spin_lock( &t->lock);
+#else
+  pthread_mutex_lock( &t->lock);
+#endif
+}
+
+static inline void TaskUnlock( lpel_task_t *t)
+{
+#ifdef TASK_USE_SPINLOCK
+  pthread_spin_unlock( &t->lock);
+#else
+  pthread_mutex_unlock( &t->lock);
+#endif
+}
+
+
 
 #endif /* _TASK_H_ */
