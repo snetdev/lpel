@@ -1,13 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <string.h>
 #include <assert.h>
 
 #include "lpel.h"
 #include "arch/timing.h"
 
-#define STACK_SIZE (4*1024) /* 4k */
+#define STACK_SIZE (16*1024) /* 16k */
 
 #define PIPE_DEPTH 100 /* min 3*/
 

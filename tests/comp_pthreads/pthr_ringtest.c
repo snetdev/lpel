@@ -86,6 +86,8 @@ void *Process(void *arg)
     free(msg);
   }
 
+  PthrStreamDestroy( in);
+
   pthread_exit(NULL);
 }
 
