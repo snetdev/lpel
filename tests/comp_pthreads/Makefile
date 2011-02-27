@@ -24,4 +24,4 @@ pipetest: pipetest.o liblpel.a
 
 
 clean:
-	rm -fr $(TARGETS) *.o
+	rm -fr $(TARGETS) *.o *mon_*.log

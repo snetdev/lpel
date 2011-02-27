@@ -10,7 +10,7 @@
 
 #define PIPE_DEPTH 100 /* min 3*/
 
-#define NUM_MSGS 500000L
+#define NUM_MSGS 100000L
 
 #define MSG_TERM ((void*)-1)
 
@@ -58,8 +58,8 @@ void Sink(lpel_task_t *self, void *inarg)
   while(1) {
     msg = LpelStreamRead( in);
     cnt++;
-    if (cnt % 100000 == 0) {
-      printf("Read %lu msgs\n", cnt);
+    if (cnt % 10000 == 0) {
+      //printf("Read %lu msgs\n", cnt);
     }
     if (msg==MSG_TERM) break;
   }
