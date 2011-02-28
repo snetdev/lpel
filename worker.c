@@ -163,10 +163,9 @@ void LpelWorkerTerminate(void)
 /******************************************************************************/
 
 
-void TaskCall( workerctx_t *wc, lpel_task_t *t);
 
 
-void TaskFinalize( workerctx_t *wc)
+void _LpelWorkerFinalizeTask( workerctx_t *wc)
 {
   if (wc->predecessor != NULL) {
     _LpelMonitoringDebug( wc->mon, "Finalize for task %d.\n", wc->predecessor->uid);
@@ -182,7 +181,7 @@ void TaskFinalize( workerctx_t *wc)
 
 void TaskCall( workerctx_t *wc, lpel_task_t *t)
 {
-  /* count how often dispatcher has executed a task */
+  /* count how often _LpelWorkerDispatcher has executed a task */
   wc->loop++;
   _LpelMonitoringDebug( wc->mon, "Calling task %d.\n", t->uid);
   if (wc->predecessor != NULL) {
@@ -196,7 +195,7 @@ void TaskCall( workerctx_t *wc, lpel_task_t *t)
   co_call( t->mctx);
 }
 
-void Dispatcher( lpel_task_t *t)
+void _LpelWorkerDispatcher( lpel_task_t *t)
 {
   workerctx_t *wc = t->worker_context;
 
@@ -224,7 +223,7 @@ void Dispatcher( lpel_task_t *t)
     /*********************************
      * ... CTX SWITCH ...
      *********************************/
-    TaskFinalize( wc);
+    _LpelWorkerFinalizeTask( wc);
 
   } else {
     /* we are on a wrapper.
@@ -510,7 +509,7 @@ static void WorkerLoop( workerctx_t *wc)
 
       assert( wc->predecessor != NULL);
       
-      TaskFinalize( wc);
+      _LpelWorkerFinalizeTask( wc);
     } else {
       /* no ready tasks */
       WaitForNewMessage( wc);
@@ -536,7 +535,7 @@ static void WrapperLoop( workerctx_t *wc)
       wc->wraptask = NULL;
       assert( wc->predecessor != NULL);
       
-      TaskFinalize( wc);
+      _LpelWorkerFinalizeTask( wc);
     } else {
       /* no ready tasks */
       WaitForNewMessage( wc);

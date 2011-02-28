@@ -49,8 +49,8 @@ void _LpelWorkerCleanup( void);
 
 void _LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom);
 
-void Dispatcher( lpel_task_t *t);
-void TaskFinalize( workerctx_t *wc);
+void _LpelWorkerDispatcher( lpel_task_t *t);
+void _LpelWorkerFinalizeTask( workerctx_t *wc);
 
 
 #endif /* _WORKER_H_ */

@@ -22,6 +22,10 @@ static atomic_t taskseq = ATOMIC_INIT(0);
 /* declaration of startup function */
 static void TaskStartup(void *data);
 
+static inline void TaskStart( lpel_task_t *t);
+static inline void TaskStop( lpel_task_t *t);
+static inline void TaskBlock( lpel_task_t *t, taskstate_t state);
+
 
 lpel_taskreq_t *LpelTaskRequest( lpel_taskfunc_t func,
     void *inarg, int flags, int stacksize, int prio)
@@ -122,49 +126,7 @@ unsigned int LpelTaskReqGetUID( lpel_taskreq_t *t)
 /******************************************************************************/
 
 
-static inline void TaskStart( lpel_task_t *t)
-{
-  /* start timestamp, dispatch counter, state */
-  t->cnt_dispatch++;
-  t->state = TASK_RUNNING;
-      
-  if ( TASK_FLAGS( t, LPEL_TASK_ATTR_MONITOR_TIMES)) {
-    TIMESTAMP( &t->times.start);
-  }
-}
 
-static inline void TaskStop( lpel_task_t *t)
-{
-  workerctx_t *wc = t->worker_context;
-  assert( t->state != TASK_RUNNING);
-
-  /* stop timestamp */
-  if ( TASK_FLAGS( t, LPEL_TASK_ATTR_MONITOR_TIMES) ) {
-    /* if monitor output, we need a timestamp */
-    TIMESTAMP( &t->times.stop);
-  }
-
-  /* output accounting info */
-  if ( TASK_FLAGS(t, LPEL_TASK_ATTR_MONITOR_OUTPUT)) {
-    _LpelMonitoringOutput( wc->mon, t);
-  }
-
-}
-
-
-void TaskBlock( lpel_task_t *t, taskstate_t state)
-{
-
-  assert( t->state == TASK_RUNNING);
-  assert( state == TASK_READY || state == TASK_ZOMBIE || state == TASK_BLOCKED);
-
-  /* set new state */
-  t->state = state;
-
-  TaskStop( t);
-  Dispatcher( t);
-  TaskStart( t);
-}
 
 
 
@@ -307,7 +269,7 @@ static void TaskStartup( void *data)
   lpel_task_t *t = (lpel_task_t *)data;
   lpel_taskfunc_t func = t->code;
 
-  TaskFinalize( t->worker_context);
+  _LpelWorkerFinalizeTask( t->worker_context);
   TaskStart( t);
 
   /* call the task function with inarg as parameter */
@@ -317,3 +279,45 @@ static void TaskStartup( void *data)
 }
 
 
+static inline void TaskStart( lpel_task_t *t)
+{
+  /* start timestamp, dispatch counter, state */
+  t->cnt_dispatch++;
+  t->state = TASK_RUNNING;
+      
+  if ( TASK_FLAGS( t, LPEL_TASK_ATTR_MONITOR_TIMES)) {
+    TIMESTAMP( &t->times.start);
+  }
+}
+
+static inline void TaskStop( lpel_task_t *t)
+{
+  workerctx_t *wc = t->worker_context;
+  assert( t->state != TASK_RUNNING);
+
+  /* stop timestamp */
+  if ( TASK_FLAGS( t, LPEL_TASK_ATTR_MONITOR_TIMES) ) {
+    /* if monitor output, we need a timestamp */
+    TIMESTAMP( &t->times.stop);
+  }
+
+  /* output accounting info */
+  if ( TASK_FLAGS(t, LPEL_TASK_ATTR_MONITOR_OUTPUT)) {
+    _LpelMonitoringOutput( wc->mon, t);
+  }
+
+}
+
+static inline void TaskBlock( lpel_task_t *t, taskstate_t state)
+{
+
+  assert( t->state == TASK_RUNNING);
+  assert( state == TASK_READY || state == TASK_ZOMBIE || state == TASK_BLOCKED);
+
+  /* set new state */
+  t->state = state;
+
+  TaskStop( t);
+  _LpelWorkerDispatcher( t);
+  TaskStart( t);
+}

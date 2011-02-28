@@ -106,11 +106,7 @@ void         _LpelTaskDestroy( lpel_task_t *t);
 void _LpelTaskReset( lpel_task_t *t, lpel_taskreq_t *req);
 void _LpelTaskUnset( lpel_task_t *t);
 
-void _LpelTaskCall(  lpel_task_t *t);
 void _LpelTaskBlock( lpel_task_t *ct, taskstate_blocked_t block_on);
-
-void TaskBlock( lpel_task_t *t, taskstate_t state);
-
 
 
 
