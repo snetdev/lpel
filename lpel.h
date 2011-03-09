@@ -62,14 +62,6 @@ int LpelCanSetExclusive( int *result);
 
 
 
-/**
- * Aquire a thread from the LPEL
- */
-lpel_thread_t *LpelThreadCreate( void (*func)(void *),
-    void *arg, int detached);
-
-void LpelThreadJoin( lpel_thread_t *env);
-
 
 /******************************************************************************/
 /*  DATATYPES                                                                 */
@@ -77,34 +69,13 @@ void LpelThreadJoin( lpel_thread_t *env);
 
 /* task types */
 
-/* the running task */
+/* a task */
 typedef struct lpel_task_t lpel_task_t;
-
-/* a task request */
-typedef struct lpel_taskreq_t lpel_taskreq_t;
 
 /* task function signature */
 typedef void (*lpel_taskfunc_t)( lpel_task_t *self, void *inarg);
 
 
-#define LPEL_TASK_ATTR_NONE                (0)
-
-#define LPEL_TASK_ATTR_JOINABLE         (1<<0)
-
-#define LPEL_TASK_ATTR_MONITOR_OUTPUT   (1<<4)
-#define LPEL_TASK_ATTR_MONITOR_TIMES    (1<<5)
-#define LPEL_TASK_ATTR_MONITOR_STREAMS  (1<<6)
-
-#define LPEL_TASK_ATTR_MONITOR_ALL  \
-  ( LPEL_TASK_ATTR_MONITOR_OUTPUT  |\
-    LPEL_TASK_ATTR_MONITOR_TIMES   |\
-    LPEL_TASK_ATTR_MONITOR_STREAMS )
-
-/**
- * If a stacksize <= 0 is specified,
- * use the default stacksize
- */
-#define LPEL_TASK_ATTR_STACKSIZE_DEFAULT  8192  /* 8k stacksize*/
 
 
 
@@ -119,30 +90,40 @@ typedef lpel_stream_desc_t          *lpel_stream_list_t;
 typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 
 
+/* monitoring */
+
+#define LPEL_TASK_ATTR_NONE                (0)
+
+
+#define LPEL_TASK_ATTR_MONITOR_OUTPUT   (1<<4)
+#define LPEL_TASK_ATTR_MONITOR_TIMES    (1<<5)
+#define LPEL_TASK_ATTR_MONITOR_STREAMS  (1<<6)
+
+#define LPEL_TASK_ATTR_MONITOR_ALL  \
+  ( LPEL_TASK_ATTR_MONITOR_OUTPUT  |\
+    LPEL_TASK_ATTR_MONITOR_TIMES   |\
+    LPEL_TASK_ATTR_MONITOR_STREAMS )
+
+
 
 /******************************************************************************/
 /*  TASK FUNCTIONS                                                            */
 /******************************************************************************/
 
-lpel_taskreq_t *LpelTaskRequest( lpel_taskfunc_t,
-    void *inarg, int flags, int stacksize, int prio);
+lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
+    void *inarg, int stacksize );
+
+/** let the previously created task run */
+void LpelTaskRun( lpel_task_t *t );
 
 
-void  LpelTaskExit(  lpel_task_t *ct, void* joinarg);
-void  LpelTaskYield( lpel_task_t *ct);
-void* LpelTaskJoin( lpel_task_t *ct, lpel_taskreq_t *child);
-
-unsigned int LpelTaskGetUID( lpel_task_t *t);
-unsigned int LpelTaskReqGetUID( lpel_taskreq_t *t);
+unsigned int LpelTaskGetUID( lpel_task_t *t );
 
 
-/******************************************************************************/
-/*  WORKER FUNCTIONS                                                          */
-/******************************************************************************/
+/** to be called from within a task: */
+void LpelTaskExit(  lpel_task_t *ct );
+void LpelTaskYield( lpel_task_t *ct );
 
-void LpelWorkerTaskAssign( lpel_taskreq_t *t, int wid);
-void LpelWorkerWrapperCreate( lpel_taskreq_t *t, char *name);
-void LpelWorkerTerminate( void);
 
 
 
@@ -182,12 +163,18 @@ void LpelStreamIterAppend(  lpel_stream_iter_t *iter, lpel_stream_desc_t *node);
 void LpelStreamIterRemove(  lpel_stream_iter_t *iter);
 
 
+/******************************************************************************/
+/*  MONITORING FUNCTIONS                                                      */
+/******************************************************************************/
 
 
 /******************************************************************************/
 /*  THREADING FUNCTIONS                                                       */
 /******************************************************************************/
 
+/**
+ * Aquire a thread from the LPEL
+ */
 extern lpel_thread_t *LpelThreadCreate( void (*func)(void *),
     void *arg, int detached);
 extern void LpelThreadJoin( lpel_thread_t *env);

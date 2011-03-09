@@ -16,7 +16,32 @@
 
 #define TASK_FLAGS(t, f)  (((t)->flags & (f)) == (f))
 
+/**
+ * If a stacksize <= 0 is specified,
+ * use the default stacksize
+ */
+#define LPEL_TASK_ATTR_STACKSIZE_DEFAULT  8192  /* 8k stacksize*/
+
+
+
+
+
+/* protecting tasks is necessary in case of envisioned work stealing:
+ * - a task might decrement a stream semaphore counter and notice it is going to be blocked
+ * - before the task does switch context, it can be waken up by a task on another worker
+ *   finding the semaphore was <0
+ * - as the task is ready, it is subject of theft despite of still being executed
+ * - a task must not be executed also by the thief! - the lock physically avoids this
+ *
+ * Use a pthread mutex for locking, unless following macro is defined:
+ */
 #define TASK_USE_SPINLOCK
+
+#ifdef TASK_USE_SPINLOCK
+#define TASKLOCK_TYPE pthread_spinlock_t
+#else
+#define TASKLOCK_TYPE pthread_mutex_t
+#endif /* TASK_USE_SPINLOCK */
 
 typedef enum {
   TASK_CREATED = 'C',
@@ -30,27 +55,7 @@ typedef enum {
   BLOCKED_ON_INPUT  = 'i',
   BLOCKED_ON_OUTPUT = 'o',
   BLOCKED_ON_ANYIN  = 'a',
-  BLOCKED_ON_CHILD  = 'c'
 } taskstate_blocked_t;
-
-
-struct lpel_taskreq_t {
-  unsigned int uid;
-  struct {
-    lpel_taskfunc_t func;
-    void *arg;
-    int   flags;
-    int   stacksize;
-    int   prio;
-  } in;
-  /* for joining: */
-  struct {
-    atomic_t     refcnt;
-    void        *arg;
-    lpel_task_t *parent;
-  } join;
-};
-
 
 
 /**
@@ -60,12 +65,10 @@ struct lpel_task_t {
   /** intrinsic pointers for organizing tasks in a list*/
   lpel_task_t *prev, *next;
   unsigned int uid;    /** unique identifier */
-  int flags;           /** flags */
   int stacksize;       /** stacksize */
   taskstate_t state;   /** state */
   taskstate_blocked_t blocked_on; /** on which event the task is waiting */
 
-  lpel_taskreq_t *request;      /** task request that created this task */
   workerctx_t *worker_context;  /** worker context for this task */
 
   sched_task_t sched_info;
@@ -78,6 +81,8 @@ struct lpel_task_t {
   atomic_t poll_token;        /** poll token, accessed concurrently */
 
   /* ACCOUNTING INFORMATION */
+  /* TODO encapsule in mon_task_t mon_info */
+  int flags;           /** monitoring flags */
   /** timestamps for creation, start/stop of last dispatch */
   struct {
     timing_t creat, start, stop;
@@ -88,45 +93,21 @@ struct lpel_task_t {
   lpel_stream_desc_t *dirty_list;
 
   /* CODE */
-#ifdef TASK_USE_SPINLOCK
-  pthread_spinlock_t lock;   /** spinlock */
-#else
-  pthread_mutex_t lock; /** mutex */
-#endif
+  TASKLOCK_TYPE lock;
   coroutine_t mctx;     /** context of the task*/
-  lpel_taskfunc_t code; /** function of the task */
+  lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
 };
 
 
 
-lpel_task_t *_LpelTaskCreate( void);
-void         _LpelTaskDestroy( lpel_task_t *t);
-
-void _LpelTaskReset( lpel_task_t *t, lpel_taskreq_t *req);
-void _LpelTaskUnset( lpel_task_t *t);
+void _LpelTaskDestroy( lpel_task_t *t);
 
 void _LpelTaskBlock( lpel_task_t *ct, taskstate_blocked_t block_on);
+void _LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
 
-
-
-static inline void TaskLock( lpel_task_t *t)
-{
-#ifdef TASK_USE_SPINLOCK
-  pthread_spin_lock( &t->lock);
-#else
-  pthread_mutex_lock( &t->lock);
-#endif
-}
-
-static inline void TaskUnlock( lpel_task_t *t)
-{
-#ifdef TASK_USE_SPINLOCK
-  pthread_spin_unlock( &t->lock);
-#else
-  pthread_mutex_unlock( &t->lock);
-#endif
-}
+void _LpelTaskLock( lpel_task_t *t);
+void _LpelTaskUnlock( lpel_task_t *t);
 
 
 

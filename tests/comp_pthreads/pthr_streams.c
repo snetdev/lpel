@@ -8,6 +8,25 @@
 #include "pthr_streams.h"
 
 
+struct pthr_stream_t {
+  pthread_mutex_t lock;
+  pthread_cond_t  notempty;
+  pthread_cond_t  notfull;
+  
+  void *buffer[PTHR_STREAM_BUFFER_SIZE];
+  int head, tail;
+  int count;
+};
+
+
+struct pthr_stream_desc_t {
+  pthr_stream_t *stream;
+  struct pthr_stream_desc_t *next;
+};
+
+
+
+
 
 pthr_stream_t *PthrStreamCreate(void)
 {
@@ -33,8 +52,33 @@ void PthrStreamDestroy(pthr_stream_t *s)
   free(s);
 }
 
-void PthrStreamWrite(pthr_stream_t *s, void *item)
+
+pthr_stream_desc_t *PthrStreamOpen(pthr_stream_t *stream, char mode)
 {
+  pthr_stream_desc_t *sd = malloc(sizeof(pthr_stream_t));
+  sd->stream = stream;
+  sd->next = NULL;
+
+  assert( mode=='w' || mode=='r' );
+  /* mode is ignored in this implementation */
+
+  return sd;
+}
+
+
+void PthrStreamClose(pthr_stream_desc_t *sd, int destroy_s)
+{
+  if (destroy_s) {
+    free(sd->stream);
+  }
+  free(sd);
+}
+
+
+void PthrStreamWrite(pthr_stream_desc_t *sd, void *item)
+{
+  pthr_stream_t *s = sd->stream;
+
   pthread_mutex_lock( &s->lock);
   while(s->count == PTHR_STREAM_BUFFER_SIZE){
     pthread_cond_wait(&s->notfull, &s->lock);
@@ -49,8 +93,9 @@ void PthrStreamWrite(pthr_stream_t *s, void *item)
   pthread_mutex_unlock( &s->lock);
 }
 
-void *PthrStreamRead(pthr_stream_t *s)
+void *PthrStreamRead(pthr_stream_desc_t *sd)
 {
+  pthr_stream_t *s = sd->stream;
   void *item;
 
   pthread_mutex_lock( &s->lock);

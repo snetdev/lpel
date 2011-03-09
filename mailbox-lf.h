@@ -26,7 +26,6 @@ typedef enum {
 typedef struct {
   workermsg_type_t  type;
   union {
-    lpel_taskreq_t *treq;
     lpel_task_t    *task;
     int             from;
   } body;

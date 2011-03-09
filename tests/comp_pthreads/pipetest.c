@@ -6,12 +6,17 @@
 #include "lpel.h"
 #include "arch/timing.h"
 
-#define STACK_SIZE (16*1024) /* 16k */
-
+#ifndef PIPE_DEPTH
 #define PIPE_DEPTH 100 /* min 3*/
+#endif
 
+#ifndef NUM_MSGS
 #define NUM_MSGS 100000L
+#endif
 
+
+
+#define STACK_SIZE (16*1024) /* 16k */
 #define MSG_TERM ((void*)-1)
 
 typedef struct {
@@ -93,18 +98,18 @@ void Relay(lpel_task_t *self, void *inarg)
 
   free(arg);
 
-  LpelTaskExit(self, NULL);
+  LpelTaskExit(self);
 }
 
 
 static void CreateTask(task_arg_t *arg)
 {
-  lpel_taskreq_t *t;
-  int flags = LPEL_TASK_ATTR_NONE;
+  lpel_task_t *t;
+  int place;
 
-  t = LpelTaskRequest( Relay, arg, flags, STACK_SIZE, 0);
-  //LpelWorkerTaskAssign( t, 0);
-  LpelWorkerTaskAssign( t, (arg->id < PIPE_DEPTH/2) ? 0 : 1);
+  place = (arg->id < PIPE_DEPTH/2) ? 0 : 1;
+  t = LpelTaskCreate( place, Relay, arg, STACK_SIZE);
+  LpelTaskRun(t);
 }
 
 
@@ -129,19 +134,17 @@ lpel_stream_t *PipeElement(lpel_stream_t *in, int depth)
 static void CreatePipe(void)
 {
   lpel_stream_t *glob_in, *glob_out;
-  lpel_taskreq_t *t;
-  int flags = LPEL_TASK_ATTR_NONE;
+  lpel_task_t *t;
 
 
   glob_in = LpelStreamCreate();
   glob_out = PipeElement(glob_in, 1);
 
-  t = LpelTaskRequest( Source, glob_in, flags, STACK_SIZE, 0);
-  LpelWorkerTaskAssign( t, 0);
+  t = LpelTaskCreate( 0, Source, glob_in, STACK_SIZE);
+  LpelTaskRun(t);
 
-  t = LpelTaskRequest( Sink, glob_out, flags, STACK_SIZE, 0);
-  LpelWorkerTaskAssign( t, 0);
-}
+  t = LpelTaskCreate( 1, Sink, glob_out, STACK_SIZE);
+  LpelTaskRun(t);
 
 
 

@@ -84,20 +84,22 @@ void Process(lpel_task_t *self, void *arg)
   LpelStreamClose( out, 0);
 
 
-  LpelTaskExit(self, NULL);
+  LpelTaskExit(self);
 }
 
 
 
 static void CreateTask(int id)
 {
-  lpel_taskreq_t *t;
-  int flags = LPEL_TASK_ATTR_NONE;
+  lpel_task_t *t;
+  int i;
 
-  t = LpelTaskRequest( Process, &ids[id], flags, STACK_SIZE, 0);
-  LpelWorkerTaskAssign( t, 0);
-  //LpelWorkerTaskAssign( t, id % 2);
-  //LpelWorkerTaskAssign( t, (id < RING_SIZE/2) ? 0 : 1);
+  i = 0;
+  // i = id % 2;
+  // i = (id < RING_SIZE/2) ? 0 : 1;
+
+  t = LpelTaskCreate( i, Process, &ids[id], STACK_SIZE);
+  LpelTaskRun( t );
 }
 
 

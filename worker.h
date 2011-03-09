@@ -10,8 +10,8 @@
 #include "bool.h"
 #include "scheduler.h"
 #include "monitoring.h"
-//#include "mailbox.h"
-#include "mailbox-lf.h"
+#include "mailbox.h"
+//#include "mailbox-lf.h"
 #include "taskqueue.h"
 
 
@@ -32,7 +32,7 @@ typedef struct {
   bool          terminate;
   timing_t      wait_time;
   unsigned int  wait_cnt;
-  taskqueue_t   free_tasks;
+  //taskqueue_t   free_tasks;
   mailbox_t     mailbox;
   schedctx_t   *sched;
   lpel_task_t  *wraptask;
@@ -42,15 +42,14 @@ typedef struct {
 
 
 
-
-
 void _LpelWorkerInit( int size, workercfg_t *cfg);
 void _LpelWorkerCleanup( void);
-
 void _LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom);
 
 void _LpelWorkerDispatcher( lpel_task_t *t);
 void _LpelWorkerFinalizeTask( workerctx_t *wc);
 
+void _LpelWorkerRunTask( lpel_task_t *t);
+workerctx_t *_LpelWorkerId2Wc(int id);
 
 #endif /* _WORKER_H_ */

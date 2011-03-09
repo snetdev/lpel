@@ -68,12 +68,12 @@ static inline void TaskRemove( void)
 /******************************************************************************/
 
 
-static inline void SendAssign( workerctx_t *target, lpel_taskreq_t *req)
+static inline void SendAssign( workerctx_t *target, lpel_task_t *t)
 {
   workermsg_t msg;
   /* compose a task assign message */
   msg.type = WORKER_MSG_ASSIGN;
-  msg.body.treq = req;
+  msg.body.task = t;
 
 
   /* send */
@@ -100,17 +100,15 @@ static inline void SendWakeup( workerctx_t *target, lpel_task_t *t)
 /**
  * Assign a task to the worker
  */
-void LpelWorkerTaskAssign( lpel_taskreq_t *t, int wid)
+void _LpelWorkerRunTask( lpel_task_t *t)
 {
-  workerctx_t *wc = &workers[wid];
-  SendAssign( wc, t);
-
+  SendAssign( t->worker_context, t);
 }
 
 /**
  * Create a wrapper thread for a single task
  */
-void LpelWorkerWrapperCreate( lpel_taskreq_t *t, char *name)
+void LpelWorkerWrapperCreate( lpel_task_t *t, char *name)
 {
   assert(name != NULL);
 
@@ -128,15 +126,14 @@ void LpelWorkerWrapperCreate( lpel_taskreq_t *t, char *name)
   wc->sched = NULL;
   wc->wraptask = NULL;
 
-  
-  if (t->in.flags & LPEL_TASK_ATTR_MONITOR_OUTPUT) {
+  if (t->flags & LPEL_TASK_ATTR_MONITOR_OUTPUT) {
     wc->mon = _LpelMonitoringCreate( config.node, name);
   } else {
     wc->mon = NULL;
   }
 
   /* taskqueue of free tasks */
-  TaskqueueInit( &wc->free_tasks);
+  //TaskqueueInit( &wc->free_tasks);
 
   /* mailbox */
   MailboxInit( &wc->mailbox);
@@ -170,7 +167,7 @@ void _LpelWorkerFinalizeTask( workerctx_t *wc)
   if (wc->predecessor != NULL) {
     _LpelMonitoringDebug( wc->mon, "Finalize for task %d.\n", wc->predecessor->uid);
 
-    TaskUnlock( wc->predecessor );
+    _LpelTaskUnlock( wc->predecessor );
     RescheduleTask( wc, wc->predecessor);
 
     wc->predecessor = NULL;
@@ -190,7 +187,7 @@ void TaskCall( workerctx_t *wc, lpel_task_t *t)
     _LpelMonitoringDebug( wc->mon, "Predecessor: NO PRED!\n");
   }
 
-  TaskLock( t);
+  _LpelTaskLock( t);
   t->worker_context = wc;
   co_call( t->mctx);
 }
@@ -282,7 +279,7 @@ void _LpelWorkerInit(int size, workercfg_t *cfg)
     wc->mon = _LpelMonitoringCreate( config.node, wname);
     
     /* taskqueue of free tasks */
-    TaskqueueInit( &wc->free_tasks);
+    //TaskqueueInit( &wc->free_tasks);
 
     /* mailbox */
     MailboxInit( &wc->mailbox);
@@ -327,7 +324,7 @@ void _LpelWorkerCleanup(void)
 
 /**
  * Wakeup a task from within another task - this internal function
- * is used from within StreamRead/Write/Poll
+ * is called in _LpelTaskUnblock()
  * TODO: wakeup from without a task, i.e. from kernel by an asynchronous
  *       interrupt for a completed request?
  *       -> by == NULL, at least there is no valid by->worker_context
@@ -349,7 +346,15 @@ void _LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
 }
 
 
-
+/**
+ * Get a worker context from the worker id
+ */
+workerctx_t *_LpelWorkerId2Wc(int id) {
+  if (id < 0 || id >= num_workers) {
+    return NULL;
+  }
+  return &workers[id];
+}
 
 
 
@@ -361,30 +366,6 @@ void _LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
 /******************************************************************************/
 
 
-static lpel_task_t *AssignTask( workerctx_t *wc, lpel_taskreq_t *req)
-{
-  lpel_task_t *task;
-  if (wc->free_tasks.count > 0) {
-    task = TaskqueuePopFront( &wc->free_tasks);
-  } else {
-    task = _LpelTaskCreate();
-  }
-  _LpelTaskReset( task, req);
-  /* assign worker_context */
-  task->worker_context = wc;
-
-  return task;
-}
-
-static void ReturnTask( workerctx_t *wc, lpel_task_t *t)
-{
-  _LpelTaskUnset( t);
-  /* un-assign worker_context */
-  t->worker_context = NULL;
-
-  TaskqueuePushFront( &wc->free_tasks, t);
-}
-
 /**
  * Reschedule workers own task, returning from a call
  */
@@ -393,9 +374,9 @@ static void RescheduleTask( workerctx_t *wc, lpel_task_t *t)
   /* reschedule task */
   switch(t->state) {
     case TASK_ZOMBIE:  /* task exited by calling TaskExit() */
-      ReturnTask( wc, t);
-      TaskRemove();
       _LpelMonitoringDebug( wc->mon, "Killed task %d.\n", t->uid);
+      _LpelTaskDestroy( t);
+      TaskRemove();
 
       if (wc->wid < 0) {
         wc->terminate = true;
@@ -436,12 +417,13 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
         SchedMakeReady( wc->sched, t);
       }
       break;
+    
     case WORKER_MSG_TERMINATE:
       wc->terminate = true;
       break;
+
     case WORKER_MSG_ASSIGN:
-      /* assign task to worker */
-      t = AssignTask( wc, msg->body.treq);
+      t = msg->body.task;
 
       TaskAdd();
       _LpelMonitoringDebug( wc->mon, "Creating task %d.\n", t->uid);
@@ -589,10 +571,12 @@ static void *WorkerThread( void *arg)
   
 
   /* destroy all the free tasks */
+  /*
   while( wc->free_tasks.count > 0) {
     lpel_task_t *t = TaskqueuePopFront( &wc->free_tasks);
     free( t);
   }
+  */
 
   /* on a wrapper, we also can cleanup more*/
   if (wc->wid < 0) {
