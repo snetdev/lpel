@@ -106,14 +106,19 @@ static void CreateTask(int id)
 static void CreateRing(void)
 {
   int i;
+  timing_t ts;
+
   for (i=0; i<RING_SIZE; i++) {
     ids[i] = i;
     streams[i] = LpelStreamCreate();
   }
 
+  TimingStart( &ts );
   for (i=RING_SIZE-1; i>=0; i--) {
     CreateTask(i);
   }
+  TimingEnd( &ts) ;
+  printf("Time to create %d tasks: %.2f ms\n", RING_SIZE, TimingToMSec( &ts));
 }
 
 

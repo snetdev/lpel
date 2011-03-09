@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
 #include <error.h>
 #include <pthread.h>
 
@@ -35,16 +36,16 @@ static void PrintEOR(msg_t *msg) {
 void *Process(void *arg)
 {
   int id = *(int *)arg;
-  pthr_stream_t *in, *out;
+  pthr_stream_desc_t *in, *out;
   msg_t *msg;
   int term = 0;
   timing_t ts;
 
-  out = streams[id];
+  out = PthrStreamOpen(streams[id], 'w');
 
 
   if (id==0) {
-    in = streams[RING_SIZE-1];
+    in = PthrStreamOpen(streams[RING_SIZE-1], 'r');
     
     printf("Sending message, ringsize %d, rounds %d\n", RING_SIZE, ROUNDS);
     /* send the first message */
@@ -57,7 +58,7 @@ void *Process(void *arg)
     TimingStart( &ts);
     PthrStreamWrite( out, msg);
   } else {
-    in = streams[id-1];
+    in = PthrStreamOpen(streams[id-1], 'r');
   }
 
 
@@ -86,7 +87,9 @@ void *Process(void *arg)
     free(msg);
   }
 
-  PthrStreamDestroy( in);
+
+  PthrStreamClose( out, 0);
+  PthrStreamClose( in,  1);
 
   pthread_exit(NULL);
 }
@@ -125,14 +128,19 @@ static void CreateTask(int id)
 static void CreateRing(void)
 {
   int i;
+  timing_t ts;
+
   for (i=0; i<RING_SIZE; i++) {
     ids[i] = i;
     streams[i] = PthrStreamCreate();
   }
 
+  TimingStart( &ts) ;
   for (i=RING_SIZE-1; i>=0; i--) {
     CreateTask(i);
   }
+  TimingEnd( &ts) ;
+  printf("Time to create %d tasks: %.2f ms\n", RING_SIZE, TimingToMSec( &ts));
 }
 
 

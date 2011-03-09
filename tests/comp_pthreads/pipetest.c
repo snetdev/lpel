@@ -107,7 +107,10 @@ static void CreateTask(task_arg_t *arg)
   lpel_task_t *t;
   int place;
 
-  place = (arg->id < PIPE_DEPTH/2) ? 0 : 1;
+  //place = (arg->id < PIPE_DEPTH/2) ? 0 : 1;
+  place = 0;
+  place = (arg->id / (PIPE_DEPTH/(1<<2))) % 2;
+
   t = LpelTaskCreate( place, Relay, arg, STACK_SIZE);
   LpelTaskRun(t);
 }
@@ -145,7 +148,7 @@ static void CreatePipe(void)
 
   t = LpelTaskCreate( 1, Sink, glob_out, STACK_SIZE);
   LpelTaskRun(t);
-
+}
 
 
 

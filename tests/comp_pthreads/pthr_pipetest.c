@@ -1,22 +1,28 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+
 #include <error.h>
 #include <pthread.h>
-#include <assert.h>
 
 #include "pthr_streams.h"
 
+
 #include "arch/timing.h"
+
+#ifndef PIPE_DEPTH
+#define PIPE_DEPTH 100 /* min 3*/
+#endif
+
+#ifndef NUM_MSGS
+#define NUM_MSGS 100000L
+#endif
 
 
 #define STACK_SIZE (16*1024) /* 16k */
-
-#define PIPE_DEPTH 100 /* min 3*/
-
-#define NUM_MSGS 100000L
-
 #define MSG_TERM ((void*)-1)
+
 
 typedef struct {
   pthr_stream_t *in, *out;
@@ -29,14 +35,14 @@ static timing_t ts;
 void *Source(void *inarg)
 {
   unsigned long cnt = 0;
-  pthr_stream_t *out;
+  pthr_stream_desc_t *out;
   void *msg;
 
   printf("Starting message transfer, pipe length %d msgs %lu\n",
       PIPE_DEPTH, NUM_MSGS);
   TimingStart( &ts);
 
-  out = (pthr_stream_t *)inarg;
+  out = PthrStreamOpen( (pthr_stream_t *)inarg, 'w');
 
   while( cnt < (NUM_MSGS-1) ) {
     msg = (void*)(0x10000000 + cnt);
@@ -47,6 +53,8 @@ void *Source(void *inarg)
   msg = MSG_TERM;
   PthrStreamWrite( out, msg);
 
+  PthrStreamClose( out, 0);
+
   pthread_exit(NULL);
 }
 
@@ -55,10 +63,10 @@ void *Source(void *inarg)
 void *Sink(void *inarg)
 {
   unsigned long cnt = 0;
-  pthr_stream_t *in;
+  pthr_stream_desc_t *in;
   void *msg;
 
-  in = (pthr_stream_t *)inarg;
+  in = PthrStreamOpen( (pthr_stream_t *)inarg, 'r' );
 
   while(1) {
     msg = PthrStreamRead( in);
@@ -69,7 +77,7 @@ void *Sink(void *inarg)
     if (msg==MSG_TERM) break;
   }
 
-  PthrStreamDestroy( in);
+  PthrStreamClose( in, 1);
 
   TimingEnd( &ts);
   printf("End of message stream, cnt %lu duration %.2f ms\n",
@@ -82,12 +90,12 @@ void *Relay(void *inarg)
 {
   task_arg_t *arg = (task_arg_t *)inarg;
   //int id = arg->id;
-  pthr_stream_t *in, *out;
+  pthr_stream_desc_t *in, *out;
   int term = 0;
   void *msg;
 
-  in = arg->in;
-  out = arg->out;
+  in = PthrStreamOpen( arg->in, 'r');
+  out = PthrStreamOpen( arg->out, 'w');
   
   while(!term) {
     msg = PthrStreamRead( in);
@@ -95,7 +103,8 @@ void *Relay(void *inarg)
     PthrStreamWrite( out, msg);
   }
 
-  PthrStreamDestroy( in);
+  PthrStreamClose( in, 1);
+  PthrStreamClose( out, 0);
 
   free(arg);
 
