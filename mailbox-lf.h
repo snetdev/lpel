@@ -41,7 +41,7 @@ typedef struct {
   struct {
     mailbox_node_t  *volatile top;
     unsigned long    volatile out_cnt;
-  } stack_free;
+  }  stack_free __attribute__((aligned(16)));
 #ifdef MAILBOX_USE_SPINLOCK
   pthread_spinlock_t
                    lock_inbox;

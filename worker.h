@@ -10,9 +10,11 @@
 #include "bool.h"
 #include "scheduler.h"
 #include "monitoring.h"
-#include "mailbox.h"
-//#include "mailbox-lf.h"
 #include "taskqueue.h"
+
+//#include "mailbox-lf.h"
+#include "mailbox.h"
+
 
 
 
@@ -37,7 +39,7 @@ typedef struct {
   schedctx_t   *sched;
   lpel_task_t  *wraptask;
   monitoring_t *mon;
-  //char          padding[64];
+  char          padding[64];
 } workerctx_t;
 
 
