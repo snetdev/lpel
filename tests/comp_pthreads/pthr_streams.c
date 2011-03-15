@@ -69,7 +69,7 @@ pthr_stream_desc_t *PthrStreamOpen(pthr_stream_t *stream, char mode)
 void PthrStreamClose(pthr_stream_desc_t *sd, int destroy_s)
 {
   if (destroy_s) {
-    free(sd->stream);
+    PthrStreamDestroy(sd->stream);
   }
   free(sd);
 }
