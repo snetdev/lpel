@@ -122,7 +122,7 @@ lpel_stream_t *PipeElement(lpel_stream_t *in, int depth)
   task_arg_t *arg;
 
 
-  out = LpelStreamCreate();
+  out = LpelStreamCreate(0);
   arg = (task_arg_t *) malloc( sizeof(task_arg_t));
   arg->in = in;
   arg->out = out;
@@ -140,7 +140,7 @@ static void CreatePipe(void)
   lpel_task_t *t;
 
 
-  glob_in = LpelStreamCreate();
+  glob_in = LpelStreamCreate(0);
   glob_out = PipeElement(glob_in, 1);
 
   t = LpelTaskCreate( 0, Source, glob_in, STACK_SIZE);

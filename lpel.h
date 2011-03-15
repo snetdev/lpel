@@ -131,7 +131,7 @@ void LpelTaskYield( lpel_task_t *ct );
 /*  STREAM FUNCTIONS                                                          */
 /******************************************************************************/
 
-lpel_stream_t *LpelStreamCreate( void);
+lpel_stream_t *LpelStreamCreate( int);
 void LpelStreamDestroy( lpel_stream_t *s);
 
 lpel_stream_desc_t *

@@ -74,9 +74,9 @@
  * (single) producer and a (single) consumer.
  */
 struct lpel_stream_t {
-  unsigned int uid;         /** unique sequence number */
   buffer_t buffer;          /** buffer holding the actual data */
-  PRODLOCK_TYPE prod_lock;      /** to support polling a lock is needed */
+  unsigned int uid;         /** unique sequence number */
+  PRODLOCK_TYPE prod_lock;  /** to support polling a lock is needed */
   int is_poll;              /** indicates if a consumer polls this stream,
                                 is_poll is protected by the prod_lock */
   lpel_stream_desc_t *prod_sd;   /** points to the sd of the producer */
@@ -100,14 +100,25 @@ static inline void MarkDirty( lpel_stream_desc_t *sd);
  *
  * @return pointer to the created stream
  */
-lpel_stream_t *LpelStreamCreate(void)
+lpel_stream_t *LpelStreamCreate(int size)
 {
-  lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof( lpel_stream_t));
+  void *streammem;
+  assert( size >= 0);
+  if (0==size) size = STREAM_BUFFER_SIZE;
+  /* allocate memory for both the stream struct and the buffer area */
+  streammem = malloc( sizeof(lpel_stream_t) + size*sizeof(void*) );
+  /* stream struct at beginning of allocated memory */
+  lpel_stream_t *s = (lpel_stream_t *) streammem;
+
+  /* reset buffer (including buffer area) */
+  _LpelBufferReset( &s->buffer, size,
+      streammem+sizeof(lpel_stream_t) /* start address of buffer area */
+      );
+
   s->uid = fetch_and_inc( &stream_seq);
-  _LpelBufferReset( &s->buffer);
   PRODLOCK_INIT( &s->prod_lock );
   atomic_init( &s->n_sem, 0);
-  atomic_init( &s->e_sem, STREAM_BUFFER_SIZE);
+  atomic_init( &s->e_sem, size);
   s->is_poll = 0;
   s->prod_sd = NULL;
   s->cons_sd = NULL;

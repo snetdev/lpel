@@ -2,10 +2,6 @@
 #define _BUFFER_H_
 
 
-#ifndef  STREAM_BUFFER_SIZE
-#define  STREAM_BUFFER_SIZE 10
-#endif
-
 
 #include "arch/sysdep.h"
 
@@ -15,15 +11,18 @@
 /* Padding is required to avoid false-sharing
    between core's private cache */
 typedef struct {
-  volatile unsigned long pread;
-//  long padding1[longxCacheLine-1];
-  volatile unsigned long pwrite;
-//  long padding2[longxCacheLine-1];
-  void *data[STREAM_BUFFER_SIZE];
+  unsigned long pread;
+//  volatile unsigned long pread;
+  long padding1[longxCacheLine-1];
+  unsigned long pwrite;
+//  volatile unsigned long pwrite;
+  long padding2[longxCacheLine-1];
+  unsigned long size;
+  void **data;
 } buffer_t;
 
 
-void  _LpelBufferReset( buffer_t *buf);
+void  _LpelBufferReset( buffer_t *buf, unsigned int size, void **data);
 void *_LpelBufferTop( buffer_t *buf);
 void  _LpelBufferPop( buffer_t *buf);
 int   _LpelBufferIsSpace( buffer_t *buf);

@@ -21,13 +21,19 @@
 
 /**
  * Reset a buffer
+ *
+ * @param buf   pointer to buffer struct
+ * @param size  number of void* elements in the buffer
+ * @param data  start address of buffer area
  */
-void _LpelBufferReset( buffer_t *buf)
+void _LpelBufferReset( buffer_t *buf, unsigned int size, void **data)
 {
   buf->pread = 0;
   buf->pwrite = 0;
+  buf->size = size;
+  buf->data = data;
   /* clear all the buffer space */
-  memset(&(buf->data), 0, STREAM_BUFFER_SIZE*sizeof(void *));
+  memset(buf->data, 0, buf->size*sizeof(void *));
 }
 
 
@@ -58,8 +64,7 @@ void _LpelBufferPop( buffer_t *buf)
 {
   /* clear, and advance pread */
   buf->data[buf->pread]=NULL;
-  buf->pread += (buf->pread+1 >= STREAM_BUFFER_SIZE) ?
-              (1-STREAM_BUFFER_SIZE) : 1;
+  buf->pread += (buf->pread+1 >= buf->size) ? (1-buf->size) : 1;
 }
 
 
@@ -106,8 +111,7 @@ void _LpelBufferPut( buffer_t *buf, void *item)
    */
   WMB(); 
   buf->data[buf->pwrite] = item;
-  buf->pwrite += (buf->pwrite+1 >= STREAM_BUFFER_SIZE) ?
-               (1-STREAM_BUFFER_SIZE) : 1;
+  buf->pwrite += (buf->pwrite+1 >= buf->size) ? (1-buf->size) : 1;
 }
 
 

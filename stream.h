@@ -6,7 +6,9 @@
 #include "lpel.h"
 
 
-
+#ifndef  STREAM_BUFFER_SIZE
+#define  STREAM_BUFFER_SIZE 10
+#endif
 
 //#define STREAM_POLL_SPINLOCK
 

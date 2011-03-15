@@ -110,7 +110,7 @@ static void CreateRing(void)
 
   for (i=0; i<RING_SIZE; i++) {
     ids[i] = i;
-    streams[i] = LpelStreamCreate();
+    streams[i] = LpelStreamCreate(0);
   }
 
   TimingStart( &ts );
