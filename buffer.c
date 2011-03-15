@@ -20,20 +20,31 @@
 
 
 /**
- * Reset a buffer
+ * Initialize a buffer.
+ * Also allocates space for size void* items
  *
  * @param buf   pointer to buffer struct
  * @param size  number of void* elements in the buffer
- * @param data  start address of buffer area
  */
-void _LpelBufferReset( buffer_t *buf, unsigned int size, void **data)
+void _LpelBufferInit( buffer_t *buf, unsigned int size)
 {
   buf->pread = 0;
   buf->pwrite = 0;
   buf->size = size;
-  buf->data = data;
+  buf->data = malloc( size*sizeof(void*) );
   /* clear all the buffer space */
-  memset(buf->data, 0, buf->size*sizeof(void *));
+  memset(buf->data, 0, size*sizeof(void *));
+}
+
+/**
+ * Cleanup the buffer.
+ * Free the memory for the buffer items.
+ *
+ * @param buf   pointer to buffer struct
+ */
+void  _LpelBufferCleanup(buffer_t *buf)
+{
+  free(buf->data);
 }
 
 

@@ -53,7 +53,7 @@
 
 #ifdef STREAM_POLL_SPINLOCK
 
-#define PRODLOCK_TYPE       pthread_spinPRODLOCK_t
+#define PRODLOCK_TYPE       pthread_spinlock_t
 #define PRODLOCK_INIT(x)    pthread_spin_init(x, PTHREAD_PROCESS_PRIVATE)
 #define PRODLOCK_DESTROY(x) pthread_spin_destroy(x)
 #define PRODLOCK_LOCK(x)    pthread_spin_lock(x)
@@ -102,18 +102,14 @@ static inline void MarkDirty( lpel_stream_desc_t *sd);
  */
 lpel_stream_t *LpelStreamCreate(int size)
 {
-  void *streammem;
   assert( size >= 0);
   if (0==size) size = STREAM_BUFFER_SIZE;
+
   /* allocate memory for both the stream struct and the buffer area */
-  streammem = malloc( sizeof(lpel_stream_t) + size*sizeof(void*) );
-  /* stream struct at beginning of allocated memory */
-  lpel_stream_t *s = (lpel_stream_t *) streammem;
+  lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
 
   /* reset buffer (including buffer area) */
-  _LpelBufferReset( &s->buffer, size,
-      streammem+sizeof(lpel_stream_t) /* start address of buffer area */
-      );
+  _LpelBufferInit( &s->buffer, size);
 
   s->uid = fetch_and_inc( &stream_seq);
   PRODLOCK_INIT( &s->prod_lock );
@@ -139,6 +135,7 @@ void LpelStreamDestroy( lpel_stream_t *s)
   PRODLOCK_DESTROY( &s->prod_lock);
   atomic_destroy( &s->n_sem);
   atomic_destroy( &s->e_sem);
+  _LpelBufferCleanup( &s->buffer);
   free( s);
 }
 

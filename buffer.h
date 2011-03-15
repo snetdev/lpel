@@ -22,10 +22,12 @@ typedef struct {
 } buffer_t;
 
 
-void  _LpelBufferReset( buffer_t *buf, unsigned int size, void **data);
-void *_LpelBufferTop( buffer_t *buf);
-void  _LpelBufferPop( buffer_t *buf);
-int   _LpelBufferIsSpace( buffer_t *buf);
-void  _LpelBufferPut( buffer_t *buf, void *item);
+void  _LpelBufferInit(buffer_t *buf, unsigned int size);
+void  _LpelBufferCleanup(buffer_t *buf);
+
+void *_LpelBufferTop(buffer_t *buf);
+void  _LpelBufferPop(buffer_t *buf);
+int   _LpelBufferIsSpace(buffer_t *buf);
+void  _LpelBufferPut(buffer_t *buf, void *item);
 
 #endif /* _BUFFER_H_ */

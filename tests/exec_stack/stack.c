@@ -7,7 +7,6 @@
 
 #include <pcl.h>
 
-static long stackend;
 
 typedef struct {
   int dummy;
@@ -15,11 +14,14 @@ typedef struct {
   void* stack;
 } tcb_t;
 
+static tcb_t *tcb;
+
+
 void coro_func(void *arg)
 {
   int a;
   printf("Address of a: %p\n", &a);
-  printf("Difference stackend-a: %ld\n", stackend-(long)&a);
+  printf("Difference tcb-a: %ld\n", (long)tcb-(long)&a);
   co_resume();
 }
 
@@ -27,24 +29,23 @@ void main(int argc, char **argv)
 {
   int pagesize = sysconf(_SC_PAGESIZE);
   int stacksize = 4*pagesize;
-  int offset = sizeof(tcb_t);
-  tcb_t *tcb;
 
   void *mem = memalign(pagesize, stacksize);
   
-  tcb = mem;
+  /* following is unsafe, as*/
+  tcb = mem+stacksize-sizeof(tcb_t);
 
   printf("Test exec stack\n");
 
   printf("Pagesize: %d\n", pagesize);
   printf("Memory ptr: %p\n", mem);
 
-  stackend = (long) mem+stacksize;
-  printf("Memory ptr+stacksize: %p\n", (void *) stackend);
+  printf("Memory start of tcb: %p\n", (void *) tcb);
 
 
-  printf("Size of TCB: %d\n", offset);
-  tcb->coro = co_create(coro_func, NULL, mem+offset, stacksize-offset);
+  printf("Size of TCB: %ld\n", sizeof(tcb_t));
+
+  tcb->coro = co_create(coro_func, NULL, mem, stacksize-sizeof(tcb_t));
   co_call(tcb->coro);
 
 
