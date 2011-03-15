@@ -9,6 +9,12 @@
 #include "stream.h"
 
 
+/*
+ * n is a pointer to a stream descriptor
+ */
+#define NODE_NEXT(n)  (n)->next
+
+
 /**
  * An iterator for a stream descriptor list
  */
@@ -35,12 +41,12 @@ void LpelStreamListAppend( lpel_stream_list_t *lst, lpel_stream_desc_t *node)
   if (*lst  == NULL) {
     /* list is empty */
     *lst = node;
-    node->next = node; /* selfloop */
+    NODE_NEXT(node) = node; /* selfloop */
   } else { 
     /* insert stream between last element=*lst
        and first element=(*lst)->next */
-    node->next = (*lst)->next;
-    (*lst)->next = node;
+    NODE_NEXT(node) = NODE_NEXT(*lst);
+    NODE_NEXT(*lst) = node;
     *lst = node;
   }
 }
@@ -59,7 +65,7 @@ int LpelStreamListRemove( lpel_stream_list_t *lst, lpel_stream_desc_t *node)
 
   prev = *lst;
   do {
-    cur = prev->next;
+    cur = NODE_NEXT(prev);
     prev = cur;
   } while (cur != node && prev != *lst);
 
@@ -69,8 +75,8 @@ int LpelStreamListRemove( lpel_stream_list_t *lst, lpel_stream_desc_t *node)
     /* self-loop */
     *lst = NULL;
   } else {
-    prev->next = cur->next;
-    cur->next = NULL;
+    NODE_NEXT(prev) = NODE_NEXT(cur);
+    NODE_NEXT(cur) = NULL;
     /* fix list handle if necessary */
     if (*lst == cur) {
       *lst = prev;
@@ -178,9 +184,9 @@ lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter)
   if (iter->cur != NULL) {
     /* this also does account for the state after deleting */
     iter->prev = iter->cur;
-    iter->cur = iter->cur->next;
+    iter->cur = NODE_NEXT(iter->cur);
   } else {
-    iter->cur = iter->prev->next;
+    iter->cur = NODE_NEXT(iter->prev);
   }
   return iter->cur;
 }
@@ -200,8 +206,8 @@ void LpelStreamIterAppend( lpel_stream_iter_t *iter,
 {
 #if 0
   /* insert after cur */
-  node->next = iter->cur->next;
-  iter->cur->next = node;
+  NODE_NEXT(node) = NODE_NEXT(iter->cur);
+  NODE_NEXT(iter->cur) = node;
 
   /* if current node was last node, update list */
   if (iter->cur == *iter->list) {
@@ -214,8 +220,8 @@ void LpelStreamIterAppend( lpel_stream_iter_t *iter,
   }
 #else
   /* insert at end of list */
-  node->next = (*iter->list)->next;
-  (*iter->list)->next = node;
+  NODE_NEXT(node) = NODE_NEXT(*iter->list);
+  NODE_NEXT(*iter->list) = node;
 
   /* if current node was first node */
   if (iter->prev == *iter->list) {
@@ -245,13 +251,13 @@ void LpelStreamIterRemove( lpel_stream_iter_t *iter)
   /* handle case if there is only a single element */
   if (iter->prev == iter->cur) {
     assert( iter->prev == *iter->list );
-    iter->cur->next = NULL;
+    NODE_NEXT(iter->cur) = NULL;
     *iter->list = NULL;
   } else {
     /* remove cur */
-    iter->prev->next = iter->cur->next;
+    NODE_NEXT(iter->prev) = NODE_NEXT(iter->cur);
     /* cur becomes invalid */
-    iter->cur->next = NULL;
+    NODE_NEXT(iter->cur) = NULL;
     /* if the first element was deleted, clear cur */
     if (*iter->list == iter->prev) {
       iter->cur = NULL;
