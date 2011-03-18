@@ -182,10 +182,11 @@ void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
 }
 
 /**
+ * @return 1 if there is an incoming msg, 0 otherwise
  * @note: does not need to be locked as a 'missed' msg 
  *        will be eventually fetched in the next worker loop
  */
-bool MailboxHasIncoming( mailbox_t *mbox)
+int MailboxHasIncoming( mailbox_t *mbox)
 {
   return ( mbox->in_head->next != NULL );
 }

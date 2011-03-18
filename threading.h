@@ -8,14 +8,13 @@
 #include <pthread.h>
 
 #include "lpel.h"
-#include "bool.h"
 
 
 
 
 struct lpel_thread_t {
   pthread_t pthread;
-  bool detached;
+  int detached;
   void (*func)(void *);
   void *arg;
 };

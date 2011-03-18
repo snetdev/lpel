@@ -152,7 +152,7 @@ lpel_task_t *TaskqueuePopBack(taskqueue_t *tq)
  * @param arg     argument (context) for the callback functions
  */
 int TaskqueueIterateRemove(taskqueue_t *tq, 
-  bool (*cond)(lpel_task_t*, void*), void (*action)(lpel_task_t*, void*), void *arg )
+  int (*cond)(lpel_task_t*, void*), void (*action)(lpel_task_t*, void*), void *arg )
 {
   int cnt_removed = 0;
   lpel_task_t *cur = tq->head;

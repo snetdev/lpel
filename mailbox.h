@@ -5,7 +5,6 @@
 
 #include "lpel.h"
 
-#include "bool.h"
 
 
 /*
@@ -49,7 +48,7 @@ void MailboxInit( mailbox_t *mbox);
 void MailboxCleanup( mailbox_t *mbox);
 void MailboxSend( mailbox_t *mbox, workermsg_t *msg);
 void MailboxRecv( mailbox_t *mbox, workermsg_t *msg);
-bool MailboxHasIncoming( mailbox_t *mbox);
+int  MailboxHasIncoming( mailbox_t *mbox);
 
 
 #endif /* _MAILBOX_H_ */

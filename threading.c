@@ -325,7 +325,7 @@ static void *ThreadStartup( void *arg)
  * Aquire a thread from the LPEL
  */
 lpel_thread_t *LpelThreadCreate( void (*func)(void *),
-    void *arg, bool detached)
+    void *arg, int detached)
 {
   int res;
   pthread_attr_t attr;
@@ -359,7 +359,7 @@ lpel_thread_t *LpelThreadCreate( void (*func)(void *),
 void LpelThreadJoin( lpel_thread_t *env)
 {
   int res;
-  assert( env->detached == false);
+  assert( env->detached == 0);
   res = pthread_join(env->pthread, NULL);
   assert( res==0 );
 

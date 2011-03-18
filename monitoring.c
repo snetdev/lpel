@@ -19,7 +19,7 @@
 
 struct monitoring_t {
   FILE *outfile;
-  bool  print_schedctx;
+  int   print_schedctx;
 };
 
 
@@ -49,7 +49,7 @@ monitoring_t *_LpelMonitoringCreate( int node, char *name)
   assert( mon->outfile != NULL);
 
   /* default values */
-  mon->print_schedctx = false;
+  mon->print_schedctx = 0;
 
   return mon;
 }

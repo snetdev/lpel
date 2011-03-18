@@ -2,7 +2,6 @@
 #define _TASKQUEUE_H_
 
 #include "lpel.h"
-#include "bool.h"
 
 
 typedef struct {
@@ -22,7 +21,7 @@ lpel_task_t *TaskqueuePopFront( taskqueue_t *tq);
 #define TaskqueueDequeue    TaskqueuePopFront
 
 int TaskqueueIterateRemove( taskqueue_t *tq, 
-    bool (*cond)( lpel_task_t*,void*),
+    int  (*cond)( lpel_task_t*,void*),
     void (*action)(lpel_task_t*,void*),
     void *arg );
 

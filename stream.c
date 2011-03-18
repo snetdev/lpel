@@ -179,7 +179,7 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_task_t *ct, lpel_stream_t *s, char mode
  * Close a stream previously opened for reading/writing
  *
  * @param sd          stream descriptor
- * @param destroy_s   if true, destroy the stream as well
+ * @param destroy_s   if != 0, destroy the stream as well
  */
 void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
 {

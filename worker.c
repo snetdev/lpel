@@ -117,7 +117,7 @@ void LpelWorkerWrapperCreate( lpel_task_t *t, char *name)
 
   wc->wid = -1;
 
-  wc->terminate = false;
+  wc->terminate = 0;
 
   wc->wait_cnt = 0;
   TimingZero( &wc->wait_time);
@@ -255,7 +255,7 @@ void _LpelWorkerInit(int size, workercfg_t *cfg)
     config = *cfg;
   } else {
     config.node = -1;
-    config.do_print_workerinfo = true;
+    config.do_print_workerinfo = 1;
   }
 
   /* allocate the array of worker contexts */
@@ -270,7 +270,7 @@ void _LpelWorkerInit(int size, workercfg_t *cfg)
     wc->wait_cnt = 0;
     TimingZero( &wc->wait_time);
 
-    wc->terminate = false;
+    wc->terminate = 0;
 
     wc->sched = SchedCreate( i);
     wc->wraptask = NULL;
@@ -379,7 +379,7 @@ static void RescheduleTask( workerctx_t *wc, lpel_task_t *t)
       TaskRemove();
 
       if (wc->wid < 0) {
-        wc->terminate = true;
+        wc->terminate = 1;
       }
       break;
     case TASK_BLOCKED: /* task returned from a blocking call*/
@@ -419,7 +419,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       break;
     
     case WORKER_MSG_TERMINATE:
-      wc->terminate = true;
+      wc->terminate = 1;
       break;
 
     case WORKER_MSG_ASSIGN:

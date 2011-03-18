@@ -1,0 +1,23 @@
+#
+# create a shared library
+#
+
+CFLAGS = -c -g -Wall -pthread -fPIC -I.
+LDFLAGS = -shared -lpthread -pthread
+
+OBJS = buffer.o mailbox.o monitoring.o scheduler.o stream.o \
+       streamset.o task.o taskqueue.o threading.o worker.o \
+       # mailbox-lf.o 
+
+TARGET = liblpel.so
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	gcc $(LDFLAGS) -o $@ $(OBJS)
+
+%.o: %.c
+	gcc $(CFLAGS) $<
+
+clean:
+	rm -fr $(OBJS) $(TARGET)

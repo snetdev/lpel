@@ -7,7 +7,7 @@
 #include "lpel.h"
 
 #include "arch/timing.h"
-#include "bool.h"
+
 #include "scheduler.h"
 #include "monitoring.h"
 #include "taskqueue.h"
@@ -20,7 +20,7 @@
 
 typedef struct {
   int node;
-  bool do_print_workerinfo;
+  int do_print_workerinfo;
 } workercfg_t;
 
 
@@ -31,7 +31,7 @@ typedef struct {
   coroutine_t   mctx;
   unsigned int  loop;
   lpel_task_t  *predecessor;
-  bool          terminate;
+  int           terminate;
   timing_t      wait_time;
   unsigned int  wait_cnt;
   //taskqueue_t   free_tasks;

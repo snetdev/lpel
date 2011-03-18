@@ -6,7 +6,6 @@
 
 #include "lpel.h"
 
-#include "bool.h"
 
 #define MAILBOX_USE_SPINLOCK
 
@@ -59,7 +58,7 @@ void MailboxInit( mailbox_t *mbox);
 void MailboxCleanup( mailbox_t *mbox);
 void MailboxSend( mailbox_t *mbox, workermsg_t *msg);
 void MailboxRecv( mailbox_t *mbox, workermsg_t *msg);
-bool MailboxHasIncoming( mailbox_t *mbox);
+int  MailboxHasIncoming( mailbox_t *mbox);
 
 
 
