@@ -5,8 +5,7 @@
  *
  * Desc:
  * 
- * Core stream handling functions, including stream descriptors,
- * stream descriptor lists and iterators.
+ * Core stream handling functions, including stream descriptors.
  *
  * A stream is the communication and synchronization primitive between two
  * tasks. If a task wants to use a stream, it must open it in order to
@@ -27,7 +26,7 @@
  * LpelStreamRead() suspends the consumer trying to read from an empty stream,
  * LpelStreamWrite() suspends the producer trying to write to a full stream,
  * and a consumer can use LpelStreamPoll() to wait for the arrival of data
- * on any of the streams specified in a list.
+ * on any of the streams specified in a set.
  *
  *
  * @see http://www.cs.colorado.edu/department/publications/reports/docs/CU-CS-1023-07.pdf
@@ -361,36 +360,36 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 
 
 /**
- * Poll a list of streams
+ * Poll a set of streams
  *
  * This is a blocking function called by a consumer which wants to wait
- * for arrival of data on any of a specified list of streams.
+ * for arrival of data on any of a specified set of streams.
  * The consumer task is suspended while there is no new data on all streams.
  *
- * @param list    a stream descriptor list the task wants to poll
- * @pre           list must not be empty (*list != NULL)
+ * @param set     a stream descriptor set the task wants to poll
+ * @pre           set must not be empty (*set != NULL)
  *
- * @post          The first element when iterating through the list after
+ * @post          The first element when iterating through the set after
  *                LpelStreamPoll() will be the one after the one which
  *                caused the task to wakeup,
  *                i.e., the first stream where data arrived.
  */
-lpel_stream_desc_t *LpelStreamPoll( lpel_stream_list_t *list)
+lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
 {
   lpel_task_t *self;
   lpel_stream_iter_t *iter;
   int do_ctx_switch = 1;
 
-  assert( *list != NULL);
+  assert( *set != NULL);
 
   /* get 'self', i.e. the task calling LpelStreamPoll() */
-  self = (*list)->task;
+  self = (*set)->task;
 
   /* place a poll token */
   atomic_set( &self->poll_token, 1);
 
-  /* for each stream in the list */
-  iter = LpelStreamIterCreate( list);
+  /* for each stream in the set */
+  iter = LpelStreamIterCreate( set);
   while( LpelStreamIterHasNext( iter)) {
    lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
     /* lock stream (prod-side) */
@@ -444,7 +443,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_stream_list_t *list)
    *   and no entity writes a record on the stream after these records.
    */
   /*
-  iter = LpelStreamIterCreate( list);
+  iter = LpelStreamIterCreate( set);
   while( LpelStreamIterHasNext( iter)) {
    lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
     pthread_spin_lock( &sd->stream->prod_lock);
@@ -453,8 +452,8 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_stream_list_t *list)
   }
   */
 
-  /* 'rotate' list to stream descriptor for non-empty buffer */
-  *list = self->wakeup_sd;
+  /* 'rotate' set to stream descriptor for non-empty buffer */
+  *set = self->wakeup_sd;
 
   return self->wakeup_sd;
 }

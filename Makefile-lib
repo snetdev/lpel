@@ -6,8 +6,8 @@ CFLAGS = -g -Wall
 LDFLAGS = -lpcl -cap -lpthread -lrt
 
 OBJS = buffer.o  mailbox.o  monitoring.o  scheduler.o  stream.o  \
-          stream_list.o  task.o  taskqueue.o  threading.o  worker.o \
-          # mpsctq.o  mailbox-lf.o  
+          streamset.o  task.o  taskqueue.o  threading.o  worker.o \
+          # mailbox-lf.o  
 
 
 all: liblpel.a

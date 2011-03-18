@@ -85,7 +85,7 @@ typedef struct lpel_stream_t         lpel_stream_t;
 
 typedef struct lpel_stream_desc_t    lpel_stream_desc_t;    
 
-typedef lpel_stream_desc_t          *lpel_stream_list_t;
+typedef lpel_stream_desc_t          *lpel_streamset_t;
 
 typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 
@@ -143,20 +143,20 @@ void *LpelStreamPeek(    lpel_stream_desc_t *sd);
 void *LpelStreamRead(    lpel_stream_desc_t *sd);
 void  LpelStreamWrite(   lpel_stream_desc_t *sd, void *item);
 
-lpel_stream_desc_t *LpelStreamPoll(    lpel_stream_list_t *list);
+lpel_stream_desc_t *LpelStreamPoll(    lpel_streamset_t *set);
 
 
 
-void LpelStreamListAppend(  lpel_stream_list_t *lst, lpel_stream_desc_t *node);
-int  LpelStreamListRemove( lpel_stream_list_t *lst, lpel_stream_desc_t *node);
-int  LpelStreamListIsEmpty( lpel_stream_list_t *lst);
+void LpelStreamsetPut(  lpel_streamset_t *set, lpel_stream_desc_t *node);
+int  LpelStreamsetRemove( lpel_streamset_t *set, lpel_stream_desc_t *node);
+int  LpelStreamsetIsEmpty( lpel_streamset_t *set);
 
 
 
-lpel_stream_iter_t *LpelStreamIterCreate( lpel_stream_list_t *lst);
+lpel_stream_iter_t *LpelStreamIterCreate( lpel_streamset_t *set);
 void LpelStreamIterDestroy( lpel_stream_iter_t *iter);
 
-void LpelStreamIterReset(   lpel_stream_list_t *lst, lpel_stream_iter_t *iter);
+void LpelStreamIterReset(  lpel_stream_iter_t *iter, lpel_streamset_t *set);
 int  LpelStreamIterHasNext( lpel_stream_iter_t *iter);
 lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter);
 void LpelStreamIterAppend(  lpel_stream_iter_t *iter, lpel_stream_desc_t *node);
