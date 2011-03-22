@@ -30,6 +30,9 @@ typedef struct timespec timing_t;
 
 #define TIMING_BILLION 1000000000L
 
+
+#define TIMING_INITIALIZER  {0,0}
+
 /**
  * Start timing
  *
@@ -81,7 +84,7 @@ static inline void TimingAdd(timing_t *t, const timing_t *val)
   }
 }
 
-static inline void TimingDiff( timing_t *res, timing_t *start, timing_t *end)
+static inline void TimingDiff( timing_t *res, const timing_t *start, const timing_t *end)
 {
   /* calculate elapsed time to t,
    * assuming end > start and *.tv_nsec < TIMING_BILLION
@@ -113,6 +116,11 @@ static inline void TimingZero(timing_t *t)
   t->tv_nsec = 0;
 }
 
+static inline int TimingEquals(const timing_t *t1, const timing_t *t2)
+{
+  return ( (t1->tv_sec  == t2->tv_sec) && 
+           (t1->tv_nsec == t2->tv_nsec) );
+}
 
 static inline double TimingToNSec(const timing_t *t)
 {

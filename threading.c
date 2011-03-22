@@ -22,7 +22,7 @@
 #include "threading.h"
 
 /*!! link with -lcap */
-#if defined(__LINUX__) && defined(LPEL_USE_CAPABILITIES)
+#if defined(__linux__) && defined(LPEL_USE_CAPABILITIES)
 #  include <sys/capability.h>
 #endif
 
@@ -40,7 +40,7 @@ lpel_config_t    _lpel_global_config;
 /* test if flags are set in lpel config */
 #define LPEL_ICFG(f)   ( (_lpel_global_config.flags & (f)) == (f) )
 
-#ifdef __LINUX__
+#ifdef __linux__
 /* cpuset for others-threads */
 static cpu_set_t cpuset_others;
 
@@ -49,18 +49,7 @@ static cpu_set_t cpuset_others;
  * is only used if not FLAG_PINNED is set
  */
 static cpu_set_t cpuset_workers;
-#endif /* __LINUX__ */
-
-
-
-static void CleanupEnv( lpel_thread_t *env)
-{
-  //TODO
-  free( env);
-}
-
-
-
+#endif /* __linux__ */
 
 
 
@@ -82,7 +71,7 @@ int LpelGetNumCores( int *result)
 
 int LpelCanSetExclusive( int *result)
 {
-#if defined(__LINUX__) && defined(LPEL_USE_CAPABILITIES)
+#if defined(__linux__) && defined(LPEL_USE_CAPABILITIES)
   cap_t caps;
   cap_flag_value_t cap;
   /* obtain caps of process */
@@ -148,7 +137,7 @@ static int CheckConfig( void)
 
 static void CreateCpusets( void)
 {
-  #ifdef __LINUX__
+  #ifdef __linux__
   lpel_config_t *cfg = &_lpel_global_config;
   int  i;
 
@@ -173,7 +162,7 @@ static void CreateCpusets( void)
       CPU_SET(i, &cpuset_others);
     }
   }
-  #endif /* __LINUX__ */
+  #endif /* __linux__ */
 }
 
 
@@ -211,10 +200,20 @@ int LpelInit( lpel_config_t *cfg)
  
   worker_config.node = _lpel_global_config.node;
   /* initialise workers */
-  _LpelWorkerInit( _lpel_global_config.num_workers, &worker_config);
+  LpelWorkerInit( _lpel_global_config.num_workers, &worker_config);
 
+  LpelWorkerSpawn();
   return 0;
 }
+
+
+
+void LpelStop(void)
+{
+  LpelWorkerTerminate();
+}
+
+
 
 /**
  * Cleans the LPEL up
@@ -224,7 +223,7 @@ int LpelInit( lpel_config_t *cfg)
 void LpelCleanup(void)
 {
   /* Cleanup scheduler */
-  _LpelWorkerCleanup();
+  LpelWorkerCleanup();
 
   /* Cleanup libPCL */
   co_thread_cleanup();
@@ -236,9 +235,9 @@ void LpelCleanup(void)
 /**
  * @pre core in [0, num_workers] or -1
  */
-int _LpelThreadAssign( int core)
+int LpelThreadAssign( int core)
 {
-  #ifdef __LINUX__
+  #ifdef __linux__
   lpel_config_t *cfg = &_lpel_global_config;
   pid_t tid;
   int res;
@@ -280,90 +279,11 @@ int _LpelThreadAssign( int core)
     }
   }
 
-  #endif /* __LINUX__ */
+  #endif /* __linux__ */
   return 0;
 }
 
 
 
 
-
-
-
-
-/**
- * Startup a lpel thread, assigned to cpuset_others
- */
-static void *ThreadStartup( void *arg)
-{
-  lpel_thread_t *env = (lpel_thread_t *)arg;
-
-  (void) _LpelThreadAssign(-1);
-
-  /* Init libPCL */
-  co_thread_init();
-
-  /* call the function */
-  env->func( env->arg);
-
-  /* if detached, cleanup the env now,
-     otherwise it will be done on join */
-  if (env->detached) {
-    CleanupEnv( env);
-  }
-
-  /* Cleanup libPCL */
-  co_thread_cleanup();
-
-  return NULL;
-}
-
-
-
-
-/**
- * Aquire a thread from the LPEL
- */
-lpel_thread_t *LpelThreadCreate( void (*func)(void *),
-    void *arg, int detached)
-{
-  int res;
-  pthread_attr_t attr;
-
-  lpel_thread_t *env = (lpel_thread_t *) malloc( sizeof( lpel_thread_t));
-
-  env->func = func;
-  env->arg = arg;
-  env->detached = detached;
-
-
-  /* create attributes for joinable/detached*/
-  pthread_attr_init( &attr);
-  pthread_attr_setdetachstate( &attr,
-      (detached) ? PTHREAD_CREATE_DETACHED : PTHREAD_CREATE_JOINABLE
-      );
-  
-  res = pthread_create( &env->pthread, &attr, ThreadStartup, env);
-  assert( res==0 );
-
-  pthread_attr_destroy( &attr);
-
-  return env;
-}
-
-
-/**
- * @pre  thread must not have been created detached
- * @post lt is freed and the reference is invalidated
- */
-void LpelThreadJoin( lpel_thread_t *env)
-{
-  int res;
-  assert( env->detached == 0);
-  res = pthread_join(env->pthread, NULL);
-  assert( res==0 );
-
-  /* cleanup */
-  CleanupEnv( env);
-}
 

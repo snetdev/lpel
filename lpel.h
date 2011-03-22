@@ -50,12 +50,10 @@ typedef struct {
 
 
 
-typedef struct lpel_thread_t    lpel_thread_t;
-
-
 int LpelInit( lpel_config_t *cfg);
 void LpelCleanup( void);
 
+void LpelStop(void);
 
 int LpelGetNumCores( int *result);
 int LpelCanSetExclusive( int *result);
@@ -92,17 +90,8 @@ typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 
 /* monitoring */
 
-#define LPEL_TASK_ATTR_NONE                (0)
-
-
-#define LPEL_TASK_ATTR_MONITOR_OUTPUT   (1<<4)
-#define LPEL_TASK_ATTR_MONITOR_TIMES    (1<<5)
-#define LPEL_TASK_ATTR_MONITOR_STREAMS  (1<<6)
-
-#define LPEL_TASK_ATTR_MONITOR_ALL  \
-  ( LPEL_TASK_ATTR_MONITOR_OUTPUT  |\
-    LPEL_TASK_ATTR_MONITOR_TIMES   |\
-    LPEL_TASK_ATTR_MONITOR_STREAMS )
+#define LPEL_MON_TASK_TIMES   (1<<0)
+#define LPEL_MON_TASK_STREAMS (1<<1)
 
 
 
@@ -113,11 +102,13 @@ typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
     void *inarg, int stacksize );
 
-/** let the previously created task run */
-void LpelTaskRun( lpel_task_t *t );
-
+/** monitor a task */
+void LpelTaskMonitor( lpel_task_t *t, char *name, unsigned long flags);
 
 unsigned int LpelTaskGetUID( lpel_task_t *t );
+
+/** let the previously created task run */
+void LpelTaskRun( lpel_task_t *t );
 
 
 /** to be called from within a task: */
@@ -161,23 +152,6 @@ int  LpelStreamIterHasNext( lpel_stream_iter_t *iter);
 lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter);
 void LpelStreamIterAppend(  lpel_stream_iter_t *iter, lpel_stream_desc_t *node);
 void LpelStreamIterRemove(  lpel_stream_iter_t *iter);
-
-
-/******************************************************************************/
-/*  MONITORING FUNCTIONS                                                      */
-/******************************************************************************/
-
-
-/******************************************************************************/
-/*  THREADING FUNCTIONS                                                       */
-/******************************************************************************/
-
-/**
- * Aquire a thread from the LPEL
- */
-extern lpel_thread_t *LpelThreadCreate( void (*func)(void *),
-    void *arg, int detached);
-extern void LpelThreadJoin( lpel_thread_t *env);
 
 
 

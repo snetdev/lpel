@@ -1,5 +1,5 @@
-CFLAGS = -g -Wall -DNODEBUG
-LDFLAGS = 
+CFLAGS = -g -Wall -DNODEBUG -pthread
+LDFLAGS = -lpthread -lcap -lpcl -lrt
 
 all: lpel
 .PHONY: all
@@ -19,13 +19,11 @@ timing:
 lpel:
 	rm -f check_*.o
 	gcc -c check_lpel.c $(CFLAGS)
-	gcc -c ../*.c $(CFLAGS)
-	gcc -o check_lpel *.o $(LDFLAGS) -lcap -lpcl -lpthread -lrt
+	gcc -o check_lpel check_lpel.o ../liblpel.a $(LDFLAGS)
 	./check_lpel
 
 lpel2:
 	rm -f check_*.o
 	gcc -c check_lpel2.c $(CFLAGS)
-	gcc -c ../*.c $(CFLAGS)
-	gcc -o check_lpel2 *.o $(LDFLAGS) -lcap -lpcl -lpthread -lrt
+	gcc -o check_lpel2 check_lpel2.o ../liblpel.a $(LDFLAGS)
 	./check_lpel2

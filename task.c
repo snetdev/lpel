@@ -5,7 +5,6 @@
 #include "arch/atomic.h"
 #include "arch/timing.h"
 
-#include "lpel.h"
 #include "task.h"
 
 #include "worker.h"
@@ -14,23 +13,6 @@
 #include "monitoring.h"
 
 
-/**
- * Either use a pthread mutex or a pthread spinlock
- */
-#ifdef TASK_USE_SPINLOCK
-//#define TASKLOCK_TYPE       pthread_spinlock_t
-#define TASKLOCK_INIT(x)    pthread_spin_init(x, PTHREAD_PROCESS_PRIVATE)
-#define TASKLOCK_DESTROY(x) pthread_spin_destroy(x)
-#define TASKLOCK_LOCK(x)    pthread_spin_lock(x)
-#define TASKLOCK_UNLOCK(x)  pthread_spin_unlock(x)
-#else
-//#define TASKLOCK_TYPE       pthread_mutex_t
-#define TASKLOCK_INIT(x)    pthread_mutex_init(x, NULL)
-#define TASKLOCK_DESTROY(x) pthread_mutex_destroy(x)
-#define TASKLOCK_LOCK(x)    pthread_mutex_lock(x)
-#define TASKLOCK_UNLOCK(x)  pthread_mutex_unlock(x)
-
-#endif /* TASK_USE_SPINLOCK */
 
 static atomic_t taskseq = ATOMIC_INIT(0);
 
@@ -44,6 +26,9 @@ static void TaskStop( lpel_task_t *t);
 static void TaskBlock( lpel_task_t *t, taskstate_t state);
 
 
+
+
+
 /**
  * Create a task.
  *
@@ -51,6 +36,8 @@ static void TaskBlock( lpel_task_t *t, taskstate_t state);
  * @param func    task function
  * @param arg     arguments
  * @param stacksize   size of the execution stack of the task
+ *
+ * @return the task handle of the created task (pointer to TCB)
  */
 lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
     void *inarg, int stacksize )
@@ -59,7 +46,10 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   /*TODO reuse one from the worker */
   lpel_task_t *t = malloc( sizeof(lpel_task_t));
   
-  t->worker_context = _LpelWorkerId2Wc(worker);
+
+  /* obtain a usable worker context */
+  t->worker_context = LpelWorkerGetContext(worker);
+
 
   t->uid = fetch_and_inc( &taskseq);  /* obtain a unique task id */
   t->func = func;
@@ -73,16 +63,11 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   /* initialize poll token to 0 */
   atomic_init( &t->poll_token, 0);
 
-  TASKLOCK_INIT( &t->lock);
-  
   t->state = TASK_CREATED;
 
   t->prev = t->next = NULL;
 
-  t->flags = 0;
-  TIMESTAMP(&t->times.creat);
-  t->cnt_dispatch = 0;
-  t->dirty_list = STDESC_DIRTY_END; /* empty dirty list */
+  t->mon = NULL;
   
   /* function, argument (data), stack base address, stacksize */
   t->mctx = co_create( TaskStartup, (void *)t, NULL, t->stacksize);
@@ -94,6 +79,37 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 }
 
 
+
+/**
+ * Destroy a task
+ * - completely free the memory for that task
+ */
+void LpelTaskDestroy( lpel_task_t *t)
+{
+  assert( t->state == TASK_ZOMBIE);
+
+  /* if task had a monitoring object, destroy it */
+  if (t->mon) LpelMonTaskDestroy(t->mon);
+
+  atomic_destroy( &t->poll_token);
+  /* delete the coroutine */
+  co_delete(t->mctx);
+  /* free the TCB itself*/
+  free(t);
+}
+
+
+/**
+ * Attach monitoring to a task
+ */
+void LpelTaskMonitor( lpel_task_t *t, char *name, unsigned long flags)
+{
+  t->mon = LpelMonTaskCreate(t->uid, name, flags);
+}
+
+
+
+
 /**
  * Let the task run on the worker
  */
@@ -101,8 +117,7 @@ void LpelTaskRun( lpel_task_t *t)
 {
   assert( t->state == TASK_CREATED );
 
-  t->state = TASK_READY;
-  _LpelWorkerRunTask( t);
+  LpelWorkerRunTask( t);
 }
 
 
@@ -135,6 +150,7 @@ void LpelTaskYield( lpel_task_t *ct)
   TaskBlock( ct, TASK_READY);
 }
 
+
 unsigned int LpelTaskGetUID( lpel_task_t *t)
 {
   return t->uid;
@@ -142,38 +158,11 @@ unsigned int LpelTaskGetUID( lpel_task_t *t)
 
 
 
-/******************************************************************************/
-/* HIDDEN FUNCTIONS                                                           */
-/******************************************************************************/
-
-
-/**
- * Destroy a task
- * - completely free the memory for that task
- */
-void _LpelTaskDestroy( lpel_task_t *t)
-{
-  assert( t->state == TASK_ZOMBIE);
-
-  atomic_destroy( &t->poll_token);
-
-  TASKLOCK_DESTROY( &t->lock);
-
-  /* delete the coroutine */
-  co_delete(t->mctx);
-
-  /* free the TCB itself*/
-  free(t);
-}
-
-
-
-
 
 /**
  * Block a task
  */
-void _LpelTaskBlock(lpel_task_t *ct, taskstate_blocked_t block_on)
+void LpelTaskBlock(lpel_task_t *ct, taskstate_blocked_t block_on)
 {
   ct->blocked_on = block_on;
   TaskBlock( ct, TASK_BLOCKED);
@@ -183,29 +172,14 @@ void _LpelTaskBlock(lpel_task_t *ct, taskstate_blocked_t block_on)
 /**
  * Unblock a task. Called from StreamRead/StreamWrite procedures
  */
-void _LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
+void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
 {
   assert(ct != NULL);
   assert(blocked != NULL);
 
-  _LpelWorkerTaskWakeup( ct, blocked);
+  LpelWorkerTaskWakeup( ct, blocked);
 }
 
-/**
- * Lock a task
- */
-void _LpelTaskLock( lpel_task_t *t)
-{
-  TASKLOCK_LOCK( &t->lock );
-}
-
-/**
- * Unlock a task
- */
-void _LpelTaskUnlock( lpel_task_t *t)
-{
-  TASKLOCK_UNLOCK( &t->lock );
-}
 
 /******************************************************************************/
 /* PRIVATE FUNCTIONS                                                          */
@@ -221,7 +195,10 @@ static void TaskStartup( void *data)
 {
   lpel_task_t *t = (lpel_task_t *)data;
 
-  _LpelWorkerFinalizeTask( t->worker_context);
+  /**
+   * The predecessor has to be finalized!
+   */
+  LpelWorkerFinalizeTask( t->worker_context);
   TaskStart( t);
 
   /* call the task function with inarg as parameter */
@@ -233,32 +210,23 @@ static void TaskStartup( void *data)
 
 static void TaskStart( lpel_task_t *t)
 {
-  /* start timestamp, dispatch counter, state */
-  t->cnt_dispatch++;
-  t->state = TASK_RUNNING;
-      
-  if ( TASK_FLAGS( t, LPEL_TASK_ATTR_MONITOR_TIMES)) {
-    TIMESTAMP( &t->times.start);
-  }
+  assert( t->state == TASK_READY );
+
+  /* MONITORING CALLBACK */
+  if (t->mon) LpelMonTaskStart(t->mon);
+
+  t->state = TASK_RUNNING;    
 }
 
 static void TaskStop( lpel_task_t *t)
 {
-  workerctx_t *wc = t->worker_context;
+  //workerctx_t *wc = t->worker_context;
   assert( t->state != TASK_RUNNING);
 
-  /* stop timestamp */
-  if ( TASK_FLAGS( t, LPEL_TASK_ATTR_MONITOR_TIMES) ) {
-    /* if monitor output, we need a timestamp */
-    TIMESTAMP( &t->times.stop);
-  }
-
-  /* output accounting info */
-  if ( TASK_FLAGS(t, LPEL_TASK_ATTR_MONITOR_OUTPUT)) {
-    _LpelMonitoringOutput( wc->mon, t);
-  }
-
+  /* MONITORING CALLBACK */
+  if (t->mon) LpelMonTaskStop(t->mon, t->state);
 }
+
 
 static void TaskBlock( lpel_task_t *t, taskstate_t state)
 {
@@ -270,6 +238,8 @@ static void TaskBlock( lpel_task_t *t, taskstate_t state)
   t->state = state;
 
   TaskStop( t);
-  _LpelWorkerDispatcher( t);
+  LpelWorkerDispatcher( t);
   TaskStart( t);
 }
+
+

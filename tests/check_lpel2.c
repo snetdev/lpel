@@ -4,44 +4,41 @@
 #include <string.h>
 #include <assert.h>
 #include "../lpel.h"
-#include "../scheduler.h"
-#include "../stream.h"
-#include "../task.h"
 
 #define NUM_COLL    (4*10+1)
-stream_t *sinp;
-stream_t *scoll[NUM_COLL];
+lpel_stream_t *sinp;
+lpel_stream_t *scoll[NUM_COLL];
 
 
 
-void Consumer(task_t *self, void *inarg)
+void Consumer(lpel_task_t *self, void *inarg)
 {
   char *msg;
   int i, term;
-  stream_list_t lst;
-  stream_iter_t *iter;
+  lpel_streamset_t lst = NULL;
+  lpel_stream_iter_t *iter;
 
   printf("start Consumer\n" );
   /* open streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamListAppend( &lst, StreamOpen(self, scoll[i], 'r'));
+    LpelStreamsetPut( &lst, LpelStreamOpen(self, scoll[i], 'r'));
   }
 
-  iter = StreamIterCreate(&lst);
+  iter = LpelStreamIterCreate(&lst);
 
   term = 0;
   do {
     /* here we do wait */
     printf("Consumer poll\n");
-    StreamPoll( &lst);
+    LpelStreamPoll( &lst);
     printf("Consumer resumes\n");
 
     printf("Consumer iterates:\n");
-    StreamIterReset(&lst, iter);
-    while( StreamIterHasNext(iter)) {
-      stream_desc_t *snext = StreamIterNext(iter);
-      if ( NULL != StreamPeek( snext )) {
-        msg = (char *) StreamRead( snext);
+    LpelStreamIterReset(iter, &lst);
+    while( LpelStreamIterHasNext(iter)) {
+      lpel_stream_desc_t *snext = LpelStreamIterNext(iter);
+      if ( NULL != LpelStreamPeek( snext )) {
+        msg = (char *) LpelStreamRead( snext);
         if (0 == strcmp( msg, "T\n" )) {
           term=1;
         } else {
@@ -58,39 +55,39 @@ void Consumer(task_t *self, void *inarg)
   free(msg);
 
   /* close streams */ 
-  StreamIterReset(&lst, iter);
-  while( StreamIterHasNext(iter)) {
-    stream_desc_t *snext = StreamIterNext(iter);
-    StreamClose( snext, true);
+  LpelStreamIterReset(iter, &lst);
+  while( LpelStreamIterHasNext(iter)) {
+    lpel_stream_desc_t *snext = LpelStreamIterNext(iter);
+    LpelStreamClose( snext, 1);
   }
-  StreamIterDestroy( iter);
+  LpelStreamIterDestroy( iter);
   printf("exit Consumer\n" );
 
-  SchedTerminate();
+  LpelStop();
 }
 
 
 
-void Relay(task_t *self, void *inarg)
+void Relay(lpel_task_t *self, void *inarg)
 {
   void *item;
   char *msg;
   int i, dest;
-  stream_desc_t *out[NUM_COLL];
-  stream_desc_t *in;
+  lpel_stream_desc_t *out[NUM_COLL];
+  lpel_stream_desc_t *in;
   int term = 0;
 
   printf("start Relay\n" );
 
   /* open streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    out[i] = StreamOpen(self, scoll[i], 'w');
+    out[i] = LpelStreamOpen(self, scoll[i], 'w');
   }
-  in = StreamOpen(self, sinp, 'r');
+  in = LpelStreamOpen(self, sinp, 'r');
 
   /* main task: relay to consumer via defined stream */
   while( !term) {
-    item = StreamRead(in);
+    item = LpelStreamRead(in);
     assert( item != NULL );
     msg = (char *)item;
     if  ( 0 == strcmp( msg, "T\n" ) ) {
@@ -100,7 +97,7 @@ void Relay(task_t *self, void *inarg)
       dest = atoi(msg);
     }
     if ( 0<dest && dest<NUM_COLL) {
-      StreamWrite( out[dest], item);
+      LpelStreamWrite( out[dest], item);
       printf("Relay dest: %d\n", dest);
     }
   }
@@ -110,37 +107,35 @@ void Relay(task_t *self, void *inarg)
 
   /* relay to all, close streams */ 
   for (i=0; i<NUM_COLL; i++) {
-    StreamWrite( out[i], item);
-    StreamClose( out[i], false);
+    LpelStreamWrite( out[i], item);
+    LpelStreamClose( out[i], 0);
   }
-  StreamClose(in, true);
+  LpelStreamClose(in, 1);
   printf("exit Relay\n" );
 }
 
 
-static void Inputter(task_t *self, void *arg)
+static void Inputter(lpel_task_t *self, void *arg)
 {
-  stream_desc_t *out = StreamOpen( self, (stream_t*)arg, 'w'); 
+  lpel_stream_desc_t *out = LpelStreamOpen( self, (lpel_stream_t*)arg, 'w'); 
   char *buf;
 
   do {
     buf = (char *) malloc( 120 * sizeof(char) );
     (void) fgets( buf, 119, stdin  );
-    StreamWrite( out, buf);
+    LpelStreamWrite( out, buf);
   } while ( buf[0] != 'T') ;
 
-  StreamClose( out, false);
+  LpelStreamClose( out, 0);
   printf("exit Inputter\n" );
 }
 
 
 static void testBasic(void)
 {
-  lpelconfig_t cfg;
-  taskattr_t tattr = {0};
+  lpel_config_t cfg;
   int i;
-  task_t *trelay, *tcons, *intask;
-  lpelthread_t *inlt;
+  lpel_task_t *trelay, *tcons, *intask;
 
   cfg.num_workers = 2;
   cfg.proc_workers = 2;
@@ -151,26 +146,21 @@ static void testBasic(void)
   LpelInit(&cfg);
 
   /* create streams */
-  sinp = StreamCreate();
+  sinp = LpelStreamCreate(0);
   for (i=0; i<NUM_COLL; i++) {
-    scoll[i] = StreamCreate();
+    scoll[i] = LpelStreamCreate(0);
   }
 
   /* create tasks */
-  trelay = TaskCreate( Relay, NULL, &tattr);
-  SchedAssignTask( trelay, trelay->uid % 2);
+  trelay = LpelTaskCreate( 0, Relay, NULL, 4096);
+  LpelTaskRun(trelay);
 
-  //tattr.flags |= TASK_ATTR_WAITANY;
-  tcons = TaskCreate( Consumer, NULL, &tattr);
-  SchedAssignTask( tcons, tcons->uid % 2);
+  tcons = LpelTaskCreate( 1, Consumer, NULL, 4096);
+  LpelTaskRun(tcons);
  
   
-  intask = TaskCreate( Inputter, sinp, &tattr);
-  inlt = LpelThreadCreate( SchedWrapper, intask, false, "inputter");
-
-  LpelThreadJoin( inlt);
- 
-  //SchedTerminate();
+  intask = LpelTaskCreate( -1, Inputter, sinp, 4096);
+  LpelTaskRun(intask);
 
   LpelCleanup();
 }

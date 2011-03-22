@@ -3,13 +3,13 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include "../../timing.h"
+#include "../../arch/timing.h"
 
 
 #define NUM_THREADS 2
 #define MAX_INC (200000000 / NUM_THREADS)
 
-static int counter;
+static volatile int counter;
 
 static inline int fetch_and_dec(volatile int *cnt)
 {
@@ -161,5 +161,6 @@ void testRefCnt(void)
 int main(int argc, char **argv)
 {
   testRefCnt();
+  testIncToMax();
   return 0;
 }

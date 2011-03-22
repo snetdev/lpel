@@ -4,7 +4,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 
-#include "lpel.h"
+#include "task.h"
 
 
 #define MAILBOX_USE_SPINLOCK

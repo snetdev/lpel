@@ -47,6 +47,9 @@
 #include "task.h"
 
 #include "stream.h"
+#include "streamset.h"
+
+#include "monitoring.h"
 
 /** Macros for lock handling */
 
@@ -86,10 +89,6 @@ struct lpel_stream_t {
 
 static atomic_t stream_seq = ATOMIC_INIT(0);
 
-
-
-/* prototype of the function marking the stream descriptor as dirty*/
-static inline void MarkDirty( lpel_stream_desc_t *sd);
 
 
 /**
@@ -154,18 +153,16 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_task_t *ct, lpel_stream_t *s, char mode
   lpel_stream_desc_t *sd;
 
   assert( mode == 'r' || mode == 'w' );
-
   sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
   sd->task = ct;
   sd->stream = s;
-  sd->sid = s->uid;
   sd->mode = mode;
-  sd->state = STDESC_OPENED;
-  sd->counter = 0;
-  sd->event_flags = 0;
   sd->next  = NULL;
-  sd->dirty = NULL;
-  MarkDirty( sd);
+
+  /* create monitoring object, or NULL if stream
+   * is not going to be monitored (depends on ct->mon)
+   */
+  sd->mon = LpelMonStreamOpen( ct->mon, s->uid, mode);
   
   switch(mode) {
     case 'r': s->cons_sd = sd; break;
@@ -183,15 +180,13 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_task_t *ct, lpel_stream_t *s, char mode
  */
 void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
 {
-  sd->state = STDESC_CLOSED;
-  /* mark dirty */
-  MarkDirty( sd);
+  /* MONITORING CALLBACK */
+  if (sd->mon) LpelMonStreamClose(sd->mon);
 
   if (destroy_s) {
     LpelStreamDestroy( sd->stream);
   }
-  /* do not free sd, as it will be kept until its state
-     has been output via dirty list */
+  free(sd);
 }
 
 
@@ -210,13 +205,11 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
   LpelStreamDestroy( sd->stream);
   /* assign new stream */
   sd->stream = snew;
-  sd->sid = snew->uid;
   /* new consumer sd of stream */
   sd->stream->cons_sd = sd;
 
-  sd->state = STDESC_REPLACED;
-  /* counter is not reset */
-  MarkDirty( sd);
+  /* MONITORING CALLBACK */
+  if (sd->mon) LpelMonStreamReplace(sd->mon, snew->uid);
 }
 
 
@@ -252,10 +245,10 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
 
   /* quasi P(n_sem) */
   if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
+    /* MONITORING CALLBACK */
+    if (sd->mon) LpelMonStreamBlockon(sd->mon);
     /* wait on stream: */
-    sd->event_flags |= STDESC_WAITON;
-    MarkDirty( sd);
-    _LpelTaskBlock( self, BLOCKED_ON_INPUT);
+    LpelTaskBlock( self, BLOCKED_ON_INPUT);
   }
 
 
@@ -271,15 +264,13 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
     /* e_sem was -1 */
     lpel_task_t *prod = sd->stream->prod_sd->task;
     /* wakeup producer: make ready */
-    _LpelTaskUnblock( self, prod);
-    sd->event_flags |= STDESC_WOKEUP;
+    LpelTaskUnblock( self, prod);
+    /* MONITORING CALLBACK */
+    if (sd->mon) LpelMonStreamWakeup(sd->mon);
   }
 
-  /* for monitoring */
-  sd->counter++;
-  sd->event_flags |= STDESC_MOVED;
-  /* mark dirty */
-  MarkDirty( sd);
+  /* MONITORING CALLBACK */
+  if (sd->mon) LpelMonStreamMoved(sd->mon, item);
 
   return item;
 }
@@ -308,10 +299,10 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 
   /* quasi P(e_sem) */
   if ( fetch_and_dec( &sd->stream->e_sem)== 0) {
+    /* MONITORING CALLBACK */
+    if (sd->mon) LpelMonStreamBlockon(sd->mon);
     /* wait on stream: */
-    sd->event_flags |= STDESC_WAITON;
-    MarkDirty( sd);
-    _LpelTaskBlock( self, BLOCKED_ON_OUTPUT);
+    LpelTaskBlock( self, BLOCKED_ON_OUTPUT);
   }
 
   /* writing to the buffer and checking if consumer polls must be atomic */
@@ -337,24 +328,23 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     /* n_sem was -1 */
     lpel_task_t *cons = sd->stream->cons_sd->task;
     /* wakeup consumer: make ready */
-    _LpelTaskUnblock( self, cons);
-    sd->event_flags |= STDESC_WOKEUP;
+    LpelTaskUnblock( self, cons);
+    /* MONITORING CALLBACK */
+    if (sd->mon) LpelMonStreamWakeup(sd->mon);
   } else {
     /* we are the sole producer task waking the polling consumer up */
     if (poll_wakeup) {
       lpel_task_t *cons = sd->stream->cons_sd->task;
       cons->wakeup_sd = sd->stream->cons_sd;
       
-      _LpelTaskUnblock( self, cons);
-      sd->event_flags |= STDESC_WOKEUP;
+      LpelTaskUnblock( self, cons);
+      /* MONITORING CALLBACK */
+      if (sd->mon) LpelMonStreamWakeup(sd->mon);
     }
   }
 
-  /* for monitoring */
-  sd->counter++;
-  sd->event_flags |= STDESC_MOVED;
-  /* mark dirty */
-  MarkDirty( sd);
+  /* MONITORING CALLBACK */
+  if (sd->mon) LpelMonStreamMoved(sd->mon, item);
 }
 
 
@@ -428,7 +418,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   /* context switch */
   if (do_ctx_switch) {
     /* set task as blocked */
-    _LpelTaskBlock( self, BLOCKED_ON_ANYIN);
+    LpelTaskBlock( self, BLOCKED_ON_ANYIN);
   }
   assert( atomic_read( &self->poll_token) == 0);
 
@@ -456,98 +446,6 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   *set = self->wakeup_sd;
 
   return self->wakeup_sd;
-}
-
-
-
-/******************************************************************************/
-/* HIDDEN FUNCTIONS                                                           */
-/******************************************************************************/
-
-
-/**
- * Reset the list of dirty stream descriptors, and call a callback function for
- * each stream descriptor.
- * 
- * @param t         the task of which the dirty list is to be printed
- * @param callback  the callback function which is called for each stream descriptor.
- *                  If it is NULL, only the dirty list is resetted.
- * @param arg       additional parameter passed to the callback function
- */
-int _LpelStreamResetDirty( lpel_task_t *t,
-    void (*callback)( lpel_stream_desc_t *,void*), void *arg)
-{
- lpel_stream_desc_t *sd, *next;
-  int close_cnt = 0;
-
-  assert( t != NULL);
-  sd = t->dirty_list;
-
-  while (sd != STDESC_DIRTY_END) {
-    /* all elements in the dirty list must belong to same task */
-    assert( sd->task == t );
-
-    /* callback function */
-    if (callback) {
-      callback( sd, arg);
-    }
-
-    /* get the next dirty entry, and clear the link in the current entry */
-    next = sd->dirty;
-    
-    /* update/reset states */
-    switch (sd->state) {
-      case STDESC_OPENED:
-      case STDESC_REPLACED:
-        sd->state = STDESC_INUSE;
-      case STDESC_INUSE:
-        sd->dirty = NULL;
-        sd->event_flags = 0;
-        break;
-      case STDESC_CLOSED:
-        close_cnt++;
-        free( sd);
-        break;
-      default: assert(0);
-    }
-    sd = next;
-  }
-  
-  /* dirty list of task is empty */
-  t->dirty_list = STDESC_DIRTY_END;
-  return close_cnt;
-}
-
-
-/******************************************************************************/
-/* PRIVATE FUNCTIONS                                                          */
-/******************************************************************************/
-
-/**
- * Add a stream descriptor to the dirty list of its task.
- *
- * A stream descriptor is only added to the dirty list once.
- *
- * @param sd  stream descriptor to be marked as dirty
- */
-static inline void MarkDirty( lpel_stream_desc_t *sd)
-{
-  lpel_task_t *t = sd->task;
-  /*
-   * only if task wants to collect stream info and
-   * only add if not dirty yet
-   */
-  if ( TASK_FLAGS(t, LPEL_TASK_ATTR_MONITOR_STREAMS)
-      && (sd->dirty == NULL) ) {
-    /*
-     * Set the dirty ptr of sd to the dirty_list ptr of the task
-     * and the dirty_list ptr of the task to sd, i.e.,
-     * insert the sd at the front of the dirty_list.
-     * Initially, dirty_list of the tab is empty STDESC_DIRTY_END (!= NULL)
-     */
-    sd->dirty =t->dirty_list;
-    t->dirty_list = sd;
-  }
 }
 
 

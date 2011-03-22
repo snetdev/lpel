@@ -1,2 +1,2 @@
 bench: bench.c
-	gcc -o bench bench.c -O0 -lpthread -lrt
+	gcc -o bench bench.c -O3 -lpthread -lrt

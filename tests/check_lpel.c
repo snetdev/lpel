@@ -4,50 +4,47 @@
 #include <string.h>
 #include <assert.h>
 #include "../lpel.h"
-#include "../scheduler.h"
-#include "../stream.h"
-#include "../task.h"
 
 
 
 
 typedef struct {
-  stream_t *in, *out;
+  lpel_stream_t *in, *out;
   int id;
 } channels_t;
 
 
 
-void Relay(task_t *self, void *inarg)
+void Relay(lpel_task_t *self, void *inarg)
 {
   channels_t *ch = (channels_t *)inarg;
   int term = 0;
   int id = ch->id;
   char *item;
-  stream_desc_t *in, *out;
+  lpel_stream_desc_t *in, *out;
 
-  in = StreamOpen( self, ch->in, 'r');
-  out = StreamOpen( self, ch->out, 'w');
+  in = LpelStreamOpen( self, ch->in, 'r');
+  out = LpelStreamOpen( self, ch->out, 'w');
   
   printf("Relay %d START\n", id);
 
   while (!term) {
-    item = StreamRead( in);
+    item = LpelStreamRead( in);
     assert( item != NULL );
     //printf("Relay %d: %s", id, item );
     if ( 0 == strcmp( item, "T\n")) {
       term = 1;
     }
-    StreamWrite( out, item);
+    LpelStreamWrite( out, item);
   } // end while
-  StreamClose( in, true);
-  StreamClose( out, false);
+  LpelStreamClose( in, 1);
+  LpelStreamClose( out, 0);
   free(ch);
   printf("Relay %d TERM\n", id);
 }
 
 
-static channels_t *ChannelsCreate(stream_t *in, stream_t *out, int id)
+static channels_t *ChannelsCreate(lpel_stream_t *in, lpel_stream_t *out, int id)
 {
   channels_t *ch = (channels_t *) malloc( sizeof(channels_t));
   ch->in = in;
@@ -56,17 +53,18 @@ static channels_t *ChannelsCreate(stream_t *in, stream_t *out, int id)
   return ch;
 }
 
-stream_t *PipeElement(stream_t *in, int depth)
+lpel_stream_t *PipeElement(lpel_stream_t *in, int depth)
 {
-  stream_t *out;
+  lpel_stream_t *out;
   channels_t *ch;
-  taskattr_t tattr = {0};
-  task_t *t;
+  lpel_task_t *t;
+  int wid = depth % 2;
 
-  out = StreamCreate();
+  out = LpelStreamCreate(0);
   ch = ChannelsCreate( in, out, depth);
-  t = TaskCreate( Relay, ch, &tattr);
-  SchedAssignTask( t, t->uid % 2);
+  t = LpelTaskCreate( wid, Relay, ch, 4096);
+  LpelTaskMonitor( t, NULL, LPEL_MON_TASK_TIMES | LPEL_MON_TASK_STREAMS);
+  LpelTaskRun(t);
 
   printf("Created Relay %d\n", depth );
   return (depth > 0) ? PipeElement( out, depth-1) : out;
@@ -74,16 +72,16 @@ stream_t *PipeElement(stream_t *in, int depth)
 
 
 
-static void Outputter(task_t *self, void *arg)
+static void Outputter(lpel_task_t *self, void *arg)
 {
-  stream_desc_t *in= StreamOpen( self, (stream_t*)arg, 'r'); 
+  lpel_stream_desc_t *in= LpelStreamOpen( self, (lpel_stream_t*)arg, 'r'); 
   char *item;
   int term = 0;
 
   printf("Outputter START\n");
 
   while (!term) {
-    item = StreamRead(in);
+    item = LpelStreamRead(in);
     assert( item != NULL );
     printf("Out: %s", item );
 
@@ -93,36 +91,34 @@ static void Outputter(task_t *self, void *arg)
     free( item);
   } // end while
 
-  StreamClose( in, true);
-  
+  LpelStreamClose( in, 1);
   printf("Outputter TERM\n");
-  //SchedTerminate();
+
+  LpelStop();
 }
 
 
-static void Inputter(task_t *self, void *arg)
+static void Inputter(lpel_task_t *self, void *arg)
 {
-  stream_desc_t *out = StreamOpen( self, (stream_t*)arg, 'w'); 
+  lpel_stream_desc_t *out = LpelStreamOpen( self, (lpel_stream_t*)arg, 'w'); 
   char *buf;
 
   printf("Inputter START\n");
   do {
     buf = (char *) malloc( 120 * sizeof(char) );
     (void) fgets( buf, 119, stdin  );
-    StreamWrite( out, buf);
+    LpelStreamWrite( out, buf);
   } while ( 0 != strcmp(buf, "T\n") );
 
-  StreamClose( out, false);
+  LpelStreamClose( out, 0);
   printf("Inputter TERM\n");
 }
 
 static void testBasic(void)
 {
-  stream_t *in, *out;
-  lpelthread_t *inlt, *outlt;
-  lpelconfig_t cfg;
-  task_t *intask, *outtask;
-  taskattr_t tattr = { 0,0};
+  lpel_stream_t *in, *out;
+  lpel_config_t cfg;
+  lpel_task_t *intask, *outtask;
 
   cfg.num_workers = 2;
   cfg.proc_workers = 2;
@@ -132,20 +128,16 @@ static void testBasic(void)
 
   LpelInit(&cfg);
 
-  in = StreamCreate();
+  in = LpelStreamCreate(0);
   out = PipeElement(in, cfg.num_workers*20 - 1);
 
-  outtask = TaskCreate( Outputter, out, &tattr);
-  outlt = LpelThreadCreate( SchedWrapper, outtask, false, "outputter");
+  outtask = LpelTaskCreate( -1, Outputter, out, 4096);
+  LpelTaskMonitor(outtask, "outtask", LPEL_MON_TASK_TIMES);
+  LpelTaskRun(outtask);
 
-  intask = TaskCreate( Inputter, in, &tattr);
-  inlt = LpelThreadCreate( SchedWrapper, intask, false, "inputter");
-
-  LpelThreadJoin( inlt);
-  LpelThreadJoin( outlt);
-      
-  printf("Calling SchedTerminate()\n");
-  SchedTerminate();
+  intask = LpelTaskCreate( -1, Inputter, in, 4096);
+  LpelTaskMonitor(intask, "intask", LPEL_MON_TASK_TIMES);
+  LpelTaskRun(intask);
 
   LpelCleanup();
 }

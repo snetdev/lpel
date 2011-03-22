@@ -3,15 +3,17 @@
 
 
 
-#include "lpel.h"
+#include "task.h"
 
 
 #ifndef  STREAM_BUFFER_SIZE
-#define  STREAM_BUFFER_SIZE 10
+#define  STREAM_BUFFER_SIZE 16
 #endif
 
 //#define STREAM_POLL_SPINLOCK
 
+/** stream type */
+typedef struct lpel_stream_t lpel_stream_t;
 
 /**
  * A stream descriptor
@@ -19,51 +21,28 @@
  * A producer/consumer must open a stream before using it, and by opening
  * a stream, a stream descriptor is created and returned. 
  */
-struct lpel_stream_desc_t {
+typedef struct lpel_stream_desc_t {
   lpel_task_t   *task;        /** the task which opened the stream */
   lpel_stream_t *stream;      /** pointer to the stream */
-  unsigned int sid;           /** copy of the stream uid */
   char mode;                  /** either 'r' or 'w' */
-  char state;                 /** one of IOCR, for monitoring */
-  unsigned long counter;      /** counts the number of items transmitted
-                                  over the stream descriptor */
-  int event_flags;            /** which events happened on that stream */
-  /** for organizing in stream lists */
-  struct lpel_stream_desc_t *next; 
-  /** for maintaining a list of 'dirty' items */
-  struct lpel_stream_desc_t *dirty;
-};
+  struct lpel_stream_desc_t *next; /** for organizing in stream lists */
+  struct mon_stream_t *mon;   /** monitoring object */
+} lpel_stream_desc_t;
 
 
+lpel_stream_t *LpelStreamCreate( int);
+void LpelStreamDestroy( lpel_stream_t *s);
 
-/**
- * The state of a stream descriptor
- */
-#define STDESC_INUSE    'I'
-#define STDESC_OPENED   'O'
-#define STDESC_CLOSED   'C'
-#define STDESC_REPLACED 'R'
+lpel_stream_desc_t *
+LpelStreamOpen( lpel_task_t *t, lpel_stream_t *s, char mode);
 
-/**
- * The event_flags of a stream descriptor
- */
-#define STDESC_MOVED    (1<<0)
-#define STDESC_WOKEUP   (1<<1)
-#define STDESC_WAITON   (1<<2)
+void  LpelStreamClose(   lpel_stream_desc_t *sd, int destroy_s);
+void  LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew);
+void *LpelStreamPeek(    lpel_stream_desc_t *sd);
+void *LpelStreamRead(    lpel_stream_desc_t *sd);
+void  LpelStreamWrite(   lpel_stream_desc_t *sd, void *item);
 
-/**
- * This special value indicates the end of the dirty list chain.
- * NULL cannot be used as NULL indicates that the SD is not dirty.
- */
-#define STDESC_DIRTY_END   ((lpel_stream_desc_t *)-1)
-
-
-
-
-
-int _LpelStreamResetDirty( lpel_task_t *t,
-    void (*callback)(lpel_stream_desc_t *, void*), void *arg);
-
+lpel_stream_desc_t *LpelStreamPoll( lpel_stream_desc_t **set);
 
 
 

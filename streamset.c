@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "stream.h"
+#include "streamset.h"
 
 
 /*

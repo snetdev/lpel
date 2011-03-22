@@ -8,13 +8,8 @@
 #include "arch/timing.h"
 #include "arch/atomic.h"
 
-#include "lpel.h"
-#include "worker.h"
 #include "scheduler.h"
 
-
-
-#define TASK_FLAGS(t, f)  (((t)->flags & (f)) == (f))
 
 /**
  * If a stacksize <= 0 is specified,
@@ -23,27 +18,16 @@
 #define LPEL_TASK_ATTR_STACKSIZE_DEFAULT  8192  /* 8k stacksize*/
 
 
+struct lpel_task_t;
+struct mon_task_t;
 
 
 
-/* protecting tasks is necessary in case of envisioned work stealing:
- * - a task might decrement a stream semaphore counter and notice it is going to be blocked
- * - before the task does switch context, it can be waken up by a task on another worker
- *   finding the semaphore was <0
- * - as the task is ready, it is subject of theft despite of still being executed
- * - a task must not be executed also by the thief! - the lock physically avoids this
- *
- * Use a pthread mutex for locking, unless following macro is defined:
- */
-#define TASK_USE_SPINLOCK
+/* task function signature */
+typedef void (*lpel_taskfunc_t)( struct lpel_task_t *self, void *inarg);
 
-#ifdef TASK_USE_SPINLOCK
-#define TASKLOCK_TYPE pthread_spinlock_t
-#else
-#define TASKLOCK_TYPE pthread_mutex_t
-#endif /* TASK_USE_SPINLOCK */
 
-typedef enum {
+typedef enum taskstate_t {
   TASK_CREATED = 'C',
   TASK_RUNNING = 'U',
   TASK_READY   = 'R',
@@ -61,15 +45,15 @@ typedef enum {
 /**
  * TASK CONTROL BLOCK
  */
-struct lpel_task_t {
+typedef struct lpel_task_t {
   /** intrinsic pointers for organizing tasks in a list*/
-  lpel_task_t *prev, *next;
+  struct lpel_task_t *prev, *next;
   unsigned int uid;    /** unique identifier */
   int stacksize;       /** stacksize */
   taskstate_t state;   /** state */
   taskstate_blocked_t blocked_on; /** on which event the task is waiting */
 
-  workerctx_t *worker_context;  /** worker context for this task */
+  struct workerctx_t *worker_context;  /** worker context for this task */
 
   sched_task_t sched_info;
 
@@ -77,38 +61,37 @@ struct lpel_task_t {
    * indicates the SD which points to the stream which has new data
    * and caused this task to be woken up
    */
-  lpel_stream_desc_t *wakeup_sd;
+  struct lpel_stream_desc_t *wakeup_sd;
   atomic_t poll_token;        /** poll token, accessed concurrently */
 
   /* ACCOUNTING INFORMATION */
-  /* TODO encapsule in mon_task_t mon_info */
-  int flags;           /** monitoring flags */
-  /** timestamps for creation, start/stop of last dispatch */
-  struct {
-    timing_t creat, start, stop;
-  } times;
-  /** dispatch counter */
-  unsigned long cnt_dispatch;
-  /** streams marked as dirty */
-  lpel_stream_desc_t *dirty_list;
+  struct mon_task_t *mon;
 
   /* CODE */
-  TASKLOCK_TYPE lock;
   coroutine_t mctx;     /** context of the task*/
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
-};
+} lpel_task_t;
 
 
 
-void _LpelTaskDestroy( lpel_task_t *t);
 
-void _LpelTaskBlock( lpel_task_t *ct, taskstate_blocked_t block_on);
-void _LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
+lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
+    void *inarg, int stacksize );
 
-void _LpelTaskLock( lpel_task_t *t);
-void _LpelTaskUnlock( lpel_task_t *t);
+void LpelTaskDestroy( lpel_task_t *t);
 
+
+void LpelTaskMonitor( lpel_task_t *t, char *name, unsigned long flags);
+void LpelTaskRun( lpel_task_t *t);
+
+void LpelTaskExit( lpel_task_t *ct);
+void LpelTaskYield( lpel_task_t *ct);
+
+unsigned int LpelTaskGetUID( lpel_task_t *t);
+
+void LpelTaskBlock( lpel_task_t *ct, taskstate_blocked_t block_on);
+void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
 
 
 #endif /* _TASK_H_ */

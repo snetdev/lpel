@@ -1,7 +1,7 @@
 #ifndef _TASKQUEUE_H_
 #define _TASKQUEUE_H_
 
-#include "lpel.h"
+#include "task.h"
 
 
 typedef struct {
