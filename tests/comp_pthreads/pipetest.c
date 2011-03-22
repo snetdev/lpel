@@ -168,7 +168,7 @@ static void testBasic(void)
 
   CreatePipe();
 
-
+  LpelStop();
   LpelCleanup();
 }
 

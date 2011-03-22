@@ -141,6 +141,7 @@ static void testBasic(void)
 
   CreateRing();
 
+  LpelStop();
   LpelCleanup();
 }
 

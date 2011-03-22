@@ -177,12 +177,17 @@ void LpelWorkerDispatcher( lpel_task_t *t)
   if (wc->wid != -1) {
     lpel_task_t *next;
 
-    FetchAllMessages( wc);
+    /* FIXME? following could result setting t->state to ready again,
+     * resulting in wrong behaviour at the next FinalizeTask(), i.e.,
+     * double entry in ready queue
+     */
+    // FetchAllMessages( wc);
     
     next = SchedFetchReady( wc->sched);
     if (next != NULL) {
       /* short circuit */
-      if (next==t) { return; }
+      //if (next==t) { return; }
+      assert(next != t);
 
       /* execute task */
       LpelWorkerTaskCall( wc, next);
@@ -196,6 +201,9 @@ void LpelWorkerDispatcher( lpel_task_t *t)
 
     /* upon return, finalize previously executed task */
     LpelWorkerFinalizeTask( wc);
+
+    /* process all incoming messages */
+    FetchAllMessages( wc);
 
   } else {
     /* we are on a wrapper.
@@ -323,7 +331,7 @@ void LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
       SendWakeup( wc, whom);
     } else {
       whom->state = TASK_READY;
-      (void) SchedMakeReady( wc->sched, whom);
+      SchedMakeReady( wc->sched, whom);
     }
   }
 }
