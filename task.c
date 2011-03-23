@@ -195,10 +195,6 @@ static void TaskStartup( void *data)
 {
   lpel_task_t *t = (lpel_task_t *)data;
 
-  /**
-   * The predecessor has to be finalized!
-   */
-  LpelWorkerFinalizeTask( t->worker_context);
   TaskStart( t);
 
   /* call the task function with inarg as parameter */

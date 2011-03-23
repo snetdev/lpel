@@ -25,7 +25,7 @@ typedef struct mon_task_t mon_task_t;
 typedef struct mon_stream_t mon_stream_t;
 
 
-monctx_t *LpelMonContextCreate(char *name);
+monctx_t *LpelMonContextCreate(int wid, char *name);
 void LpelMonContextDestroy( monctx_t *mon);
 
 mon_task_t *LpelMonTaskCreate(unsigned long tid,
@@ -44,8 +44,11 @@ void LpelMonDebug( monctx_t *mon, const char *fmt, ...);
  * CALLBACK FUNCTIONS
  ****************************************************************************/
 
-enum taskstate_t;
+void LpelMonWorkerWaitStart(monctx_t *mon);
+void LpelMonWorkerWaitStop(monctx_t *mon);
 
+
+enum taskstate_t;
 
 void LpelMonTaskStart(mon_task_t *mt);
 void LpelMonTaskStop(mon_task_t *mt, enum taskstate_t state);

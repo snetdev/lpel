@@ -25,12 +25,10 @@ struct workerctx_t {
   int wid; 
   pthread_t     thread;
   coroutine_t   mctx;
-  lpel_task_t  *predecessor;
   int           terminate;
-  timing_t      wait_time;
-  unsigned int  wait_cnt;
   unsigned int  num_tasks;
   //taskqueue_t   free_tasks;
+  lpel_task_t  *marked_del;
   monctx_t     *mon;
   mailbox_t     mailbox;
   schedctx_t   *sched;
@@ -54,10 +52,9 @@ static void FetchAllMessages( workerctx_t *wc);
 
 
 
-/******************************************************************************/
-/*  Convenience functions for sending messages between workers                */
-/******************************************************************************/
-
+/*******************************************************************************
+ *  Convenience functions for sending messages between workers
+ ******************************************************************************/
 
 static inline void SendAssign( workerctx_t *target, lpel_task_t *t)
 {
@@ -84,140 +81,9 @@ static inline void SendWakeup( workerctx_t *target, lpel_task_t *t)
 }
 
 
-/******************************************************************************/
-/*  PUBLIC FUNCTIONS                                                          */
-/******************************************************************************/
-
-/**
- * Assign a task to the worker by sending an assign message to that task
- */
-void LpelWorkerRunTask( lpel_task_t *t)
-{
-  assert( t->state == TASK_CREATED );
-  SendAssign( t->worker_context, t);
-}
-
-
-
-/**
- * Broadcast a termination message
- */
-void LpelWorkerTerminate(void)
-{
-  int i;
-  workerctx_t *wc;
-  workermsg_t msg;
-
-  /* compose a task term message */
-  msg.type = WORKER_MSG_TERMINATE;
-
-  /* broadcast a terminate message */
-  for( i=0; i<num_workers; i++) {
-    wc = &workers[i];
-
-    /* send */
-    MailboxSend( &wc->mailbox, &msg);
-  }
-}
-
-
-/******************************************************************************/
-/*  HIDDEN FUNCTIONS                                                          */
-/******************************************************************************/
-
-
-
-
-void LpelWorkerFinalizeTask( workerctx_t *wc)
-{
-  if (wc->predecessor != NULL) {
-    /**
-     * release the task wc->predecessor
-     */
-    RescheduleTask( wc, wc->predecessor);
-    wc->predecessor = NULL;
-  }
-}
-
-
-static inline void LpelWorkerTaskCall( workerctx_t *wc, lpel_task_t *t)
-{
-  /**
-   * aquire the task t
-   */
-  co_call( t->mctx);
-}
-
-
-
-
-
-/**
- * Dispatch next ready task
- *
- * This dispatcher function is called upon blocking a task.
- * It executes on the same exec-stack as the task itself, calls the FetchReady
- * function from the scheduler module, and, if there is a ready task, makes
- * a continuation to that ready task. If no task is ready, execution returns to the
- * worker loop (wc->mctx). If the task runs on a wrapper, execution returns to the
- * wrapper loop in either case.
- * This way, in the optimal case, task switching only requires a single context switch
- * instead of two.
- *
- * @param t   the current task context
- */
-void LpelWorkerDispatcher( lpel_task_t *t)
-{
-  workerctx_t *wc = t->worker_context;
-
-  /* set this task as predecessor on worker, for finalization*/
-  wc->predecessor = t;
-
-  /* dependent of worker or wrapper */
-  if (wc->wid != -1) {
-    lpel_task_t *next;
-
-    /* FIXME? following could result setting t->state to ready again,
-     * resulting in wrong behaviour at the next FinalizeTask(), i.e.,
-     * double entry in ready queue
-     */
-    // FetchAllMessages( wc);
-    
-    next = SchedFetchReady( wc->sched);
-    if (next != NULL) {
-      /* short circuit */
-      //if (next==t) { return; }
-      assert(next != t);
-
-      /* execute task */
-      LpelWorkerTaskCall( wc, next);
-    } else {
-      /* no ready task! -> back to worker context */
-      co_call( wc->mctx);
-    }
-    /*********************************
-     * ... CTX SWITCH ...
-     *********************************/
-
-    /* upon return, finalize previously executed task */
-    LpelWorkerFinalizeTask( wc);
-
-    /* process all incoming messages */
-    FetchAllMessages( wc);
-
-  } else {
-    /* we are on a wrapper.
-     * back to wrapper context
-     */
-    co_call( wc->mctx);
-    /* nothing to finalize on a wrapper */
-  }
-  /* let task continue its business ... */
-}
-
-
-
-
+/*******************************************************************************
+ *  PUBLIC FUNCTIONS
+ ******************************************************************************/
 
 /**
  * Initialise worker globally
@@ -250,10 +116,6 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
     workerctx_t *wc = &workers[i];
     char wname[24];
     wc->wid = i;
-
-    wc->wait_cnt = 0;
-    TimingZero( &wc->wait_time);
-
     wc->num_tasks = 0;
     wc->terminate = 0;
 
@@ -261,7 +123,7 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
     wc->wraptask = NULL;
 
     snprintf( wname, 24, "mon_worker%02d.log", i);
-    wc->mon = LpelMonContextCreate( wname);
+    wc->mon = LpelMonContextCreate( wc->wid, wname);
     
     /* taskqueue of free tasks */
     //TaskqueueInit( &wc->free_tasks);
@@ -272,17 +134,6 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
 }
 
 
-
-void LpelWorkerSpawn(void)
-{
-  int i;
-  /* create worker threads */
-  for( i=0; i<num_workers; i++) {
-    workerctx_t *wc = &workers[i];
-    /* spawn joinable thread */
-    (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
-  }
-}
 
 
 /**
@@ -312,6 +163,96 @@ void LpelWorkerCleanup(void)
 }
 
 
+
+/**
+ * Assign a task to the worker by sending an assign message to that task
+ */
+void LpelWorkerRunTask( lpel_task_t *t)
+{
+  assert( t->state == TASK_CREATED );
+  SendAssign( t->worker_context, t);
+}
+
+
+
+
+
+/*******************************************************************************
+ *  PROTECTED FUNCTIONS
+ ******************************************************************************/
+
+
+
+/**
+ * Dispatch next ready task
+ *
+ * This dispatcher function is called upon blocking a task.
+ * It executes on the same exec-stack as the task itself, calls the FetchReady
+ * function from the scheduler module, and, if there is a ready task, makes
+ * a continuation to that ready task. If no task is ready, execution returns to the
+ * worker loop (wc->mctx). If the task runs on a wrapper, execution returns to the
+ * wrapper loop in either case.
+ * This way, in the optimal case, task switching only requires a single context switch
+ * instead of two.
+ *
+ * @param t   the current task context
+ */
+void LpelWorkerDispatcher( lpel_task_t *t)
+{
+  workerctx_t *wc = t->worker_context;
+
+  RescheduleTask(wc, t);
+
+  /* dependent of worker or wrapper */
+  if (wc->wid != -1) {
+    lpel_task_t *next;
+
+    /* before picking the next task, process messages to consider
+     * also newly arrived READY tasks
+     */
+    FetchAllMessages( wc);
+    
+    next = SchedFetchReady( wc->sched);
+    if (next != NULL) {
+      /* short circuit */
+      //if (next==t) { return; }
+      assert(next != t);
+
+      /* execute task */
+      co_call( next->mctx); /*SWITCH*/
+    } else {
+      /* no ready task! -> back to worker context */
+      co_call( wc->mctx); /*SWITCH*/
+    }
+  } else {
+    /* we are on a wrapper.
+     * back to wrapper context
+     */
+    co_call( wc->mctx); /*SWITCH*/
+    /* nothing to finalize on a wrapper */
+  }
+  /*********************************
+   * ... CTX SWITCH ...
+   *********************************/
+  /* let task continue its business ... */
+}
+
+
+
+void LpelWorkerSpawn(void)
+{
+  int i;
+  /* create worker threads */
+  for( i=0; i<num_workers; i++) {
+    workerctx_t *wc = &workers[i];
+    /* spawn joinable thread */
+    (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
+  }
+}
+
+
+
+
 /**
  * Wakeup a task from within another task - this internal function
  * is called in _LpelTaskUnblock()
@@ -337,6 +278,30 @@ void LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
 }
 
 
+
+/**
+ * Broadcast a termination message
+ */
+void LpelWorkerTerminate(void)
+{
+  int i;
+  workerctx_t *wc;
+  workermsg_t msg;
+
+  /* compose a task term message */
+  msg.type = WORKER_MSG_TERMINATE;
+
+  /* broadcast a terminate message */
+  for( i=0; i<num_workers; i++) {
+    wc = &workers[i];
+
+    /* send */
+    MailboxSend( &wc->mailbox, &msg);
+  }
+}
+
+
+
 /**
  * Get a worker context from the worker id
  */
@@ -350,8 +315,6 @@ workerctx_t *LpelWorkerGetContext(int id) {
     workerctx_t *wc = (workerctx_t *) malloc( sizeof( workerctx_t));
     wc->wid = -1;
     wc->terminate = 0;
-    wc->wait_cnt = 0;
-    TimingZero( &wc->wait_time);
     /* Wrapper is excluded from scheduling module */
     wc->sched = NULL;
     wc->wraptask = NULL;
@@ -377,6 +340,23 @@ workerctx_t *LpelWorkerGetContext(int id) {
 /*  PRIVATE FUNCTIONS                                                         */
 /******************************************************************************/
 
+/**
+ * Deferred deletion of a task
+ */
+static inline void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t)
+{
+  /* delete task marked before */
+  if (wc->marked_del != NULL) {
+    //LpelMonDebug( wc->mon, "Destroy task %d\n", wc->marked_del->uid);
+    LpelTaskDestroy( wc->marked_del);
+    wc->marked_del = NULL;
+  }
+  /* place a new task (if any) */
+  if (t != NULL) {
+    wc->marked_del = t;
+  }
+}
+
 
 /**
  * Reschedule workers own task, returning from a call
@@ -389,9 +369,9 @@ static void RescheduleTask( workerctx_t *wc, lpel_task_t *t)
     /* task exited by calling TaskExit() */
     case TASK_ZOMBIE:
       //FIXME LpelMonitoringDebug( wc->mon, "Killed task %d.\n", t->uid);
-      LpelTaskDestroy( t);
+      /* mark t for deletion */
+      CleanupTaskContext(wc,t);
       wc->num_tasks--;
-
 
       /* wrappers can terminate if their task terminates */
       if (wc->wid < 0) {
@@ -462,9 +442,8 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
           char fname[32];
           char *taskname = LpelMonTaskGetName(t->mon);
           (void) snprintf(fname, 32, "mon_%.24s.log", taskname);
-          wc->mon = LpelMonContextCreate(fname);
-          /* start message */
-          LpelMonDebug( wc->mon, "Wrapper %s started.\n", taskname);
+          wc->mon = LpelMonContextCreate(-1, fname);
+          LpelMonWorkerWaitStart(wc->mon);
         }
       } else {
         SchedMakeReady( wc->sched, t);
@@ -480,25 +459,10 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 static void WaitForNewMessage( workerctx_t *wc)
 {
   workermsg_t msg;
-  timing_t wtm;
-
-  wc->wait_cnt += 1;
   
-  TimingStart( &wtm);
+  if (wc->mon) LpelMonWorkerWaitStart(wc->mon);
   MailboxRecv( &wc->mailbox, &msg);
-  TimingEnd( &wtm);
-  
-  //FIXME
-  /*
-  LpelMonitoringDebug( wc->mon,
-      "worker %d waited (%u) for %lu.%09lu\n",
-      wc->wid,
-      wc->wait_cnt,
-      (unsigned long) wtm.tv_sec, wtm.tv_nsec
-      );
-  */
-
-  TimingAdd( &wc->wait_time, &wtm);
+  if (wc->mon) LpelMonWorkerWaitStop(wc->mon);
   
   ProcessMessage( wc, &msg);
 }
@@ -521,21 +485,14 @@ static void WorkerLoop( workerctx_t *wc)
 {
   lpel_task_t *t = NULL;
   
-  /* start message */
-  LpelMonDebug( wc->mon, "Worker %d started.\n", wc->wid);
-
   do {
     t = SchedFetchReady( wc->sched);
     if (t != NULL) {
-
       /* execute task */
-      LpelWorkerTaskCall( wc, t);
-      
+      co_call(t->mctx);
       //FIXME LpelMonitoringDebug( wc->mon, "Back on worker %d context.\n", wc->wid);
-
-      assert( wc->predecessor != NULL);
-      
-      LpelWorkerFinalizeTask( wc);
+      /* cleanup task context marked for deletion */
+      CleanupTaskContext(wc, NULL);
     } else {
       /* no ready tasks */
       WaitForNewMessage( wc);
@@ -552,23 +509,13 @@ static void WrapperLoop( workerctx_t *wc)
 {
   lpel_task_t *t = NULL;
 
-  /*
-   * Create a monitoring context for that wrapper,
-   * by the mon_info of the task
-   */
-   //TODO
-
   do {
     t = wc->wraptask;
     if (t != NULL) {
-
       /* execute task */
-      LpelWorkerTaskCall( wc, t);
+      co_call(t->mctx);
 
       wc->wraptask = NULL;
-      assert( wc->predecessor != NULL);
-      
-      LpelWorkerFinalizeTask( wc);
     } else {
       /* no ready tasks */
       WaitForNewMessage( wc);
@@ -576,6 +523,9 @@ static void WrapperLoop( workerctx_t *wc)
     /* fetch (remaining) messages */
     FetchAllMessages( wc);
   } while ( !wc->terminate);
+
+  /* cleanup task context marked for deletion */
+  CleanupTaskContext(wc, NULL);
 }
 
 
@@ -590,9 +540,8 @@ static void *WorkerThread( void *arg)
   co_thread_init();
   wc->mctx = co_current();
 
-
-  /* no predecessor */
-  wc->predecessor = NULL;
+  /* no task marked for deletion */
+  wc->marked_del = NULL;
 
   /* assign to cores */
   LpelThreadAssign( wc->wid);
@@ -605,18 +554,8 @@ static void *WorkerThread( void *arg)
   }
   /*******************************************************/
   
-  if (wc->mon) {
-    /* exit message */
-    LpelMonDebug( wc->mon,
-        "Worker %d exited. wait_cnt %u, wait_time %lu.%09lu\n",
-        wc->wid,
-        wc->wait_cnt, 
-        (unsigned long) wc->wait_time.tv_sec, wc->wait_time.tv_nsec
-        );
-
-    /* cleanup monitoring */
-    LpelMonContextDestroy( wc->mon);
-  }
+  /* cleanup monitoring */
+  if (wc->mon) LpelMonContextDestroy( wc->mon);
   
 
   /* destroy all the free tasks */

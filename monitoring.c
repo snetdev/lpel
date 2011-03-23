@@ -19,9 +19,13 @@
 #define MON_TASKNAME_MAXLEN  32
 
 struct monctx_t {
-  FILE *outfile;      /** where to write the monitoring data to */
-  unsigned int disp;  /** count how often a task has been dispatched */
-  int debug_level;
+  int           wid;         /** worker id */
+  FILE         *outfile;     /** where to write the monitoring data to */
+  unsigned int  disp;        /** count how often a task has been dispatched */
+  int           debug_level;
+  unsigned int  wait_cnt;
+  timing_t      wait_total;
+  timing_t      wait_current;
 };
 
 
@@ -186,8 +190,9 @@ static void PrintDirtyList(mon_task_t *mt)
  ****************************************************************************/
 
 /**
- * Create a monitoring context
+ * Create a monitoring context (for a worker)
  *
+ * @param wid   worker id
  * @param name  name of monitoring context,
  *              filename where the information is logged
  *
@@ -195,13 +200,14 @@ static void PrintDirtyList(mon_task_t *mt)
  *
  * @note  NOT THREAD-SAFE! sets a global variable
  */
-monctx_t *LpelMonContextCreate(char *name)
+monctx_t *LpelMonContextCreate(int wid, char *name)
 {
   monctx_t *mon;
   timing_t tnil = TIMING_INITIALIZER;
 
   mon = (monctx_t *) malloc( sizeof(monctx_t));
 
+  mon->wid = wid;
   /* open logfile */
   mon->outfile = fopen(name, "w");
   assert( mon->outfile != NULL);
@@ -209,10 +215,22 @@ monctx_t *LpelMonContextCreate(char *name)
   /* default values */
   mon->disp = 0;
   mon->debug_level = 0; /* no debug printing */
+  mon->wait_cnt = 0;
+  TimingZero(&mon->wait_total);
+  TimingZero(&mon->wait_current);
 
   /* initialize timing */
   if (TimingEquals(&monitoring_begin, &tnil)) {
     TIMESTAMP(&monitoring_begin);
+  }
+
+
+  /* start message */
+  //FIXME
+  if (wid<0) {
+    //LpelMonDebug( wc->mon, "Wrapper %s started.\n", taskname);
+  } else {
+    //LpelMonDebug( wc->mon, "Worker %d started.\n", wc->wid);
   }
 
   return mon;
@@ -226,6 +244,14 @@ monctx_t *LpelMonContextCreate(char *name)
  */
 void LpelMonContextDestroy(monctx_t *mon)
 {
+  /*FIXME exit message
+    LpelMonDebug( wc->mon,
+        "Worker %d exited. wait_cnt %u, wait_time %lu.%09lu\n",
+        wc->wid,
+        wc->wait_cnt, 
+        (unsigned long) wc->wait_time.tv_sec, wc->wait_time.tv_nsec
+        );
+   */
   if ( mon->outfile != NULL) {
     int ret;
     ret = fclose( mon->outfile);
@@ -286,6 +312,36 @@ void LpelMonTaskAssign(mon_task_t *mt, monctx_t *ctx)
   mt->ctx = ctx;
 }
 
+
+
+
+
+/*****************************************************************************
+ * CALLBACK FUNCTIONS
+ ****************************************************************************/
+
+
+
+void LpelMonWorkerWaitStart(monctx_t *mon)
+{
+  mon->wait_cnt++;
+  TimingStart(&mon->wait_current);
+}
+
+
+void LpelMonWorkerWaitStop(monctx_t *mon)
+{
+  TimingEnd(&mon->wait_current);
+  TimingAdd(&mon->wait_total, &mon->wait_current);
+  /*FIXME print message?
+  LpelMonitoringDebug( wc->mon,
+      "worker %d waited (%u) for %lu.%09lu\n",
+      wc->wid,
+      wc->wait_cnt,
+      (unsigned long) wtm.tv_sec, wtm.tv_nsec
+      );
+  */
+}
 
 
 
