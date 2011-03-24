@@ -122,7 +122,7 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
     wc->sched = SchedCreate( i);
     wc->wraptask = NULL;
 
-    snprintf( wname, 24, "mon_worker%02d.log", i);
+    snprintf( wname, 24, "worker%02d", i);
     wc->mon = LpelMonContextCreate( wc->wid, wname);
     
     /* taskqueue of free tasks */
@@ -439,10 +439,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
         wc->wraptask = t;
         /* create monitoring context if necessary */
         if (t->mon) {
-          char fname[32];
-          char *taskname = LpelMonTaskGetName(t->mon);
-          (void) snprintf(fname, 32, "mon_%.24s.log", taskname);
-          wc->mon = LpelMonContextCreate(-1, fname);
+          wc->mon = LpelMonContextCreate(-1, LpelMonTaskGetName(t->mon));
           LpelMonWorkerWaitStart(wc->mon);
         }
       } else {

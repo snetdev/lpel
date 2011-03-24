@@ -20,6 +20,8 @@
                         GNU Portable Coroutine Library  */
 
 #include "lpel_main.h"
+#include "monitoring.h"
+#include "worker.h"
 
 /*!! link with -lcap */
 #if defined(__linux__) && defined(LPEL_USE_CAPABILITIES)
@@ -30,7 +32,6 @@
 #define gettid() syscall( __NR_gettid )
 
 
-#include "worker.h"
 
 
 
@@ -184,6 +185,7 @@ int LpelInit( lpel_config_t *cfg)
 {
   workercfg_t worker_config;
   int res;
+  char node_prefix[16];
 
   /* store a local copy of cfg */
   _lpel_global_config = *cfg;
@@ -195,10 +197,15 @@ int LpelInit( lpel_config_t *cfg)
   /* create the cpu affinity set for used threads */
   CreateCpusets();
 
-  /* Init libPCL */
+  /* Init libPCL */ 
   co_thread_init();
  
   worker_config.node = _lpel_global_config.node;
+
+  /* initialise monitoring module */
+  (void) snprintf(node_prefix, 16, "mon_n%02d_", _lpel_global_config.node);
+  LpelMonInit(node_prefix, ".log");
+
   /* initialise workers */
   LpelWorkerInit( _lpel_global_config.num_workers, &worker_config);
 
@@ -222,8 +229,11 @@ void LpelStop(void)
  */
 void LpelCleanup(void)
 {
-  /* Cleanup scheduler */
+  /* Cleanup workers */
   LpelWorkerCleanup();
+
+  /* Cleanup moitoring module */
+  LpelMonCleanup();
 
   /* Cleanup libPCL */
   co_thread_cleanup();

@@ -25,6 +25,10 @@ typedef struct mon_task_t mon_task_t;
 typedef struct mon_stream_t mon_stream_t;
 
 
+void LpelMonInit(char *prefix, char *postfix);
+void LpelMonCleanup(void);
+
+
 monctx_t *LpelMonContextCreate(int wid, char *name);
 void LpelMonContextDestroy( monctx_t *mon);
 

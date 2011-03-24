@@ -79,10 +79,21 @@ struct mon_stream_t {
 
 
 
+/**
+ * Prefix/postfix for monitoring outfiles
+ */
+#define MON_PFIX_LEN  16
+static char monitoring_prefix[MON_PFIX_LEN];
+static char monitoring_postfix[MON_PFIX_LEN];
 
+#define MON_NAME_LEN  31
 
-
+/**
+ * Reference timestamp
+ */
 static timing_t monitoring_begin = TIMING_INITIALIZER;
+
+
 
 /*****************************************************************************
  * HELPER FUNCTIONS
@@ -188,27 +199,72 @@ static void PrintDirtyList(mon_task_t *mt)
  * PUBLIC FUNCTIONS
  ****************************************************************************/
 
+
+/**
+ * Initialize the monitoring module
+ *
+ * @param prefix    prefix of the monitoring context files
+ * @param postfix   postfix of the monitoring context files
+ * @pre             prefix == NULL  ||  strlen(prefix)  <= MON_PFIX_LEN
+ * @pre             postfix == NULL ||  strlen(postfix) <= MON_PFIX_LEN
+ */
+void LpelMonInit(char *prefix, char *postfix)
+{
+
+  /* store the prefix */
+  (void) memset(monitoring_prefix,  0, MON_PFIX_LEN);
+  if ( prefix != NULL ) {
+    (void) strncpy( monitoring_prefix, prefix, MON_PFIX_LEN);
+  }
+
+  /* store the postfix */
+  (void) memset(monitoring_postfix, 0, MON_PFIX_LEN);
+  if ( postfix != NULL ) {
+    (void) strncpy( monitoring_postfix, postfix, MON_PFIX_LEN);
+  }
+
+  /* initialize timing */
+  TIMESTAMP(&monitoring_begin);
+}
+
+
+/**
+ * Cleanup the monitoring module 
+ */
+void LpelMonCleanup(void)
+{
+  /* NOP */
+}
+
+
+
 /**
  * Create a monitoring context (for a worker)
  *
  * @param wid   worker id
  * @param name  name of monitoring context,
  *              filename where the information is logged
+ * @pre         name != NULL && strlen(name) <= MON_NAME_LEN
  *
  * @return a newly created monitoring context
- *
- * @note  NOT THREAD-SAFE! sets a global variable
  */
 monctx_t *LpelMonContextCreate(int wid, char *name)
 {
-  monctx_t *mon;
-  timing_t tnil = TIMING_INITIALIZER;
+  int buflen = MON_PFIX_LEN*2 + MON_NAME_LEN + 1;
+  char fname[buflen];
 
-  mon = (monctx_t *) malloc( sizeof(monctx_t));
+  monctx_t *mon = (monctx_t *) malloc( sizeof(monctx_t));
 
   mon->wid = wid;
+
+  /* build filename */
+  memset(fname, 0, buflen);
+  strncat(fname, monitoring_prefix, MON_PFIX_LEN);
+  strncat(fname, name, MON_NAME_LEN);
+  strncat(fname, monitoring_postfix, MON_PFIX_LEN);
+
   /* open logfile */
-  mon->outfile = fopen(name, "w");
+  mon->outfile = fopen(fname, "w");
   assert( mon->outfile != NULL);
 
   /* default values */
@@ -217,11 +273,6 @@ monctx_t *LpelMonContextCreate(int wid, char *name)
   mon->wait_cnt = 0;
   TimingZero(&mon->wait_total);
   TimingZero(&mon->wait_current);
-
-  /* initialize timing */
-  if (TimingEquals(&monitoring_begin, &tnil)) {
-    TIMESTAMP(&monitoring_begin);
-  }
 
 
   /* start message */
