@@ -215,8 +215,7 @@ void LpelWorkerDispatcher( lpel_task_t *t)
     next = SchedFetchReady( wc->sched);
     if (next != NULL) {
       /* short circuit */
-      //if (next==t) { return; }
-      assert(next != t);
+      if (next==t) { return; }
 
       /* execute task */
       co_call( next->mctx); /*SWITCH*/
