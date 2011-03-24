@@ -17,7 +17,7 @@
 #include "worker.h"
 
 #include "task.h"
-#include "threading.h"
+#include "lpel_main.h"
 #include "monitoring.h"
 
 

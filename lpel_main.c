@@ -19,7 +19,7 @@
 #include <pcl.h>     /* tasks are executed in user-space with help of
                         GNU Portable Coroutine Library  */
 
-#include "threading.h"
+#include "lpel_main.h"
 
 /*!! link with -lcap */
 #if defined(__linux__) && defined(LPEL_USE_CAPABILITIES)

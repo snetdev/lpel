@@ -5,11 +5,7 @@
 #include <pcl.h>
 
 
-#include "arch/timing.h"
-
 #include "task.h"
-#include "scheduler.h"
-#include "taskqueue.h"
 
 //#include "mailbox-lf.h"
 #include "mailbox.h"

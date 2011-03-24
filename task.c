@@ -3,7 +3,6 @@
 #include <assert.h>
 
 #include "arch/atomic.h"
-#include "arch/timing.h"
 
 #include "task.h"
 

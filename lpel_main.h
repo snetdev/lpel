@@ -1,6 +1,6 @@
 
-#ifndef _THREADING_H_
-#define _THREADING_H_
+#ifndef _LPEL_MAIN_H_
+#define _LPEL_MAIN_H_
 
 #define LPEL_USE_CAPABILITIES
 
@@ -63,4 +63,4 @@ int LpelThreadAssign( int core);
 
 extern lpel_config_t    _lpel_global_config;
 
-#endif /* _THREADING_H_ */
+#endif /* _LPEL_MAIN_H_ */

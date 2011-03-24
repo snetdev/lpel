@@ -5,7 +5,6 @@
 #include <pcl.h>    /* tasks are executed in user-space with help of
                        GNU Portable Coroutine Library  */
 
-#include "arch/timing.h"
 #include "arch/atomic.h"
 
 #include "scheduler.h"
