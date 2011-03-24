@@ -119,6 +119,21 @@ static inline void PrintTiming( const timing_t *t, FILE *file)
   }
 }
 
+/**
+ * Print a normalized timestamp
+ */
+static inline void PrintNormTS( const timing_t *t, FILE *file)
+{
+  timing_t norm_ts;
+
+  TimingDiff(&norm_ts, &monitoring_begin, t);
+  (void) fprintf( file,
+      "%lu%06lu ",
+      (unsigned long) norm_ts.tv_sec,
+      (norm_ts.tv_nsec / 1000)
+      );
+}
+
 
 /**
  * Add a stream monitor object to the dirty list of its task.
@@ -417,25 +432,17 @@ void LpelMonTaskStart(mon_task_t *mt)
 void LpelMonTaskStop(mon_task_t *mt, taskstate_t state)
 {
   FILE *file = mt->ctx->outfile;
-  timing_t et, norm_ts;
+  timing_t et;
   assert( mt != NULL );
 
 
   if FLAG_TIMES(mt) {
     TIMESTAMP(&mt->times.stop);
-    TimingDiff(&norm_ts, &monitoring_begin, &mt->times.stop);
-
-    
-    PrintTiming(&norm_ts, file);
+    PrintNormTS(&mt->times.stop, file);
   }
 
-  /* print general info: name, disp.cnt, state */
-  fprintf( file, "%lu ", mt->tid);
-  if (strlen(mt->name) > 0) {
-    fprintf( file, "%s ", mt->name);
-  }
-  
-  fprintf( file, "disp %lu ", mt->disp);
+  /* print general info: tid, disp.cnt, state */
+  fprintf( file, "%lu disp %lu ", mt->tid, mt->disp);
 
   if ( state==TASK_BLOCKED) {
     fprintf( file, "st B%c ", mt->blockon);
@@ -455,6 +462,9 @@ void LpelMonTaskStop(mon_task_t *mt, taskstate_t state)
     if ( state == TASK_ZOMBIE) {
       fprintf( file, "creat ");
       PrintTiming( &mt->times.creat, file);
+      if (strlen(mt->name) > 0) {
+        fprintf( file, "'%s' ", mt->name);
+      }
     }
   }
 
@@ -567,7 +577,7 @@ void LpelMonStreamWakeup(mon_stream_t *ms)
 
 void LpelMonDebug( monctx_t *mon, const char *fmt, ...)
 {
-  timing_t tnow, ts;
+  timing_t tnow;
   va_list ap;
 
   if (!mon) return;
@@ -575,8 +585,7 @@ void LpelMonDebug( monctx_t *mon, const char *fmt, ...)
   /* print current timestamp */
   //TODO check if timestamping required
   TIMESTAMP(&tnow);
-  TimingDiff(&ts, &monitoring_begin, &tnow);
-  PrintTiming( &ts, mon->outfile);
+  PrintNormTS(&tnow, mon->outfile);
   fprintf( mon->outfile, "*** ");
 
   va_start(ap, fmt);
