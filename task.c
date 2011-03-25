@@ -60,7 +60,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   
   if (num_pages==0) num_pages = 1;
 
-  res = posix_memalign( (void**) &t, pgsize, size /*num_pages*pgsize*/);
+  res = posix_memalign( (void**) &t, pgsize, num_pages*pgsize);
   assert(res==0);
 
   /* calc stackaddr */

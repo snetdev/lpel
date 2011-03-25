@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include <assert.h>
-#include "../timing.h"
+#include "../arch/timing.h"
 
 
 

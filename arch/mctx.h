@@ -15,10 +15,10 @@ static inline int mctx_create(mctx_t *mctx, void *func, void *arg, char *sk_addr
   mctx->uc_link = NULL;
 
   mctx->uc_stack.ss_sp = sk_addr;
-  mctx->uc_stack.ss_size = sk_size - sizeof(long);
+  mctx->uc_stack.ss_size = sk_size - 2*sizeof(long);
   mctx->uc_stack.ss_flags = 0;
 
-  makecontext(mctx, func, 1, arg);
+  makecontext(mctx, func, 2, arg);
 
   return 0;
 }
