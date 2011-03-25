@@ -20,7 +20,7 @@ static atomic_t taskseq = ATOMIC_INIT(0);
 
 
 /* declaration of startup function */
-static void TaskStartup(void *data);
+static void TaskStartup( unsigned int y, unsigned int x);
 
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
@@ -200,11 +200,16 @@ void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
  * Startup function for user specified task,
  * calls task function with proper signature
  *
- * @param data  the previously allocated lpel_task_t TCB
  */
-static void TaskStartup( void *data)
+static void TaskStartup( unsigned int y, unsigned int x)
 {
-  lpel_task_t *t = (lpel_task_t *)data;
+  unsigned long z;
+  lpel_task_t *t;
+
+  z = x<<16;
+  z <<= 16;
+  z |= y;
+  t = (lpel_task_t *)z;
 
   TaskStart( t);
 
