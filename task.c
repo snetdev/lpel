@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include <unistd.h> /* for sysconf() */
+
 #include "arch/atomic.h"
 
 #include "task.h"
@@ -25,7 +27,7 @@ static void TaskStop( lpel_task_t *t);
 static void TaskBlock( lpel_task_t *t, taskstate_t state);
 
 
-
+#define TASK_STACK_ALIGN  256
 
 
 /**
@@ -34,17 +36,38 @@ static void TaskBlock( lpel_task_t *t, taskstate_t state);
  * @param worker  id of the worker where to create the task
  * @param func    task function
  * @param arg     arguments
- * @param stacksize   size of the execution stack of the task
+ * @param size    size of the task, including execution stack
+ * @pre           size is a power of two
  *
  * @return the task handle of the created task (pointer to TCB)
+ *
+ * TODO reuse task contexts from the worker 
  */
 lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
-    void *inarg, int stacksize )
+    void *inarg, int size)
 {
-  /* obtain a task context */
-  /*TODO reuse one from the worker */
-  lpel_task_t *t = malloc( sizeof(lpel_task_t));
+  lpel_task_t *t;
+  int num_pages, pgsize, res;
+  char *stackaddr;
+  int offset;
+ 
+  if (size <= 0) {
+    size = LPEL_TASK_SIZE_DEFAULT;
+  }
+
+  pgsize = sysconf(_SC_PAGESIZE);
+  num_pages = size / pgsize;
   
+  if (num_pages==0) num_pages = 1;
+
+  res = posix_memalign( (void**) &t, pgsize, size /*num_pages*pgsize*/);
+  assert(res==0);
+
+  /* calc stackaddr */
+  offset = (sizeof(lpel_task_t) + TASK_STACK_ALIGN-1) & ~(TASK_STACK_ALIGN-1);
+  stackaddr = (char *) t + offset;
+  t->size = size;
+
 
   /* obtain a usable worker context */
   t->worker_context = LpelWorkerGetContext(worker);
@@ -53,11 +76,6 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->uid = fetch_and_inc( &taskseq);  /* obtain a unique task id */
   t->func = func;
   t->inarg = inarg;
-
-  t->stacksize = stacksize;
-  if (t->stacksize <= 0) {
-    t->stacksize = LPEL_TASK_ATTR_STACKSIZE_DEFAULT;
-  }
 
   /* initialize poll token to 0 */
   atomic_init( &t->poll_token, 0);
@@ -68,8 +86,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 
   t->mon = NULL;
   
-  /* function, argument (data), stack base address, stacksize */
-  //FIXME t->mctx = co_create( TaskStartup, (void *)t, NULL, t->stacksize);
+  mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
   // if (t->mctx == NULL) assert(0);
   return t;
 }
@@ -88,9 +105,7 @@ void LpelTaskDestroy( lpel_task_t *t)
   if (t->mon) LpelMonTaskDestroy(t->mon);
 
   atomic_destroy( &t->poll_token);
-  /* delete the coroutine */
-  //FIXME will be NOP: co_delete(t->mctx);
-  /* free the TCB itself*/
+
   free(t);
 }
 

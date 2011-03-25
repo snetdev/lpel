@@ -3,15 +3,16 @@
 
 
 #include "arch/atomic.h"
+#include "arch/mctx.h"
 
 #include "scheduler.h"
 
 
 /**
- * If a stacksize <= 0 is specified,
- * use the default stacksize
+ * If a task size <= 0 is specified,
+ * use the default size
  */
-#define LPEL_TASK_ATTR_STACKSIZE_DEFAULT  8192  /* 8k stacksize*/
+#define LPEL_TASK_SIZE_DEFAULT  8192  /* 8k size*/
 
 
 struct lpel_task_t;
@@ -45,7 +46,6 @@ typedef struct lpel_task_t {
   /** intrinsic pointers for organizing tasks in a list*/
   struct lpel_task_t *prev, *next;
   unsigned int uid;    /** unique identifier */
-  int stacksize;       /** stacksize */
   taskstate_t state;   /** state */
   taskstate_blocked_t blocked_on; /** on which event the task is waiting */
 
@@ -64,7 +64,8 @@ typedef struct lpel_task_t {
   struct mon_task_t *mon;
 
   /* CODE */
-  //FIXME mctx_t mctx;     /** machine context of the task*/
+  mctx_t mctx;          /** machine context of the task*/
+  int size;             /** complete size of the task, incl stack */
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
 } lpel_task_t;
