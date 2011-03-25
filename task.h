@@ -1,9 +1,6 @@
 #ifndef _TASK_H_
 #define _TASK_H_
 
-#include <pthread.h>
-#include <pcl.h>    /* tasks are executed in user-space with help of
-                       GNU Portable Coroutine Library  */
 
 #include "arch/atomic.h"
 
@@ -67,7 +64,7 @@ typedef struct lpel_task_t {
   struct mon_task_t *mon;
 
   /* CODE */
-  coroutine_t mctx;     /** context of the task*/
+  //FIXME mctx_t mctx;     /** machine context of the task*/
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
 } lpel_task_t;

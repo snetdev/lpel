@@ -10,7 +10,6 @@
 #include <errno.h>
 
 #include <pthread.h>
-#include <pcl.h>
 
 #include "arch/atomic.h"
 
@@ -24,7 +23,7 @@
 struct workerctx_t {
   int wid; 
   pthread_t     thread;
-  coroutine_t   mctx;
+  //FIXME mctx_t  mctx;
   int           terminate;
   unsigned int  num_tasks;
   //taskqueue_t   free_tasks;
@@ -218,16 +217,16 @@ void LpelWorkerDispatcher( lpel_task_t *t)
       if (next==t) { return; }
 
       /* execute task */
-      co_call( next->mctx); /*SWITCH*/
+      //FIXME co_call( next->mctx); /*SWITCH*/
     } else {
       /* no ready task! -> back to worker context */
-      co_call( wc->mctx); /*SWITCH*/
+      //FIXME co_call( wc->mctx); /*SWITCH*/
     }
   } else {
     /* we are on a wrapper.
      * back to wrapper context
      */
-    co_call( wc->mctx); /*SWITCH*/
+    // FIXME co_call( wc->mctx); /*SWITCH*/
     /* nothing to finalize on a wrapper */
   }
   /*********************************
@@ -485,7 +484,7 @@ static void WorkerLoop( workerctx_t *wc)
     t = SchedFetchReady( wc->sched);
     if (t != NULL) {
       /* execute task */
-      co_call(t->mctx);
+      //FIXME co_call(t->mctx);
       //FIXME LpelMonitoringDebug( wc->mon, "Back on worker %d context.\n", wc->wid);
       /* cleanup task context marked for deletion */
       CleanupTaskContext(wc, NULL);
@@ -509,7 +508,7 @@ static void WrapperLoop( workerctx_t *wc)
     t = wc->wraptask;
     if (t != NULL) {
       /* execute task */
-      co_call(t->mctx);
+      //FIXME co_call(t->mctx);
 
       wc->wraptask = NULL;
     } else {
@@ -532,9 +531,7 @@ static void *WorkerThread( void *arg)
 {
   workerctx_t *wc = (workerctx_t *)arg;
 
-  /* Init libPCL */
-  co_thread_init();
-  wc->mctx = co_current();
+  //FIXME wc->mctx = co_current();
 
   /* no task marked for deletion */
   wc->marked_del = NULL;
@@ -570,8 +567,6 @@ static void *WorkerThread( void *arg)
     /* free the worker context */
     free( wc);
   }
-  /* Cleanup libPCL */
-  co_thread_cleanup();
 
   return NULL;
 }

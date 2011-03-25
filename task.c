@@ -69,11 +69,8 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->mon = NULL;
   
   /* function, argument (data), stack base address, stacksize */
-  t->mctx = co_create( TaskStartup, (void *)t, NULL, t->stacksize);
-  if (t->mctx == NULL) {
-    /*TODO throw error!*/
-    assert(0);
-  }
+  //FIXME t->mctx = co_create( TaskStartup, (void *)t, NULL, t->stacksize);
+  // if (t->mctx == NULL) assert(0);
   return t;
 }
 
@@ -92,7 +89,7 @@ void LpelTaskDestroy( lpel_task_t *t)
 
   atomic_destroy( &t->poll_token);
   /* delete the coroutine */
-  co_delete(t->mctx);
+  //FIXME will be NOP: co_delete(t->mctx);
   /* free the TCB itself*/
   free(t);
 }

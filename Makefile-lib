@@ -3,7 +3,7 @@
 #
 
 CFLAGS = -g -Wall
-LDFLAGS = -lpcl -cap -lpthread -lrt
+LDFLAGS = -lcap -lpthread -lrt
 
 OBJS = buffer.o  mailbox.o  monitoring.o  scheduler.o  stream.o  \
           streamset.o  task.o  taskqueue.o  lpel_main.o  worker.o \

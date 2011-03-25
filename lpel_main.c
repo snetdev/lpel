@@ -16,8 +16,6 @@
 #include <sys/syscall.h>
 
 #include <pthread.h> /* worker threads are OS threads */
-#include <pcl.h>     /* tasks are executed in user-space with help of
-                        GNU Portable Coroutine Library  */
 
 #include "lpel_main.h"
 #include "monitoring.h"
@@ -197,9 +195,6 @@ int LpelInit( lpel_config_t *cfg)
   /* create the cpu affinity set for used threads */
   CreateCpusets();
 
-  /* Init libPCL */ 
-  co_thread_init();
- 
   worker_config.node = _lpel_global_config.node;
 
   /* initialise monitoring module */
@@ -235,8 +230,6 @@ void LpelCleanup(void)
   /* Cleanup moitoring module */
   LpelMonCleanup();
 
-  /* Cleanup libPCL */
-  co_thread_cleanup();
 }
 
 
