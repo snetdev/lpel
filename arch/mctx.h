@@ -22,6 +22,8 @@ static inline int mctx_create(mctx_t *mctx, void *func, void *arg, char *sk_addr
   mctx->uc_stack.ss_flags = 0;
 
   /*
+   * From libtask, by Ross Cox:
+   *
    * All this magic is because you have to pass makecontext a
    * function that takes some number of word-sized variables,
    * and on 64-bit machines pointers are bigger than words.
@@ -39,6 +41,11 @@ static inline void mctx_switch(mctx_t *octx, mctx_t *nctx)
 {
   (void) swapcontext(octx, nctx);
 }
+
+
+static inline void mctx_thread_init(void) {}
+
+static inline void mctx_thread_cleanup(void) {}
 
 
 #endif /* _MCTX_H_ */

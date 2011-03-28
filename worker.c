@@ -532,7 +532,7 @@ static void *WorkerThread( void *arg)
 {
   workerctx_t *wc = (workerctx_t *)arg;
 
-  //FIXME wc->mctx = co_current();
+  mctx_thread_init();
 
   /* no task marked for deletion */
   wc->marked_del = NULL;
@@ -568,6 +568,9 @@ static void *WorkerThread( void *arg)
     /* free the worker context */
     free( wc);
   }
+
+
+  mctx_thread_cleanup();
 
   return NULL;
 }

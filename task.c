@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include <unistd.h> /* for sysconf() */
-
 #include "arch/atomic.h"
 
 #include "task.h"
@@ -28,6 +26,7 @@ static void TaskBlock( lpel_task_t *t, taskstate_t state);
 
 
 #define TASK_STACK_ALIGN  256
+#define TASK_MINSIZE  4096
 
 
 /**
@@ -37,7 +36,7 @@ static void TaskBlock( lpel_task_t *t, taskstate_t state);
  * @param func    task function
  * @param arg     arguments
  * @param size    size of the task, including execution stack
- * @pre           size is a power of two
+ * @pre           size is a power of two, >= 4096
  *
  * @return the task handle of the created task (pointer to TCB)
  *
@@ -47,21 +46,16 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
     void *inarg, int size)
 {
   lpel_task_t *t;
-  int num_pages, pgsize, res;
   char *stackaddr;
   int offset;
  
   if (size <= 0) {
     size = LPEL_TASK_SIZE_DEFAULT;
   }
+  assert( size >= TASK_MINSIZE );
 
-  pgsize = sysconf(_SC_PAGESIZE);
-  num_pages = size / pgsize;
-  
-  if (num_pages==0) num_pages = 1;
-
-  res = posix_memalign( (void**) &t, pgsize, num_pages*pgsize);
-  assert(res==0);
+  /* aligned at page boundary */
+  t = valloc( size );
 
   /* calc stackaddr */
   offset = (sizeof(lpel_task_t) + TASK_STACK_ALIGN-1) & ~(TASK_STACK_ALIGN-1);

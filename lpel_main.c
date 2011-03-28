@@ -17,6 +17,9 @@
 
 #include <pthread.h> /* worker threads are OS threads */
 
+
+#include "arch/mctx.h"
+
 #include "lpel_main.h"
 #include "monitoring.h"
 #include "worker.h"
@@ -195,6 +198,9 @@ int LpelInit( lpel_config_t *cfg)
   /* create the cpu affinity set for used threads */
   CreateCpusets();
 
+  /* initialize machine context for main thread */
+  mctx_thread_init();
+
   worker_config.node = _lpel_global_config.node;
 
   /* initialise monitoring module */
@@ -229,7 +235,9 @@ void LpelCleanup(void)
 
   /* Cleanup moitoring module */
   LpelMonCleanup();
-
+  
+  /* cleanup machine context for main thread */
+  mctx_thread_cleanup();
 }
 
 
