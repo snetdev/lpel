@@ -1,9 +1,6 @@
 #ifndef _WORKER_H_
 #define _WORKER_H_
 
-#include <pthread.h>
-#include <pcl.h>
-
 
 #include "task.h"
 

@@ -1,7 +1,6 @@
 #ifndef _TASK_H_
 #define _TASK_H_
 
-#include <pthread.h>
 #include <pcl.h>    /* tasks are executed in user-space with help of
                        GNU Portable Coroutine Library  */
 
@@ -11,10 +10,10 @@
 
 
 /**
- * If a stacksize <= 0 is specified,
- * use the default stacksize
+ * If a task size <= 0 is specified,
+ * use the default size
  */
-#define LPEL_TASK_ATTR_STACKSIZE_DEFAULT  8192  /* 8k stacksize*/
+#define LPEL_TASK_SIZE_DEFAULT  8192  /* 8k */
 
 
 struct lpel_task_t;
@@ -48,7 +47,6 @@ typedef struct lpel_task_t {
   /** intrinsic pointers for organizing tasks in a list*/
   struct lpel_task_t *prev, *next;
   unsigned int uid;    /** unique identifier */
-  int stacksize;       /** stacksize */
   taskstate_t state;   /** state */
   taskstate_blocked_t blocked_on; /** on which event the task is waiting */
 
@@ -67,7 +65,8 @@ typedef struct lpel_task_t {
   struct mon_task_t *mon;
 
   /* CODE */
-  coroutine_t mctx;     /** context of the task*/
+  int size;             /** complete size of the task, incl stack */
+  coroutine_t mctx;     /** machine context of the task*/
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
 } lpel_task_t;

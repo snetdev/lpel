@@ -134,7 +134,7 @@ static void testBasic(void)
 
   cfg.proc_others = 0;
   cfg.flags = 0;
-  cfg.node = -1;
+  cfg.node = 0;
 
   
   LpelInit(&cfg);
