@@ -18,7 +18,8 @@ static atomic_t taskseq = ATOMIC_INIT(0);
 
 
 /* declaration of startup function */
-static void TaskStartup( unsigned int y, unsigned int x);
+//static void TaskStartup( unsigned int y, unsigned int x);
+static void TaskStartup( void *arg);
 
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
@@ -195,16 +196,20 @@ void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
  * calls task function with proper signature
  *
  */
-static void TaskStartup( unsigned int y, unsigned int x)
+//static void TaskStartup( unsigned int y, unsigned int x)
+static void TaskStartup( void *arg)
 {
-  unsigned long z;
   lpel_task_t *t;
+
+  t = (lpel_task_t *)arg;
+#if 0
+  unsigned long z;
 
   z = x<<16;
   z <<= 16;
   z |= y;
   t = (lpel_task_t *)z;
-
+#endif
   TaskStart( t);
 
   /* call the task function with inarg as parameter */

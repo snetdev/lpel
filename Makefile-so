@@ -7,6 +7,7 @@ LDFLAGS = -shared -lpthread -pthread
 
 OBJS = buffer.o mailbox.o monitoring.o scheduler.o stream.o \
        streamset.o task.o taskqueue.o lpel_main.o worker.o \
+       ctx_amd64.o
        # mailbox-lf.o 
 
 TARGET = liblpel.so
@@ -17,6 +18,9 @@ $(TARGET): $(OBJS)
 	gcc $(LDFLAGS) -o $@ $(OBJS)
 
 %.o: %.c
+	gcc $(CFLAGS) $<
+
+%.o: %.S
 	gcc $(CFLAGS) $<
 
 clean:
