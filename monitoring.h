@@ -29,7 +29,7 @@ void LpelMonInit(char *prefix, char *postfix);
 void LpelMonCleanup(void);
 
 
-monctx_t *LpelMonContextCreate(int wid, char *name);
+monctx_t *LpelMonContextCreate(int wid, char *name, int dbglvl);
 void LpelMonContextDestroy( monctx_t *mon);
 
 mon_task_t *LpelMonTaskCreate(unsigned long tid,

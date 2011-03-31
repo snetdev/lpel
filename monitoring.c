@@ -263,7 +263,7 @@ void LpelMonCleanup(void)
  *
  * @return a newly created monitoring context
  */
-monctx_t *LpelMonContextCreate(int wid, char *name)
+monctx_t *LpelMonContextCreate(int wid, char *name, int dbglvl)
 {
   int buflen = MON_PFIX_LEN*2 + MON_NAME_LEN + 1;
   char fname[buflen];
@@ -284,18 +284,17 @@ monctx_t *LpelMonContextCreate(int wid, char *name)
 
   /* default values */
   mon->disp = 0;
-  mon->debug_level = 0; /* no debug printing */
+  mon->debug_level = dbglvl;
   mon->wait_cnt = 0;
   TimingZero(&mon->wait_total);
   TimingZero(&mon->wait_current);
 
 
   /* start message */
-  //FIXME
   if (wid<0) {
-    //LpelMonDebug( wc->mon, "Wrapper %s started.\n", taskname);
+    LpelMonDebug( mon, "Wrapper %s started.\n", name);
   } else {
-    //LpelMonDebug( wc->mon, "Worker %d started.\n", wc->wid);
+    LpelMonDebug( mon, "Worker %d started.\n", mon->wid);
   }
 
   return mon;
@@ -309,14 +308,20 @@ monctx_t *LpelMonContextCreate(int wid, char *name)
  */
 void LpelMonContextDestroy(monctx_t *mon)
 {
-  /*FIXME exit message
-    LpelMonDebug( wc->mon,
-        "Worker %d exited. wait_cnt %u, wait_time %lu.%09lu\n",
-        wc->wid,
-        wc->wait_cnt, 
-        (unsigned long) wc->wait_time.tv_sec, wc->wait_time.tv_nsec
+  if (mon->wid < 0) {
+    LpelMonDebug( mon,
+        "Wrapper exited. wait_cnt %u, wait_time %lu%06lu\n",
+        mon->wait_cnt,
+        (unsigned long) mon->wait_total.tv_sec, (mon->wait_total.tv_nsec / 1000)
         );
-   */
+  } else {
+    LpelMonDebug( mon,
+        "Worker %d exited. wait_cnt %u, wait_time %lu%06lu\n",
+        mon->wid, mon->wait_cnt,
+        (unsigned long) mon->wait_total.tv_sec, (mon->wait_total.tv_nsec / 1000)
+        );
+  }
+
   if ( mon->outfile != NULL) {
     int ret;
     ret = fclose( mon->outfile);
@@ -398,14 +403,12 @@ void LpelMonWorkerWaitStop(monctx_t *mon)
 {
   TimingEnd(&mon->wait_current);
   TimingAdd(&mon->wait_total, &mon->wait_current);
-  /*FIXME print message?
-  LpelMonitoringDebug( wc->mon,
-      "worker %d waited (%u) for %lu.%09lu\n",
-      wc->wid,
-      wc->wait_cnt,
-      (unsigned long) wtm.tv_sec, wtm.tv_nsec
+
+  LpelMonDebug( mon,
+      "worker %d waited (%u) for %lu%06lu\n",
+      mon->wid, mon->wait_cnt,
+      (unsigned long) mon->wait_current.tv_sec, (mon->wait_current.tv_nsec / 1000)
       );
-  */
 }
 
 
@@ -580,7 +583,7 @@ void LpelMonDebug( monctx_t *mon, const char *fmt, ...)
   timing_t tnow;
   va_list ap;
 
-  if (!mon) return;
+  if (!mon || mon->debug_level==0) return;
 
   /* print current timestamp */
   //TODO check if timestamping required
@@ -590,7 +593,7 @@ void LpelMonDebug( monctx_t *mon, const char *fmt, ...)
 
   va_start(ap, fmt);
   vfprintf( mon->outfile, fmt, ap);
-  fflush(mon->outfile);
+  //fflush(mon->outfile);
   va_end(ap);
 }
 

@@ -201,6 +201,7 @@ int LpelInit( lpel_config_t *cfg)
   co_thread_init();
  
   worker_config.node = _lpel_global_config.node;
+  worker_config.do_print_workerinfo = _lpel_global_config.worker_dbg;
 
   /* initialise monitoring module */
   (void) snprintf(node_prefix, 16, "mon_n%02d_", _lpel_global_config.node);
