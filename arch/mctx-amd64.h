@@ -2,7 +2,7 @@
 
 
 typedef struct {
-  void *regs[30];
+  void *regs[10];
   void  *sk_addr;
   size_t sk_size;
 } mctx_t;

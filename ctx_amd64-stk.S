@@ -3,7 +3,8 @@
  * They are optimized to save
  * only callee-save registers and omit FP context altogether.
  *
- * This file is taken and modified from Nornir, (c) Zeljko Vrba
+ * Stack is used to store param and callee-saved regs
+ * http://charm.cs.illinois.edu/papers/migThreads.www/node24.html
  *
  * 2011-04-01 Daniel Prokesch
  */
@@ -24,9 +25,14 @@ ctx_init_internal:
 		rdx = entry point address
 		rcx = argument to the entry point
 		*/
-		movq		%rsi, 0(%rdi)
-		movq		%rdx, 8(%rdi)
-		movq		%rcx, 16(%rdi)
+                # context IS just the displaced stack pointer;
+                # displaced to account for popping off in swap()
+		lea		-64(%rsi), %rax
+                mov             %rax, 0(%rdi)
+                # write entry function to new stack
+		movq		%rdx, 0(%rsi)
+                # write func arg to new stack
+		movq		%rcx, -8(%rsi)
 		ret
 
 		.align 16
@@ -59,6 +65,6 @@ ctx_swap_internal:
 		movq		48(%rsi), %r12
 		movq		56(%rsi), %rbp
 		movq		64(%rsi), %rbx
-                # restore first argument (only useful upon first call?)
+                # restore first argument
 		movq		16(%rsi), %rdi
 		ret
