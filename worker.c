@@ -104,8 +104,8 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
     /* copy configuration for local use */
     config = *cfg;
   } else {
-    config.node = -1;
-    config.do_print_workerinfo = 1;
+    config.node = 0;
+    config.do_print_workerinfo = 0;
   }
 
   /* allocate the array of worker contexts */
@@ -123,7 +123,7 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
     wc->wraptask = NULL;
 
     snprintf( wname, 24, "worker%02d", i);
-    wc->mon = LpelMonContextCreate( wc->wid, wname);
+    wc->mon = LpelMonContextCreate( wc->wid, wname, config.do_print_workerinfo);
     
     /* taskqueue of free tasks */
     //TaskqueueInit( &wc->free_tasks);
@@ -438,7 +438,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
         wc->wraptask = t;
         /* create monitoring context if necessary */
         if (t->mon) {
-          wc->mon = LpelMonContextCreate(-1, LpelMonTaskGetName(t->mon));
+          wc->mon = LpelMonContextCreate(-1, LpelMonTaskGetName(t->mon), config.do_print_workerinfo);
           LpelMonWorkerWaitStart(wc->mon);
         }
       } else {
