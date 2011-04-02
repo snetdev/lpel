@@ -6,6 +6,9 @@
 
 #include "mctx-amd64.h"
 
+#elif defined(__i386__)
+
+#include "mctx-amd64.h"
 
 #elif defined(__linux__)
 
