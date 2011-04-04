@@ -27,14 +27,18 @@ ctx_init_internal:
 		*/
                 # context IS just the displaced stack pointer;
                 # displaced to account for popping off in swap()
-                mov               8(%esp), %eax
-		lea		-20(%eax), %ecx
-                mov             %ecx, 4(%esp)
+                mov             8(%esp), %eax
+		lea		-24(%eax), %ecx
+                mov             4(%esp), %edx
+                mov             %ecx, (%edx)
                 # write entry function to new stack (as return address)
 		mov		12(%esp), %ecx
-                mov             %ecx, 8(%eax)
+                mov             %ecx, -8(%eax)
                 # write func arg to new stack
 		mov		16(%esp), %ecx
+		mov		%ecx, -4(%eax)
+		# write base pointer that is to be restored
+		lea		-12(%eax), %ecx
 		mov		%ecx, 0(%eax)
 		ret
 
