@@ -1,5 +1,5 @@
 
-CFLAGS = -g -Wall # -fomit-frame-pointer
+CFLAGS = -g -Wall # -O0 -fomit-frame-pointer
 all: stack
 
 

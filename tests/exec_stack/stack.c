@@ -17,6 +17,7 @@ void func1(void *arg)
   mctx_switch( &ctx1, &ctx2 );
   printf("Function 2 again, arg: %p\n", arg);
   mctx_switch( &ctx1, &ctx2 );
+  //return;
 }
 
 void func2(void *arg)

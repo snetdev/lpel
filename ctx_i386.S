@@ -36,10 +36,9 @@ ctx_init_internal:
   mov     %ecx, -8(%eax)
   # write func arg to new stack
   mov     16(%esp), %ecx
-  mov     %ecx, -4(%eax)
-  # write base pointer that is to be restored
-  lea     -12(%eax), %ecx
-  mov     %ecx, 0(%eax)
+  mov     %ecx,  0(%eax)
+  # write fake return address
+  #movl    $0xdead, -4(%eax)
   ret
 
   .align 16
