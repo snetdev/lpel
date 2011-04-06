@@ -14,6 +14,6 @@
 
 #include "mctx-setjmp.h"
 
-#endif 
+#endif
 
 #endif /* _MCTX_H_ */

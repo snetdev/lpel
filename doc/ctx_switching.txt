@@ -1,0 +1,149 @@
+
+===============================================================================
+                        Context switching in lpel-nopcl
+===============================================================================
+
+
+The context switching API consists of two functions:
+
+- create a new context, with a given function, argument, stack address,
+  stack size
+
+
+  mctx_create(mctx_t *mctx, void *func, void *arg, char *sk_addr, long sk_size)
+
+
+- switch to another context, while storing the current context
+
+  mctx_switch(mctx_t *octx, mctx_t *nctx)
+
+
+
+
+i386 and x86_64 (AMD64)
+=======================
+
+internal functions
+
+ctx_init_internal(ctx_addr, stack_end_addr, entry_func, arg)
+ctx_swap_internal(old_ctx_addr, new_ctx_addr)
+
+
+mctx_t is a single pointer (void *)
+
+for swap:
+
+callee saved registers need to be saved and restored
+
+  1. push callee saved registers onto stack
+  2. store stack pointer in old_ctx
+  3. replace stack pointer by new_ctx
+  4. pop callee saved registers from stack
+  5. return (return address is on stack)
+
+
+
+for init:
+
+Prepare the new stack so that it fits the procedure of the
+second half of swap for the first context switch to the new context.
+
+entry_func is never called, instead, the ctx_swap_internal() routine
+'returns' to the entry_func, hence entry_func is written on the new stack
+to act as a return address for ctx_swap_internal().
+Stack layout upon entering entry_func needs to look exactly like as if
+entry_func is called from within another function.
+
+Adjust stack pointer to account for popping off callee saved registers
+(although they are not meaningful as entry_func_addr has no caller).
+
+That also means that the entry_func must NEVER return (no meaningful return
+address)!
+Switch to a different context and, if desired, free the space for for the
+entry_func context.
+
+
+
+In following stack layouts, addresses are relative to the stack end address.
+
+AMD64 stack layout (init)
+------------------------
+
+%rdi contains first argument of a function,
+%rsi the second argument
+
+%r12-%r15, %rbx, %rbp are the callee-saved registers.
+
+(Parameter 'arg' needs to be held in register)
+
+
+-56   r15
+-48   r14
+-40   r13
+-32   r12
+-24   rbx
+-16   rbp
+ -8   rdi (arg)
+  0   return address (entry func)
+
+For the swap routine, %rdi is pushed onto the stack, then the callee-saved
+registers. They are popped in reverse order.
+
+Popping %rdi is only meaningful for the first time switching to a newly
+created context. Upon 'returning' to entry func, the argument will be
+present in %rdi as required by the AMD64 calling conventions, just
+as if entry_func is called from within another function.
+(In all other cases, the caller of ctx_swap_internal() will, if needed,
+save and restore %rdi.)
+
+On the other hand, restoring callee-saved registers is only meaningful
+in all but the first time switching to a context.
+
+Hence, creating a new context consists of writing entry func and arg, and
+storing the by -56 offset stack end address in the context.
+
+
+
+
+i386 stack layout (init)
+-------------------------
+
+Parameters are always stored on the stack.
+par1 in  4(%esp)
+par2 in  8(%esp)
+par3 in 12(%esp)
+...
+
+%ebp, %ebx, %esi, %edi are the callee saved registers.
+
+
+-24   edi
+-20   esi
+-16   ebx
+-12   ebp
+ -8   return address (entry func)
+ -4   fake return address of entry func
+  0   arg
+
+Parameter arg is an address below (fake) return address.
+After 'returning' to entry_func, %esp points to -4,
+and arg is accessed through 4(%esp) as required.
+
+Note: Usually the prolog would push the %ebp onto the stack and store the
+resulting %esp in %ebp. This way, all parameters could be accessed via the
+%ebp, such that par1 is 8(%ebp), par2 is 12(%ebp) etc.
+
+In -4, usually the return address of entry_func is expected (by entry_func).
+Again, there is uninitialized memory and entry_func must never return!
+
+
+
+Other context switching routines
+--------------------------------
+
+PowerPC: no arbitrary stack growth
+- callee saved registers, and maybe arg need to be also stored in context
+  (besides stack pointer)
+
+
+
