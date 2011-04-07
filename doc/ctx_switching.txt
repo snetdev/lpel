@@ -18,6 +18,15 @@ The context switching API consists of two functions:
   mctx_switch(mctx_t *octx, mctx_t *nctx)
 
 
+The idea of switching contexts via subroutine calls was taken from
+Section 4.3 from:
+
+    Gengbin Zheng, Laxmikant V. Kalé, Orion Sky Lawlor:
+    Multiple Flows of Control in Migratable Parallel Programs.
+    ICPP Workshops 2006: 435-444
+
+
+
 
 
 i386 and x86_64 (AMD64)
