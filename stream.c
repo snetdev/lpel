@@ -4,7 +4,7 @@
  * Date: 2010/08/26
  *
  * Desc:
- * 
+ *
  * Core stream handling functions, including stream descriptors.
  *
  * A stream is the communication and synchronization primitive between two
@@ -33,7 +33,7 @@
  *      accessed Aug 26, 2010
  *      for more details on the FastForward queue.
  *
- * 
+ *
  */
 
 #include <stdlib.h>
@@ -163,12 +163,12 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_task_t *ct, lpel_stream_t *s, char mode
    * is not going to be monitored (depends on ct->mon)
    */
   sd->mon = LpelMonStreamOpen( ct->mon, s->uid, mode);
-  
+
   switch(mode) {
     case 'r': s->cons_sd = sd; break;
     case 'w': s->prod_sd = sd; break;
   }
-  
+
   return sd;
 }
 
@@ -220,10 +220,10 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
  * @return    the top item of the stream, or NULL if stream is empty
  */
 void *LpelStreamPeek( lpel_stream_desc_t *sd)
-{ 
+{
   assert( sd->mode == 'r');
   return _LpelBufferTop( &sd->stream->buffer);
-}    
+}
 
 
 /**
@@ -336,7 +336,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     if (poll_wakeup) {
       lpel_task_t *cons = sd->stream->cons_sd->task;
       cons->wakeup_sd = sd->stream->cons_sd;
-      
+
       LpelTaskUnblock( self, cons);
       /* MONITORING CALLBACK */
       if (sd->mon) LpelMonStreamWakeup(sd->mon);
@@ -348,6 +348,24 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 }
 
 
+
+/**
+ * Non-blocking write to a stream
+ *
+ * @param sd    stream descriptor
+ * @param item  data item (a pointer) to write
+ * @pre         current task is single writer
+ * @pre         item != NULL
+ * @return 0 if the item could be written, -1 if the stream was full
+ */
+int LpelStreamTryWrite( lpel_stream_desc_t *sd, void *item)
+{
+  if (!_LpelBufferIsSpace(&sd->stream->buffer)) {
+    return -1;
+  }
+  LpelStreamWrite( sd, item );
+  return 0;
+}
 
 /**
  * Poll a set of streams
@@ -388,7 +406,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
       /* check if there is something in the buffer */
       if ( _LpelBufferTop( &sd->stream->buffer) != NULL) {
         /* yes, we can stop iterating through streams.
-         * determine, if we have been woken up by another producer: 
+         * determine, if we have been woken up by another producer:
          */
         int tok = atomic_swap( &self->poll_token, 0);
         if (tok) {
