@@ -135,6 +135,8 @@ void *LpelStreamRead(     lpel_stream_desc_t *sd);
 void  LpelStreamWrite(    lpel_stream_desc_t *sd, void *item);
 int   LpelStreamTryWrite( lpel_stream_desc_t *sd, void *item);
 
+snet_stream_t *LpelStreamGet(lpel_stream_desc_t *sd);
+
 lpel_stream_desc_t *LpelStreamPoll(    lpel_streamset_t *set);
 
 

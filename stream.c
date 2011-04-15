@@ -214,6 +214,19 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
 
 
 /**
+ * Get the stream opened by a stream descriptor
+ *
+ * @param sd  the stream descriptor
+ * @return    the stream opened by the stream descriptor
+ */
+lpel_stream_t *LpelStreamGet(lpel_stream_desc_t *sd)
+{
+  return sd->stream;
+}
+
+
+
+/**
  * Non-blocking, non-consuming read from a stream
  *
  * @param sd  stream descriptor
