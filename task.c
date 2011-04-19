@@ -41,7 +41,7 @@ static void TaskBlock( lpel_task_t *t, taskstate_t state);
  *
  * @return the task handle of the created task (pointer to TCB)
  *
- * TODO reuse task contexts from the worker 
+ * TODO reuse task contexts from the worker
  */
 lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
     void *inarg, int size)
@@ -49,7 +49,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   lpel_task_t *t;
   char *stackaddr;
   int offset;
- 
+
   if (size <= 0) {
     size = LPEL_TASK_SIZE_DEFAULT;
   }
@@ -80,7 +80,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->prev = t->next = NULL;
 
   t->mon = NULL;
-  
+
   /* function, argument (data), stack base address, stacksize */
   t->mctx = co_create( TaskStartup, (void *)t, stackaddr, t->size-offset);
   assert(t->mctx != NULL);
@@ -130,6 +130,11 @@ void LpelTaskRun( lpel_task_t *t)
   LpelWorkerRunTask( t);
 }
 
+
+lpel_task_t *LpelTaskSelf(void)
+{
+  return LpelWorkerCurrentTask();
+}
 
 
 /**
@@ -221,7 +226,7 @@ static void TaskStart( lpel_task_t *t)
   /* MONITORING CALLBACK */
   if (t->mon) LpelMonTaskStart(t->mon);
 
-  t->state = TASK_RUNNING;    
+  t->state = TASK_RUNNING;
 }
 
 static void TaskStop( lpel_task_t *t)

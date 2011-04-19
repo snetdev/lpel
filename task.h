@@ -83,6 +83,7 @@ void LpelTaskDestroy( lpel_task_t *t);
 void LpelTaskMonitor( lpel_task_t *t, char *name, unsigned long flags);
 void LpelTaskRun( lpel_task_t *t);
 
+lpel_task_t *LpelTaskSelf(void);
 void LpelTaskExit( lpel_task_t *ct);
 void LpelTaskYield( lpel_task_t *ct);
 
