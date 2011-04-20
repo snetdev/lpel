@@ -141,18 +141,16 @@ void LpelStreamDestroy( lpel_stream_t *s)
 /**
   * Open a stream for reading/writing
  *
- * @param ct    pointer to current task
  * @param s     pointer to stream
  * @param mode  either 'r' for reading or 'w' for writing
  * @return      a stream descriptor
  * @pre         only one task may open it for reading resp. writing
  *              at any given point in time
  */
-lpel_stream_desc_t *LpelStreamOpen( lpel_task_t *ct, lpel_stream_t *s, char mode)
+lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
 {
   lpel_stream_desc_t *sd;
-
-  assert( ct == LpelTaskSelf() );
+  lpel_task_t *ct = LpelTaskSelf();
 
   assert( mode == 'r' || mode == 'w' );
   sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));

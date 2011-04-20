@@ -71,7 +71,7 @@ int LpelCanSetExclusive( int *result);
 typedef struct lpel_task_t lpel_task_t;
 
 /* task function signature */
-typedef void (*lpel_taskfunc_t)( lpel_task_t *self, void *inarg);
+typedef void *(*lpel_taskfunc_t)(void *inarg);
 
 
 
@@ -81,7 +81,7 @@ typedef void (*lpel_taskfunc_t)( lpel_task_t *self, void *inarg);
 
 typedef struct lpel_stream_t         lpel_stream_t;
 
-typedef struct lpel_stream_desc_t    lpel_stream_desc_t;    
+typedef struct lpel_stream_desc_t    lpel_stream_desc_t;
 
 typedef lpel_stream_desc_t          *lpel_streamset_t;
 
@@ -112,8 +112,9 @@ void LpelTaskRun( lpel_task_t *t );
 
 
 /** to be called from within a task: */
-void LpelTaskExit(  lpel_task_t *ct );
-void LpelTaskYield( lpel_task_t *ct );
+lpel_task_t *LpelTaskSelf(void);
+void LpelTaskExit(void *outarg);
+void LpelTaskYield(void);
 
 
 
@@ -126,7 +127,7 @@ lpel_stream_t *LpelStreamCreate( int);
 void LpelStreamDestroy( lpel_stream_t *s);
 
 lpel_stream_desc_t *
-LpelStreamOpen( lpel_task_t *t, lpel_stream_t *s, char mode);
+LpelStreamOpen(lpel_stream_t *s, char mode);
 
 void  LpelStreamClose(    lpel_stream_desc_t *sd, int destroy_s);
 void  LpelStreamReplace(  lpel_stream_desc_t *sd, lpel_stream_t *snew);
@@ -135,7 +136,7 @@ void *LpelStreamRead(     lpel_stream_desc_t *sd);
 void  LpelStreamWrite(    lpel_stream_desc_t *sd, void *item);
 int   LpelStreamTryWrite( lpel_stream_desc_t *sd, void *item);
 
-snet_stream_t *LpelStreamGet(lpel_stream_desc_t *sd);
+lpel_stream_t *LpelStreamGet(lpel_stream_desc_t *sd);
 
 lpel_stream_desc_t *LpelStreamPoll(    lpel_streamset_t *set);
 

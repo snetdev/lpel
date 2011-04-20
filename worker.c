@@ -262,6 +262,7 @@ void LpelWorkerDispatcher( lpel_task_t *t)
       co_call( next->mctx); /*SWITCH*/
     } else {
       /* no ready task! -> back to worker context */
+      wc->current_task = NULL;
       co_call( wc->mctx); /*SWITCH*/
     }
   } else {
@@ -552,6 +553,7 @@ static void WrapperLoop( workerctx_t *wc)
     t = wc->wraptask;
     if (t != NULL) {
       /* execute task */
+      wc->current_task = t;
       co_call(t->mctx);
 
       wc->wraptask = NULL;
