@@ -21,7 +21,7 @@ struct mon_task_t;
 
 
 /* task function signature */
-typedef void (*lpel_taskfunc_t)( struct lpel_task_t *self, void *inarg);
+typedef void *(*lpel_taskfunc_t)(void *inarg);
 
 
 typedef enum taskstate_t {
@@ -68,6 +68,7 @@ typedef struct lpel_task_t {
   int size;             /** complete size of the task, incl stack */
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
+  void *outarg;         /** output argument  */
 } lpel_task_t;
 
 
@@ -82,8 +83,9 @@ void LpelTaskDestroy( lpel_task_t *t);
 void LpelTaskMonitor( lpel_task_t *t, char *name, unsigned long flags);
 void LpelTaskRun( lpel_task_t *t);
 
-void LpelTaskExit( lpel_task_t *ct);
-void LpelTaskYield( lpel_task_t *ct);
+lpel_task_t *LpelTaskSelf(void);
+void LpelTaskExit(void *outarg);
+void LpelTaskYield(void);
 
 unsigned int LpelTaskGetUID( lpel_task_t *t);
 

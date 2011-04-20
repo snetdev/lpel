@@ -41,7 +41,7 @@ static void TaskBlock( lpel_task_t *t, taskstate_t state);
  *
  * @return the task handle of the created task (pointer to TCB)
  *
- * TODO reuse task contexts from the worker 
+ * TODO reuse task contexts from the worker
  */
 lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
     void *inarg, int size)
@@ -49,7 +49,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   lpel_task_t *t;
   char *stackaddr;
   int offset;
- 
+
   if (size <= 0) {
     size = LPEL_TASK_SIZE_DEFAULT;
   }
@@ -80,7 +80,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->prev = t->next = NULL;
 
   t->mon = NULL;
-  
+
   mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
   // if (t->mctx == NULL) assert(0);
   return t;
@@ -127,16 +127,29 @@ void LpelTaskRun( lpel_task_t *t)
 }
 
 
+/**
+ * Get the current task
+ *
+ * @pre This call must be made from within a LPEL task!
+ */
+lpel_task_t *LpelTaskSelf(void)
+{
+  return LpelWorkerCurrentTask();
+}
+
 
 /**
  * Exit the current task
  *
- * @param ct  pointer to the current task
- * @pre ct->state == TASK_RUNNING
+ * @param outarg  output argument of the task
+ * @pre This call must be made from within a LPEL task!
  */
-void LpelTaskExit( lpel_task_t *ct)
+void LpelTaskExit(void *outarg)
 {
+  lpel_task_t *ct = LpelTaskSelf();
   assert( ct->state == TASK_RUNNING );
+
+  ct->outarg = outarg;
 
   /* context switch happens, this task is cleaned up then */
   TaskBlock( ct, TASK_ZOMBIE);
@@ -148,13 +161,17 @@ void LpelTaskExit( lpel_task_t *ct)
 /**
  * Yield execution back to scheduler voluntarily
  *
- * @param ct  pointer to the current task
- * @pre ct->state == TASK_RUNNING
+ * @pre This call must be made from within a LPEL task!
  */
-void LpelTaskYield( lpel_task_t *ct)
+void LpelTaskYield(void)
 {
+  lpel_task_t *ct = LpelTaskSelf();
+  assert( ct->state == TASK_RUNNING );
+
   TaskBlock( ct, TASK_READY);
 }
+
+
 
 
 unsigned int LpelTaskGetUID( lpel_task_t *t)
@@ -213,9 +230,12 @@ static void TaskStartup( void *arg)
   TaskStart( t);
 
   /* call the task function with inarg as parameter */
-  t->func(t, t->inarg);
+  t->outarg = t->func(t->inarg);
+
   /* if task function returns, exit properly */
-  LpelTaskExit(t);
+  TaskBlock( t, TASK_ZOMBIE);
+  /* execution never comes back here */
+  assert(0);
 }
 
 
@@ -226,7 +246,7 @@ static void TaskStart( lpel_task_t *t)
   /* MONITORING CALLBACK */
   if (t->mon) LpelMonTaskStart(t->mon);
 
-  t->state = TASK_RUNNING;    
+  t->state = TASK_RUNNING;
 }
 
 static void TaskStop( lpel_task_t *t)

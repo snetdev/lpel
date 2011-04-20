@@ -33,5 +33,6 @@ void LpelWorkerSpawn(void);
 void LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom);
 void LpelWorkerTerminate(void);
 workerctx_t *LpelWorkerGetContext(int id);
+lpel_task_t *LpelWorkerCurrentTask(void);
 
 #endif /* _WORKER_H_ */

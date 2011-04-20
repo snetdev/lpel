@@ -1,4 +1,4 @@
-/* 
+/*
  * Buffer, implemented as Single-Writer Single-Reader circular buffer.
  *
  * It uses ideas from the FastForward queue implementation:
@@ -56,10 +56,10 @@ void  _LpelBufferCleanup(buffer_t *buf)
  * @return      NULL if buffer is empty
  */
 void *_LpelBufferTop( buffer_t *buf)
-{ 
+{
   /* if the buffer is empty, data[pread]==NULL */
-  return buf->data[buf->pread];  
-}    
+  return buf->data[buf->pread];
+}
 
 
 /**
@@ -113,14 +113,14 @@ void _LpelBufferPut( buffer_t *buf, void *item)
   assert( _LpelBufferIsSpace(buf) );
 
   /* WRITE TO BUFFER */
-  /* Write Memory Barrier: ensure all previous memory write 
+  /* Write Memory Barrier: ensure all previous memory write
    * are visible to the other processors before any later
    * writes are executed.  This is an "expensive" memory fence
-   * operation needed in all the architectures with a weak-ordering 
-   * memory model where stores can be executed out-or-order 
+   * operation needed in all the architectures with a weak-ordering
+   * memory model where stores can be executed out-or-order
    * (e.g. PowerPC). This is a no-op on Intel x86/x86-64 CPUs.
    */
-  WMB(); 
+  WMB();
   buf->data[buf->pwrite] = item;
   buf->pwrite += (buf->pwrite+1 >= buf->size) ? (1-buf->size) : 1;
 }

@@ -15,7 +15,7 @@ typedef struct {
 
 
 
-void Relay(lpel_task_t *self, void *inarg)
+void *Relay(void *inarg)
 {
   channels_t *ch = (channels_t *)inarg;
   int term = 0;
@@ -23,9 +23,9 @@ void Relay(lpel_task_t *self, void *inarg)
   char *item;
   lpel_stream_desc_t *in, *out;
 
-  in = LpelStreamOpen( self, ch->in, 'r');
-  out = LpelStreamOpen( self, ch->out, 'w');
-  
+  in = LpelStreamOpen(ch->in, 'r');
+  out = LpelStreamOpen(ch->out, 'w');
+
   printf("Relay %d START\n", id);
 
   while (!term) {
@@ -41,6 +41,7 @@ void Relay(lpel_task_t *self, void *inarg)
   LpelStreamClose( out, 0);
   free(ch);
   printf("Relay %d TERM\n", id);
+  return NULL;
 }
 
 
@@ -62,7 +63,7 @@ lpel_stream_t *PipeElement(lpel_stream_t *in, int depth)
 
   out = LpelStreamCreate(0);
   ch = ChannelsCreate( in, out, depth);
-  t = LpelTaskCreate( wid, Relay, ch, 4096);
+  t = LpelTaskCreate( wid, Relay, ch, 8192);
   LpelTaskMonitor( t, NULL, LPEL_MON_TASK_TIMES | LPEL_MON_TASK_STREAMS);
   LpelTaskRun(t);
 
@@ -72,9 +73,9 @@ lpel_stream_t *PipeElement(lpel_stream_t *in, int depth)
 
 
 
-static void Outputter(lpel_task_t *self, void *arg)
+static void *Outputter(void *arg)
 {
-  lpel_stream_desc_t *in= LpelStreamOpen( self, (lpel_stream_t*)arg, 'r'); 
+  lpel_stream_desc_t *in = LpelStreamOpen((lpel_stream_t*)arg, 'r'); 
   char *item;
   int term = 0;
 
@@ -95,12 +96,13 @@ static void Outputter(lpel_task_t *self, void *arg)
   printf("Outputter TERM\n");
 
   LpelStop();
+  return NULL;
 }
 
 
-static void Inputter(lpel_task_t *self, void *arg)
+static void *Inputter(void *arg)
 {
-  lpel_stream_desc_t *out = LpelStreamOpen( self, (lpel_stream_t*)arg, 'w'); 
+  lpel_stream_desc_t *out = LpelStreamOpen((lpel_stream_t*)arg, 'w'); 
   char *buf;
 
   printf("Inputter START\n");
@@ -112,6 +114,7 @@ static void Inputter(lpel_task_t *self, void *arg)
 
   LpelStreamClose( out, 0);
   printf("Inputter TERM\n");
+  return NULL;
 }
 
 static void testBasic(void)
@@ -131,11 +134,11 @@ static void testBasic(void)
   in = LpelStreamCreate(0);
   out = PipeElement(in, cfg.num_workers*20 - 1);
 
-  outtask = LpelTaskCreate( -1, Outputter, out, 4096);
+  outtask = LpelTaskCreate( -1, Outputter, out, 8192);
   LpelTaskMonitor(outtask, "outtask", LPEL_MON_TASK_TIMES);
   LpelTaskRun(outtask);
 
-  intask = LpelTaskCreate( -1, Inputter, in, 4096);
+  intask = LpelTaskCreate( -1, Inputter, in, 8192);
   LpelTaskMonitor(intask, "intask", LPEL_MON_TASK_TIMES);
   LpelTaskRun(intask);
 

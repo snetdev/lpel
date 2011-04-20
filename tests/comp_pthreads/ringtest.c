@@ -27,7 +27,7 @@ static void PrintEOR(msg_t *msg) {
 }
 
 
-void Process(lpel_task_t *self, void *arg)
+void *Process(void *arg)
 {
   int id = *(int *)arg;
   lpel_stream_desc_t *in, *out;
@@ -35,11 +35,11 @@ void Process(lpel_task_t *self, void *arg)
   int term = 0;
   timing_t ts;
 
-  out = LpelStreamOpen( self, streams[id], 'w');
+  out = LpelStreamOpen(streams[id], 'w');
 
   if (id==0) {
-    in = LpelStreamOpen( self, streams[RING_SIZE-1], 'r');
-    
+    in = LpelStreamOpen(streams[RING_SIZE-1], 'r');
+
     printf("Sending message, ringsize %d, rounds %d\n", RING_SIZE, ROUNDS);
     /* send the first message */
     msg = malloc( sizeof *msg);
@@ -47,11 +47,10 @@ void Process(lpel_task_t *self, void *arg)
     msg->term = 0;
     msg->hopcnt = 0;
 
-  
     TimingStart( &ts);
     LpelStreamWrite( out, msg);
   } else {
-    in = LpelStreamOpen( self, streams[id-1], 'r');
+    in = LpelStreamOpen(streams[id-1], 'r');
   }
 
 
@@ -83,8 +82,7 @@ void Process(lpel_task_t *self, void *arg)
   LpelStreamClose( in, 1);
   LpelStreamClose( out, 0);
 
-
-  LpelTaskExit(self);
+  return NULL;
 }
 
 
@@ -136,7 +134,6 @@ static void testBasic(void)
   cfg.flags = 0;
   cfg.node = 0;
 
-  
   LpelInit(&cfg);
 
   CreateRing();
@@ -154,3 +151,4 @@ int main(void)
   printf("test finished\n");
   return 0;
 }
+
