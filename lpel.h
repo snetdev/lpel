@@ -112,6 +112,7 @@ void LpelTaskRun( lpel_task_t *t );
 
 
 /** to be called from within a task: */
+lpel_task_t *LpelTaskSelf(void);
 void LpelTaskExit(  lpel_task_t *ct );
 void LpelTaskYield( lpel_task_t *ct );
 
@@ -135,7 +136,7 @@ void *LpelStreamRead(     lpel_stream_desc_t *sd);
 void  LpelStreamWrite(    lpel_stream_desc_t *sd, void *item);
 int   LpelStreamTryWrite( lpel_stream_desc_t *sd, void *item);
 
-snet_stream_t *LpelStreamGet(lpel_stream_desc_t *sd);
+lpel_stream_t *LpelStreamGet(lpel_stream_desc_t *sd);
 
 lpel_stream_desc_t *LpelStreamPoll(    lpel_streamset_t *set);
 

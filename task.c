@@ -26,7 +26,7 @@ static void TaskBlock( lpel_task_t *t, taskstate_t state);
 
 
 #define TASK_STACK_ALIGN  16 // 256 /* co_create does align the stack to 256 */
-#define TASK_MINSIZE  4096
+#define TASK_MINSIZE  8192
 
 
 
@@ -37,7 +37,7 @@ static void TaskBlock( lpel_task_t *t, taskstate_t state);
  * @param func    task function
  * @param arg     arguments
  * @param size    size of the task, including execution stack
- * @pre           size is a power of two, >= 4096
+ * @pre           size is a power of two, >= 8192
  *
  * @return the task handle of the created task (pointer to TCB)
  *
