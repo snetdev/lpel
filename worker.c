@@ -42,8 +42,18 @@ static int num_workers = -1;
 static workerctx_t *workers;
 static workercfg_t  config;
 
-static pthread_key_t workerctx_key;
+/**
+ * FIXME define in configure/make system!
+ */
+//#define WORKER_USE_TLSSPEC
 
+
+
+#ifdef WORKER_USE_TLSSPEC
+static __thread workerctx_t *workerctx_cur;
+#else
+static pthread_key_t workerctx_key;
+#endif /* WORKER_USE_TLSSPEC */
 
 /* worker thread function declaration */
 static void *WorkerThread( void *arg);
@@ -84,13 +94,16 @@ static inline void SendWakeup( workerctx_t *target, lpel_task_t *t)
 
 
 
-
-/*
-* Get current worker context
-*/
-static inline workerctx_t *LpelWorkerCurrent(void)
+/*******************************************************************************
+ *  Get current worker context
+ ******************************************************************************/
+static inline workerctx_t *GetCurrentWorker(void)
 {
+#ifdef WORKER_USE_TLSSPEC
+  return workerctx_cur;
+#else
   return (workerctx_t *) pthread_getspecific(workerctx_key);
+#endif /* WORKER_USE_TLSSPEC */
 }
 
 
@@ -121,8 +134,10 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
     config.do_print_workerinfo = 0;
   }
 
+#ifndef WORKER_USE_TLSSPEC
   /* init key for thread specific data */
   pthread_key_create(&workerctx_key, NULL);
+#endif /* WORKER_USE_TLSSPEC */
 
   /* allocate the array of worker contexts */
   workers = (workerctx_t *) malloc( num_workers * sizeof(workerctx_t) );
@@ -177,7 +192,9 @@ void LpelWorkerCleanup(void)
   /* free memory */
   free( workers);
 
+#ifndef WORKER_USE_TLSSPEC
   pthread_key_delete(workerctx_key);
+#endif /* WORKER_USE_TLSSPEC */
 }
 
 
@@ -202,7 +219,7 @@ void LpelWorkerRunTask( lpel_task_t *t)
 
 lpel_task_t *LpelWorkerCurrentTask(void)
 {
-  return LpelWorkerCurrent()->current_task;
+  return GetCurrentWorker()->current_task;
 }
 
 
@@ -558,8 +575,12 @@ static void *WorkerThread( void *arg)
 {
   workerctx_t *wc = (workerctx_t *)arg;
 
+#ifdef WORKER_USE_TLSSPEC
+  workerctx_cur = wc;
+#else
   /* set pointer to worker context as TSD */
   pthread_setspecific(workerctx_key, wc);
+#endif /* WORKER_USE_TLSSPEC */
 
   /* Init libPCL */
   co_thread_init();

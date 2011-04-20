@@ -145,6 +145,7 @@ lpel_task_t *LpelTaskSelf(void)
  */
 void LpelTaskExit( lpel_task_t *ct)
 {
+  assert( ct == LpelTaskSelf() );
   assert( ct->state == TASK_RUNNING );
 
   /* context switch happens, this task is cleaned up then */
@@ -162,6 +163,7 @@ void LpelTaskExit( lpel_task_t *ct)
  */
 void LpelTaskYield( lpel_task_t *ct)
 {
+  assert( ct == LpelTaskSelf() );
   TaskBlock( ct, TASK_READY);
 }
 

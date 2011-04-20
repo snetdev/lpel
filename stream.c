@@ -152,6 +152,8 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_task_t *ct, lpel_stream_t *s, char mode
 {
   lpel_stream_desc_t *sd;
 
+  assert( ct == LpelTaskSelf() );
+
   assert( mode == 'r' || mode == 'w' );
   sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
   sd->task = ct;
