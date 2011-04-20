@@ -22,7 +22,7 @@ struct mon_task_t;
 
 
 /* task function signature */
-typedef void (*lpel_taskfunc_t)( struct lpel_task_t *self, void *inarg);
+typedef void *(*lpel_taskfunc_t)(void *inarg);
 
 
 typedef enum taskstate_t {
@@ -69,6 +69,7 @@ typedef struct lpel_task_t {
   coroutine_t mctx;     /** machine context of the task*/
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
+  void *outarg;         /** output argument  */
 } lpel_task_t;
 
 
@@ -84,8 +85,8 @@ void LpelTaskMonitor( lpel_task_t *t, char *name, unsigned long flags);
 void LpelTaskRun( lpel_task_t *t);
 
 lpel_task_t *LpelTaskSelf(void);
-void LpelTaskExit( lpel_task_t *ct);
-void LpelTaskYield( lpel_task_t *ct);
+void LpelTaskExit(void *outarg);
+void LpelTaskYield(void);
 
 unsigned int LpelTaskGetUID( lpel_task_t *t);
 

@@ -131,6 +131,12 @@ void LpelTaskRun( lpel_task_t *t)
 }
 
 
+
+/**
+ * Get the current task
+ *
+ * @pre This call must be made from within a LPEL task!
+ */
 lpel_task_t *LpelTaskSelf(void)
 {
   return LpelWorkerCurrentTask();
@@ -140,13 +146,15 @@ lpel_task_t *LpelTaskSelf(void)
 /**
  * Exit the current task
  *
- * @param ct  pointer to the current task
- * @pre ct->state == TASK_RUNNING
+ * @param outarg  output argument of the task
+ * @pre This call must be made from within a LPEL task!
  */
-void LpelTaskExit( lpel_task_t *ct)
+void LpelTaskExit(void *outarg)
 {
-  assert( ct == LpelTaskSelf() );
+  lpel_task_t *ct = LpelTaskSelf();
   assert( ct->state == TASK_RUNNING );
+
+  ct->outarg = outarg;
 
   /* context switch happens, this task is cleaned up then */
   TaskBlock( ct, TASK_ZOMBIE);
@@ -158,12 +166,13 @@ void LpelTaskExit( lpel_task_t *ct)
 /**
  * Yield execution back to scheduler voluntarily
  *
- * @param ct  pointer to the current task
- * @pre ct->state == TASK_RUNNING
+ * @pre This call must be made from within a LPEL task!
  */
-void LpelTaskYield( lpel_task_t *ct)
+void LpelTaskYield(void)
 {
-  assert( ct == LpelTaskSelf() );
+  lpel_task_t *ct = LpelTaskSelf();
+  assert( ct->state == TASK_RUNNING );
+
   TaskBlock( ct, TASK_READY);
 }
 
@@ -215,9 +224,12 @@ static void TaskStartup( void *data)
   TaskStart( t);
 
   /* call the task function with inarg as parameter */
-  t->func(t, t->inarg);
+  t->outarg = t->func(t->inarg);
+
   /* if task function returns, exit properly */
-  LpelTaskExit(t);
+  TaskBlock( t, TASK_ZOMBIE);
+  /* execution never comes back here */
+  assert(0);
 }
 
 

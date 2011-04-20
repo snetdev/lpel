@@ -27,7 +27,7 @@ typedef struct {
 static timing_t ts;
 
 
-void Source(lpel_task_t *self, void *inarg)
+void *Source(void *inarg)
 {
   unsigned long cnt = 0;
   lpel_stream_desc_t *out;
@@ -36,7 +36,7 @@ void Source(lpel_task_t *self, void *inarg)
   printf("Starting message transfer, pipe length %d msgs %lu\n", PIPE_DEPTH, NUM_MSGS);
   TimingStart( &ts);
 
-  out = LpelStreamOpen( self, (lpel_stream_t *)inarg, 'w');
+  out = LpelStreamOpen((lpel_stream_t *)inarg, 'w');
 
   while( cnt < (NUM_MSGS-1) ) {
     msg = (void*)(0x10000000 + cnt);
@@ -48,17 +48,18 @@ void Source(lpel_task_t *self, void *inarg)
   LpelStreamWrite( out, msg);
 
   LpelStreamClose( out, 0);
+  return NULL;
 }
 
 
 
-void Sink(lpel_task_t *self, void *inarg)
+void *Sink(void *inarg)
 {
   unsigned long cnt = 0;
   lpel_stream_desc_t *in;
   void *msg;
 
-  in = LpelStreamOpen( self, (lpel_stream_t *)inarg, 'r');
+  in = LpelStreamOpen((lpel_stream_t *)inarg, 'r');
 
   while(1) {
     msg = LpelStreamRead( in);
@@ -74,9 +75,11 @@ void Sink(lpel_task_t *self, void *inarg)
   TimingEnd( &ts);
   printf("End of message stream, cnt %lu duration %.2f ms\n",
       cnt, TimingToMSec(&ts));
+
+  return NULL;
 }
 
-void Relay(lpel_task_t *self, void *inarg)
+void *Relay(void *inarg)
 {
   task_arg_t *arg = (task_arg_t *)inarg;
   //int id = arg->id;
@@ -84,9 +87,9 @@ void Relay(lpel_task_t *self, void *inarg)
   int term = 0;
   void *msg;
 
-  in = LpelStreamOpen( self, arg->in, 'r');
-  out = LpelStreamOpen( self, arg->out, 'w');
-  
+  in = LpelStreamOpen(arg->in, 'r');
+  out = LpelStreamOpen(arg->out, 'w');
+
   while(!term) {
     msg = LpelStreamRead( in);
     if (msg==MSG_TERM) term = 1;
@@ -98,7 +101,7 @@ void Relay(lpel_task_t *self, void *inarg)
 
   free(arg);
 
-  LpelTaskExit(self);
+  return NULL;
 }
 
 
@@ -163,7 +166,6 @@ static void testBasic(void)
   cfg.flags = 0;
   cfg.node = 0;
 
-  
   LpelInit(&cfg);
 
   CreatePipe();
@@ -181,3 +183,4 @@ int main(void)
   printf("test finished\n");
   return 0;
 }
+

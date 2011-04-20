@@ -11,7 +11,7 @@ lpel_stream_t *scoll[NUM_COLL];
 
 
 
-void Consumer(lpel_task_t *self, void *inarg)
+void *Consumer(void *inarg)
 {
   char *msg;
   int i, term;
@@ -19,9 +19,9 @@ void Consumer(lpel_task_t *self, void *inarg)
   lpel_stream_iter_t *iter;
 
   printf("start Consumer\n" );
-  /* open streams */ 
+  /* open streams */
   for (i=0; i<NUM_COLL; i++) {
-    LpelStreamsetPut( &lst, LpelStreamOpen(self, scoll[i], 'r'));
+    LpelStreamsetPut( &lst, LpelStreamOpen(scoll[i], 'r'));
   }
 
   iter = LpelStreamIterCreate(&lst);
@@ -54,7 +54,7 @@ void Consumer(lpel_task_t *self, void *inarg)
   printf("%s", msg );
   free(msg);
 
-  /* close streams */ 
+  /* close streams */
   LpelStreamIterReset(iter, &lst);
   while( LpelStreamIterHasNext(iter)) {
     lpel_stream_desc_t *snext = LpelStreamIterNext(iter);
@@ -64,11 +64,12 @@ void Consumer(lpel_task_t *self, void *inarg)
   printf("exit Consumer\n" );
 
   LpelStop();
+  return NULL;
 }
 
 
 
-void Relay(lpel_task_t *self, void *inarg)
+void *Relay(void *inarg)
 {
   void *item;
   char *msg;
@@ -79,11 +80,11 @@ void Relay(lpel_task_t *self, void *inarg)
 
   printf("start Relay\n" );
 
-  /* open streams */ 
+  /* open streams */
   for (i=0; i<NUM_COLL; i++) {
-    out[i] = LpelStreamOpen(self, scoll[i], 'w');
+    out[i] = LpelStreamOpen(scoll[i], 'w');
   }
-  in = LpelStreamOpen(self, sinp, 'r');
+  in = LpelStreamOpen(sinp, 'r');
 
   /* main task: relay to consumer via defined stream */
   while( !term) {
@@ -105,19 +106,20 @@ void Relay(lpel_task_t *self, void *inarg)
   assert( dest==0 );
   printf("Relay dest: %d\n", dest);
 
-  /* relay to all, close streams */ 
+  /* relay to all, close streams */
   for (i=0; i<NUM_COLL; i++) {
     LpelStreamWrite( out[i], item);
     LpelStreamClose( out[i], 0);
   }
   LpelStreamClose(in, 1);
   printf("exit Relay\n" );
+  return NULL;
 }
 
 
-static void Inputter(lpel_task_t *self, void *arg)
+static void *Inputter(void *arg)
 {
-  lpel_stream_desc_t *out = LpelStreamOpen( self, (lpel_stream_t*)arg, 'w'); 
+  lpel_stream_desc_t *out = LpelStreamOpen((lpel_stream_t*)arg, 'w');
   char *buf;
 
   do {
@@ -128,6 +130,7 @@ static void Inputter(lpel_task_t *self, void *arg)
 
   LpelStreamClose( out, 0);
   printf("exit Inputter\n" );
+  return NULL;
 }
 
 
@@ -157,8 +160,8 @@ static void testBasic(void)
 
   tcons = LpelTaskCreate( 1, Consumer, NULL, 8192);
   LpelTaskRun(tcons);
- 
-  
+
+
   intask = LpelTaskCreate( -1, Inputter, sinp, 8192);
   LpelTaskRun(intask);
 
