@@ -238,6 +238,8 @@ void *LpelStreamPeek( lpel_stream_desc_t *sd)
   return _LpelBufferTop( &sd->stream->buffer);
 }
 
+//#define fetch_and_inc(v)  ((v)->counter++)
+//#define fetch_and_dec(v)  ((v)->counter--)
 
 /**
  * Blocking, consuming read from a stream
