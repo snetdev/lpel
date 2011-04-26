@@ -404,6 +404,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   lpel_task_t *self;
   lpel_stream_iter_t *iter;
   int do_ctx_switch = 1;
+  int cnt = 0;
 
   assert( *set != NULL);
 
@@ -416,12 +417,13 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   /* for each stream in the set */
   iter = LpelStreamIterCreate( set);
   while( LpelStreamIterHasNext( iter)) {
-   lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
+    lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
+    lpel_stream_t *s = sd->stream;
     /* lock stream (prod-side) */
-    PRODLOCK_LOCK( &sd->stream->prod_lock);
+    PRODLOCK_LOCK( &s->prod_lock);
     { /* CS BEGIN */
       /* check if there is something in the buffer */
-      if ( _LpelBufferTop( &sd->stream->buffer) != NULL) {
+      if ( _LpelBufferTop( &s->buffer) != NULL) {
         /* yes, we can stop iterating through streams.
          * determine, if we have been woken up by another producer:
          */
@@ -432,13 +434,14 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
           self->wakeup_sd = sd;
         }
         /* unlock stream */
-        PRODLOCK_UNLOCK( &sd->stream->prod_lock);
+        PRODLOCK_UNLOCK( &s->prod_lock);
         /* exit loop */
         break;
 
       } else {
         /* nothing in the buffer, register stream as activator */
-        sd->stream->is_poll = 1;
+        s->is_poll = 1;
+        cnt++;
         //sd->event_flags |= STDESC_WAITON;
         /* TODO marking all streams does potentially flood the log-files
            - is it desired to have anyway?
@@ -447,7 +450,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
       }
     } /* CS END */
     /* unlock stream */
-    PRODLOCK_UNLOCK( &sd->stream->prod_lock);
+    PRODLOCK_UNLOCK( &s->prod_lock);
   } /* end for each stream */
 
   /* context switch */
@@ -466,16 +469,18 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
    *   a terminate record or a sync record, and between reading the record
    *   and closing the stream the consumer issues no LpelStreamPoll()
    *   and no entity writes a record on the stream after these records.
+   * UPDATE: with static/dynamc collectors in S-Net, this is possible!
    */
-  /*
-  iter = LpelStreamIterCreate( set);
+  LpelStreamIterReset(iter, set);
   while( LpelStreamIterHasNext( iter)) {
-   lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
-    pthread_spin_lock( &sd->stream->prod_lock);
-    sd->stream->is_poll = 0;
-    pthread_spin_unlock( &sd->stream->prod_lock);
+    lpel_stream_t *s = (LpelStreamIterNext(iter))->stream;
+    PRODLOCK_LOCK( &s->prod_lock);
+    s->is_poll = 0;
+    PRODLOCK_UNLOCK( &s->prod_lock);
+    if (--cnt == 0) break;
   }
-  */
+
+  LpelStreamIterDestroy(iter);
 
   /* 'rotate' set to stream descriptor for non-empty buffer */
   *set = self->wakeup_sd;
