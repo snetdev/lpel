@@ -5,7 +5,7 @@
 #include "lpel.h"
 #include "arch/timing.h"
 
-#define RING_SIZE 10000
+#define RING_SIZE 100
 #define STACK_SIZE (16*1024) /* 16k */
 
 #define ROUNDS 10000

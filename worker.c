@@ -20,6 +20,8 @@
 #include "lpel_main.h"
 #include "monitoring.h"
 
+#include "mailbox-lf.h"
+//#include "mailbox.h"
 
 struct workerctx_t {
   int wid;

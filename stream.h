@@ -21,13 +21,17 @@ typedef struct lpel_stream_t lpel_stream_t;
  * A producer/consumer must open a stream before using it, and by opening
  * a stream, a stream descriptor is created and returned.
  */
-typedef struct lpel_stream_desc_t {
+typedef struct lpel_stream_desc_t lpel_stream_desc_t;
+
+struct lpel_stream_desc_t {
   lpel_task_t   *task;        /** the task which opened the stream */
   lpel_stream_t *stream;      /** pointer to the stream */
   char mode;                  /** either 'r' or 'w' */
-  struct lpel_stream_desc_t *next; /** for organizing in stream lists */
+  struct lpel_stream_desc_t *next; /** for organizing in stream sets */
   struct mon_stream_t *mon;   /** monitoring object */
-} lpel_stream_desc_t;
+};
+
+
 
 
 lpel_stream_t *LpelStreamCreate( int);
