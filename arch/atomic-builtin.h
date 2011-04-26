@@ -11,6 +11,7 @@
 
 typedef struct {
   volatile int counter;
+  unsigned char padding[64-sizeof(int)];
 } atomic_t;
 
 #define ATOMIC_INIT(i) { (i) }
