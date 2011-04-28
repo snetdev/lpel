@@ -40,8 +40,10 @@ struct workerctx_t {
 };
 
 
+#define WORKER_PTR(i) (workers[(i)])
+
 static int num_workers = -1;
-static workerctx_t *workers;
+static workerctx_t **workers;
 static workercfg_t  config;
 
 /**
@@ -141,12 +143,16 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
   pthread_key_create(&workerctx_key, NULL);
 #endif /* WORKER_USE_TLSSPEC */
 
-  /* allocate the array of worker contexts */
-  workers = (workerctx_t *) malloc( num_workers * sizeof(workerctx_t) );
+  /* allocate worker context table */
+  workers = (workerctx_t **) malloc( num_workers * sizeof(workerctx_t*) );
+  /* allocate worker contexts */
+  for (i=0; i<num_workers; i++) {
+    workers[i] = (workerctx_t *) valloc( sizeof(workerctx_t) );
+  }
 
   /* prepare data structures */
   for( i=0; i<num_workers; i++) {
-    workerctx_t *wc = &workers[i];
+    workerctx_t *wc = WORKER_PTR(i);
     char wname[24];
     wc->wid = i;
     wc->num_tasks = 0;
@@ -180,18 +186,19 @@ void LpelWorkerCleanup(void)
 
   /* wait on workers */
   for( i=0; i<num_workers; i++) {
-    wc = &workers[i];
+    wc = WORKER_PTR(i);
     /* wait for the worker to finish */
     (void) pthread_join( wc->thread, NULL);
   }
   /* cleanup the data structures */
   for( i=0; i<num_workers; i++) {
-    wc = &workers[i];
+    wc = WORKER_PTR(i);
     MailboxCleanup( &wc->mailbox);
     SchedDestroy( wc->sched);
+    free(wc);
   }
 
-  /* free memory */
+  /* free workers table */
   free( workers);
 
 #ifndef WORKER_USE_TLSSPEC
@@ -288,7 +295,7 @@ void LpelWorkerSpawn(void)
   int i;
   /* create worker threads */
   for( i=0; i<num_workers; i++) {
-    workerctx_t *wc = &workers[i];
+    workerctx_t *wc = WORKER_PTR(i);
     /* spawn joinable thread */
     (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
   }
@@ -337,7 +344,7 @@ void LpelWorkerTerminate(void)
 
   /* broadcast a terminate message */
   for( i=0; i<num_workers; i++) {
-    wc = &workers[i];
+    wc = WORKER_PTR(i);
 
     /* send */
     MailboxSend( &wc->mailbox, &msg);
@@ -351,7 +358,7 @@ void LpelWorkerTerminate(void)
  */
 workerctx_t *LpelWorkerGetContext(int id) {
   if (id >= 0 && id < num_workers) {
-    return &workers[id];
+    return WORKER_PTR(id);
   }
 
   /* create a new worker context for a wrapper */
