@@ -10,9 +10,9 @@
 #include <errno.h>
 
 #include <pthread.h>
-#include <pcl.h>
 
 #include "arch/atomic.h"
+#include "arch/mctx.h"
 
 #include "worker.h"
 
@@ -20,13 +20,13 @@
 #include "lpel_main.h"
 #include "monitoring.h"
 
-//#include "mailbox-lf.h"
-#include "mailbox.h"
+#include "mailbox-lf.h"
+//#include "mailbox.h"
 
 struct workerctx_t {
   int wid;
   pthread_t     thread;
-  coroutine_t   mctx;
+  mctx_t        mctx;
   int           terminate;
   unsigned int  num_tasks;
   //taskqueue_t   free_tasks;
@@ -58,6 +58,7 @@ static __thread workerctx_t *workerctx_cur;
 #else
 static pthread_key_t workerctx_key;
 #endif /* WORKER_USE_TLSSPEC */
+
 
 /* worker thread function declaration */
 static void *WorkerThread( void *arg);
@@ -268,18 +269,18 @@ void LpelWorkerDispatcher( lpel_task_t *t)
 
       /* execute task */
       wc->current_task = next;
-      co_call( next->mctx); /*SWITCH*/
+      mctx_switch(&t->mctx, &next->mctx); /*SWITCH*/
     } else {
       /* no ready task! -> back to worker context */
       wc->current_task = NULL;
-      co_call( wc->mctx); /*SWITCH*/
+      mctx_switch(&t->mctx, &wc->mctx); /*SWITCH*/
     }
   } else {
     /* we are on a wrapper.
      * back to wrapper context
      */
-    wc->current_task = NULL;
-    co_call( wc->mctx); /*SWITCH*/
+      wc->current_task = NULL;
+    mctx_switch(&t->mctx, &wc->mctx); /*SWITCH*/
     /* nothing to finalize on a wrapper */
   }
   /*********************************
@@ -538,7 +539,7 @@ static void WorkerLoop( workerctx_t *wc)
     if (t != NULL) {
       /* execute task */
       wc->current_task = t;
-      co_call(t->mctx);
+      mctx_switch(&wc->mctx, &t->mctx);
       //FIXME LpelMonitoringDebug( wc->mon, "Back on worker %d context.\n", wc->wid);
       /* cleanup task context marked for deletion */
       CleanupTaskContext(wc, NULL);
@@ -563,7 +564,7 @@ static void WrapperLoop( workerctx_t *wc)
     if (t != NULL) {
       /* execute task */
       wc->current_task = t;
-      co_call(t->mctx);
+      mctx_switch(&wc->mctx, &t->mctx);
 
       wc->wraptask = NULL;
     } else {
@@ -593,9 +594,7 @@ static void *WorkerThread( void *arg)
   pthread_setspecific(workerctx_key, wc);
 #endif /* WORKER_USE_TLSSPEC */
 
-  /* Init libPCL */
-  co_thread_init();
-  wc->mctx = co_current();
+  mctx_thread_init();
 
   wc->current_task = NULL;
 
@@ -633,8 +632,9 @@ static void *WorkerThread( void *arg)
     /* free the worker context */
     free( wc);
   }
-  /* Cleanup libPCL */
-  co_thread_cleanup();
+
+
+  mctx_thread_cleanup();
 
   return NULL;
 }

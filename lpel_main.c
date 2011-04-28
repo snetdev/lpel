@@ -16,8 +16,9 @@
 #include <sys/syscall.h>
 
 #include <pthread.h> /* worker threads are OS threads */
-#include <pcl.h>     /* tasks are executed in user-space with help of
-                        GNU Portable Coroutine Library  */
+
+
+#include "arch/mctx.h"
 
 #include "lpel_main.h"
 #include "monitoring.h"
@@ -197,9 +198,9 @@ int LpelInit( lpel_config_t *cfg)
   /* create the cpu affinity set for used threads */
   CreateCpusets();
 
-  /* Init libPCL */ 
-  co_thread_init();
- 
+  /* initialize machine context for main thread */
+  mctx_thread_init();
+
   worker_config.node = _lpel_global_config.node;
   worker_config.do_print_workerinfo = _lpel_global_config.worker_dbg;
 
@@ -235,9 +236,9 @@ void LpelCleanup(void)
 
   /* Cleanup moitoring module */
   LpelMonCleanup();
-
-  /* Cleanup libPCL */
-  co_thread_cleanup();
+  
+  /* cleanup machine context for main thread */
+  mctx_thread_cleanup();
 }
 
 

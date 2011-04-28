@@ -18,16 +18,16 @@ static atomic_t taskseq = ATOMIC_INIT(0);
 
 
 /* declaration of startup function */
-static void TaskStartup(void *data);
+//static void TaskStartup( unsigned int y, unsigned int x);
+static void TaskStartup( void *arg);
 
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
 static void TaskBlock( lpel_task_t *t, taskstate_t state);
 
 
-#define TASK_STACK_ALIGN  16 // 256 /* co_create does align the stack to 256 */
-#define TASK_MINSIZE  8192
-
+#define TASK_STACK_ALIGN  256
+#define TASK_MINSIZE  4096
 
 
 /**
@@ -37,7 +37,7 @@ static void TaskBlock( lpel_task_t *t, taskstate_t state);
  * @param func    task function
  * @param arg     arguments
  * @param size    size of the task, including execution stack
- * @pre           size is a power of two, >= 8192
+ * @pre           size is a power of two, >= 4096
  *
  * @return the task handle of the created task (pointer to TCB)
  *
@@ -55,7 +55,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   }
   assert( size >= TASK_MINSIZE );
 
-  /* aligned to page boundary */
+  /* aligned at page boundary */
   t = valloc( size );
 
   /* calc stackaddr */
@@ -81,10 +81,8 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 
   t->mon = NULL;
 
-  /* function, argument (data), stack base address, stacksize */
-  t->mctx = co_create( TaskStartup, (void *)t, stackaddr, t->size-offset);
-  assert(t->mctx != NULL);
-
+  mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
+  // if (t->mctx == NULL) assert(0);
   return t;
 }
 
@@ -102,9 +100,7 @@ void LpelTaskDestroy( lpel_task_t *t)
   if (t->mon) LpelMonTaskDestroy(t->mon);
 
   atomic_destroy( &t->poll_token);
-  /* delete the coroutine */
-  co_delete(t->mctx);
-  /* free the TCB itself*/
+
   free(t);
 }
 
@@ -129,7 +125,6 @@ void LpelTaskRun( lpel_task_t *t)
 
   LpelWorkerRunTask( t);
 }
-
 
 
 /**
@@ -177,6 +172,8 @@ void LpelTaskYield(void)
 }
 
 
+
+
 unsigned int LpelTaskGetUID( lpel_task_t *t)
 {
   return t->uid;
@@ -215,12 +212,21 @@ void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
  * Startup function for user specified task,
  * calls task function with proper signature
  *
- * @param data  the previously allocated lpel_task_t TCB
  */
-static void TaskStartup( void *data)
+//static void TaskStartup( unsigned int y, unsigned int x)
+static void TaskStartup( void *arg)
 {
-  lpel_task_t *t = (lpel_task_t *)data;
+  lpel_task_t *t;
 
+  t = (lpel_task_t *)arg;
+#if 0
+  unsigned long z;
+
+  z = x<<16;
+  z <<= 16;
+  z |= y;
+  t = (lpel_task_t *)z;
+#endif
   TaskStart( t);
 
   /* call the task function with inarg as parameter */
