@@ -189,7 +189,7 @@ int LpelInit( lpel_config_t *cfg)
 
   /* store a local copy of cfg */
   _lpel_global_config = *cfg;
-  
+
   /* check the config */
   res = CheckConfig();
   if (res!=0) return res;
@@ -197,9 +197,9 @@ int LpelInit( lpel_config_t *cfg)
   /* create the cpu affinity set for used threads */
   CreateCpusets();
 
-  /* Init libPCL */ 
+  /* Init libPCL */
   co_thread_init();
- 
+
   worker_config.node = _lpel_global_config.node;
   worker_config.do_print_workerinfo = _lpel_global_config.worker_dbg;
 
@@ -210,10 +210,14 @@ int LpelInit( lpel_config_t *cfg)
   /* initialise workers */
   LpelWorkerInit( _lpel_global_config.num_workers, &worker_config);
 
-  LpelWorkerSpawn();
   return 0;
 }
 
+
+void LpelStart(void)
+{
+  LpelWorkerSpawn();
+}
 
 
 void LpelStop(void)

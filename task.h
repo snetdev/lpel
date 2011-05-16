@@ -81,7 +81,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 void LpelTaskDestroy( lpel_task_t *t);
 
 
-void LpelTaskMonitor( lpel_task_t *t, char *name, unsigned long flags);
+void LpelTaskMonitor( lpel_task_t *t, const char *name, unsigned long flags);
 void LpelTaskRun( lpel_task_t *t);
 
 lpel_task_t *LpelTaskSelf(void);

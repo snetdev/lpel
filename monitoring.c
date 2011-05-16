@@ -17,6 +17,17 @@
 
 #define MON_TASKNAME_MAXLEN  32
 
+#define MON_EVENT_TABLE_DELTA 16
+
+#define MON_USREVT_BUFSIZE 64
+
+
+typedef struct mon_usrevt_t mon_usrevt_t;
+
+/**
+ * Every worker has a monitoring context, which besides
+ * the log-file handle contains wait-times (idle-time)
+ */
 struct monctx_t {
   int           wid;         /** worker id */
   FILE         *outfile;     /** where to write the monitoring data to */
@@ -28,6 +39,14 @@ struct monctx_t {
 };
 
 
+/**
+ * Every task which is enabled for monitoring has its mon_task_t structure
+ * that contains the monitored information, e.g. timing information,
+ * a list of dirty-streams, etc
+ * It also contains a pointer to the monitoring context of
+ * the worker the task is assigned to, which is set in
+ * the LpelMonTaskAssign() handler.
+ */
 struct mon_task_t {
   char name[MON_TASKNAME_MAXLEN];
   monctx_t *ctx;
@@ -40,12 +59,22 @@ struct mon_task_t {
     timing_t start; /** start time of last dispatch */
     timing_t stop;  /** stop time of last dispatch */
   } times;
+  struct {
+    int cnt, size;
+    int start, end;
+    mon_usrevt_t *buffer;
+  } events;         /** user-defined events */
   mon_stream_t *dirty_list; /** head of dirty stream list */
-  char blockon;     /** for convenience: tracking if blocked 
+  char blockon;     /** for convenience: tracking if blocked
                         on read or write or any */
 };
 
 
+/**
+ * Each stream of a task that monitors stream information
+ * gets assigned a mon_stream_t, that is passed to the
+  callbacks upon stream procedures.
+ */
 struct mon_stream_t {
   mon_task_t   *montask;     /** Invariant: != NULL */
   mon_stream_t *dirty;       /** for maintaining a dirty stream list */
@@ -53,8 +82,16 @@ struct mon_stream_t {
   char          state;       /** one if IOCR */
   unsigned int  sid;         /** copy of the stream uid */
   unsigned long counter;     /** number of items processed */
-  unsigned int  event_flags; /** events "?!*" */
+  unsigned int  strevt_flags;/** events "?!*" */
 };
+
+
+struct mon_usrevt_t {
+  timing_t ts;
+  int evt;
+};
+
+
 
 /**
  * The state of a stream descriptor
@@ -65,7 +102,7 @@ struct mon_stream_t {
 #define ST_REPLACED 'R'
 
 /**
- * The event_flags of a stream descriptor
+ * The strevt_flags of a stream descriptor
  */
 #define ST_MOVED    (1<<0)
 #define ST_WAKEUP   (1<<1)
@@ -93,6 +130,22 @@ static char monitoring_postfix[MON_PFIX_LEN];
  */
 static timing_t monitoring_begin = TIMING_INITIALIZER;
 
+/**
+ * The event table is used to register user events,
+ * where each index in the table maps to the name
+ * of the user event
+ *
+ * Registering events in the table must be done
+ * in the initialisation phase, as it is not prepared for
+ * concurrent manipulation.
+ */
+static struct {
+  int cnt;
+  int size;
+  char **tab;
+} event_table;
+
+
 
 
 /*****************************************************************************
@@ -104,6 +157,7 @@ static timing_t monitoring_begin = TIMING_INITIALIZER;
  */
 #define FLAG_TIMES(mt)    (mt->flags & LPEL_MON_TASK_TIMES)
 #define FLAG_STREAMS(mt)  (mt->flags & LPEL_MON_TASK_STREAMS)
+#define FLAG_EVENTS(mt)   (mt->flags & LPEL_MON_TASK_USREVT)
 
 /**
  * Print a time in usec
@@ -166,6 +220,8 @@ static void PrintDirtyList(mon_task_t *mt)
   mon_stream_t *ms, *next;
   FILE *file = mt->ctx->outfile;
 
+  fprintf( file,"[" );
+
   ms = mt->dirty_list;
 
   while (ms != ST_DIRTY_END) {
@@ -176,9 +232,9 @@ static void PrintDirtyList(mon_task_t *mt)
     (void) fprintf( file,
         "%u,%c,%c,%lu,%c%c%c;",
         ms->sid, ms->mode, ms->state, ms->counter,
-        ( ms->event_flags & ST_BLOCKON) ? '?':'-',
-        ( ms->event_flags & ST_WAKEUP) ? '!':'-',
-        ( ms->event_flags & ST_MOVED ) ? '*':'-'
+        ( ms->strevt_flags & ST_BLOCKON) ? '?':'-',
+        ( ms->strevt_flags & ST_WAKEUP) ? '!':'-',
+        ( ms->strevt_flags & ST_MOVED ) ? '*':'-'
         );
 
 
@@ -193,7 +249,7 @@ static void PrintDirtyList(mon_task_t *mt)
         /* fall-through */
       case ST_INUSE:
         ms->dirty = NULL;
-        ms->event_flags = 0;
+        ms->strevt_flags = 0;
         break;
 
       case ST_CLOSED:
@@ -208,7 +264,40 @@ static void PrintDirtyList(mon_task_t *mt)
 
   /* dirty list of task is empty */
   mt->dirty_list = ST_DIRTY_END;
+
+  fprintf( file,"] " );
 }
+
+
+/**
+ * Print the user events of a task
+ */
+static void PrintUsrEvt(mon_task_t *mt)
+{
+  FILE *file = mt->ctx->outfile;
+
+  int pos = (mt->events.cnt <= mt->events.size)
+          ? mt->events.start : ((mt->events.end+1)%(mt->events.size));
+  fprintf( file,"%d[", mt->events.cnt );
+  //fprintf( file,"(pos %d) (start %d) (end %d) (cnt %d) (size %d); ", pos, mt->events.start, mt->events.end, mt->events.cnt, mt->events.size);
+  while (pos != mt->events.end) {
+    mon_usrevt_t *cur = &mt->events.buffer[pos];
+    /* print cur */
+    if FLAG_TIMES(mt) {
+      PrintNormTS(&cur->ts, file);
+    }
+    fprintf( file,"%s; ", event_table.tab[cur->evt]);
+
+    /* increment */
+    pos++;
+    if (pos == mt->events.size) { pos = 0; }
+  }
+  /* reset */
+  mt->events.start = mt->events.end;
+  mt->events.cnt = 0;
+  fprintf( file,"] " );
+}
+
 
 /*****************************************************************************
  * PUBLIC FUNCTIONS
@@ -238,6 +327,11 @@ void LpelMonInit(char *prefix, char *postfix)
     (void) strncpy( monitoring_postfix, postfix, MON_PFIX_LEN);
   }
 
+  /* initialize event table */
+  event_table.cnt = 0;
+  event_table.size = MON_EVENT_TABLE_DELTA;
+  event_table.tab = malloc( MON_EVENT_TABLE_DELTA*sizeof(char*) );
+
   /* initialize timing */
   TIMESTAMP(&monitoring_begin);
 }
@@ -248,9 +342,60 @@ void LpelMonInit(char *prefix, char *postfix)
  */
 void LpelMonCleanup(void)
 {
-  /* NOP */
+  int i;
+  /* free event table */
+  for (i=0; i<event_table.cnt; i++) {
+    /* the strings */
+    free(event_table.tab[i]);
+  }
+  /* the array itself */
+  free(event_table.tab);
 }
 
+
+
+/**
+ * Must be done before actually using the events,
+ * typically before LpelStart()
+ *
+ * the table is growing dynamically
+ */
+int LpelMonEventRegister(const char *evt_name)
+{
+  if (event_table.cnt == event_table.size) {
+    /* grow */
+    char **new_tab = malloc(
+        event_table.size + MON_EVENT_TABLE_DELTA*sizeof(char*)
+        );
+    event_table.size += MON_EVENT_TABLE_DELTA;
+    (void) memcpy(new_tab, event_table.tab, event_table.cnt*sizeof(char*));
+    free(event_table.tab);
+    event_table.tab = new_tab;
+  }
+
+  event_table.tab[event_table.cnt] = strdup(evt_name);
+  event_table.cnt++;
+
+  return event_table.cnt - 1;
+}
+
+
+void LpelMonEventSignal(int evt)
+{
+  lpel_task_t *t = LpelTaskSelf();
+  assert(t != NULL);
+  mon_task_t *mt = t->mon;
+
+  if (mt && FLAG_EVENTS(mt)) {
+    mon_usrevt_t *current = &mt->events.buffer[mt->events.end];
+    if FLAG_TIMES(mt) TIMESTAMP(&current->ts);
+    current->evt = evt;
+    /* update counters */
+    mt->events.end++;
+    if (mt->events.end == mt->events.size) { mt->events.end = 0; }
+    mt->events.cnt += 1;
+  }
+}
 
 
 /**
@@ -263,7 +408,7 @@ void LpelMonCleanup(void)
  *
  * @return a newly created monitoring context
  */
-monctx_t *LpelMonContextCreate(int wid, char *name, int dbglvl)
+monctx_t *LpelMonContextCreate(int wid, const char *name, int dbglvl)
 {
   int buflen = MON_PFIX_LEN*2 + MON_NAME_LEN + 1;
   char fname[buflen];
@@ -333,13 +478,13 @@ void LpelMonContextDestroy(monctx_t *mon)
 
 
 
-mon_task_t *LpelMonTaskCreate(unsigned long tid, char *name, unsigned long flags)
+mon_task_t *LpelMonTaskCreate(unsigned long tid, const char *name, unsigned long flags)
 {
   mon_task_t *mt = malloc( sizeof(mon_task_t) );
 
   /* zero out everything */
   memset(mt, 0, sizeof(mon_task_t));
-  
+
   /* copy name and 0-terminate */
   if ( name != NULL ) {
     (void) strncpy(mt->name, name, MON_TASKNAME_MAXLEN);
@@ -358,6 +503,15 @@ mon_task_t *LpelMonTaskCreate(unsigned long tid, char *name, unsigned long flags
     TIMESTAMP(&tnow);
     TimingDiff(&mt->times.creat, &monitoring_begin, &tnow);
   }
+
+  if FLAG_EVENTS(mt) {
+    mt->events.size = MON_USREVT_BUFSIZE;
+    mt->events.cnt = 0;
+    mt->events.start = 0;
+    mt->events.end = 0;
+    mt->events.buffer = malloc( mt->events.size * sizeof(mon_usrevt_t));
+  }
+
   return mt;
 }
 
@@ -365,6 +519,9 @@ mon_task_t *LpelMonTaskCreate(unsigned long tid, char *name, unsigned long flags
 void LpelMonTaskDestroy(mon_task_t *mt)
 {
   assert( mt != NULL );
+  if FLAG_EVENTS(mt) {
+    free(mt->events.buffer);
+  }
   free(mt);
 }
 
@@ -374,7 +531,11 @@ char *LpelMonTaskGetName(mon_task_t *mt)
   return mt->name;
 }
 
-
+/**
+ * Called upon assigning a task to a worker.
+ *
+ * Sets the monitoring context of mt accordingly.
+ */
 void LpelMonTaskAssign(mon_task_t *mt, monctx_t *ctx)
 {
   assert( mt != NULL );
@@ -473,15 +634,19 @@ void LpelMonTaskStop(mon_task_t *mt, taskstate_t state)
 
   /* print stream info */
   if FLAG_STREAMS(mt) {
-    fprintf( file,"[" );
-    
     /* print (and reset) dirty list */
     PrintDirtyList(mt);
+  }
 
-    fprintf( file,"] " );
+
+  /* print user events */
+  if (FLAG_EVENTS(mt) && mt->events.cnt>0 ) {
+    PrintUsrEvt(mt);
   }
 
   fprintf( file, "\n");
+
+//FIXME only for debugging purposes
   //fflush( file);
 }
 
@@ -490,7 +655,6 @@ void LpelMonTaskStop(mon_task_t *mt, taskstate_t state)
 
 mon_stream_t *LpelMonStreamOpen(mon_task_t *mt, unsigned int sid, char mode)
 {
-  
   if (mt && FLAG_STREAMS(mt)) {
     mon_stream_t *ms = malloc(sizeof(mon_stream_t));
     ms->sid = sid;
@@ -498,7 +662,7 @@ mon_stream_t *LpelMonStreamOpen(mon_task_t *mt, unsigned int sid, char mode)
     ms->mode = mode;
     ms->state = ST_OPENED;
     ms->counter = 0;
-    ms->event_flags = 0;
+    ms->strevt_flags = 0;
     ms->dirty = NULL;
 
     MarkDirty(ms);
@@ -539,7 +703,7 @@ void LpelMonStreamMoved(mon_stream_t *ms, void *item)
   assert( ms != NULL );
 
   ms->counter++;
-  ms->event_flags |= ST_MOVED;
+  ms->strevt_flags |= ST_MOVED;
   MarkDirty(ms);
 }
 
@@ -551,7 +715,7 @@ void LpelMonStreamMoved(mon_stream_t *ms, void *item)
 void LpelMonStreamBlockon(mon_stream_t *ms)
 {
   assert( ms != NULL );
-  ms->event_flags |= ST_BLOCKON;
+  ms->strevt_flags |= ST_BLOCKON;
   MarkDirty(ms);
 
   /* track if blocked on reading or writing */
@@ -569,7 +733,7 @@ void LpelMonStreamBlockon(mon_stream_t *ms)
 void LpelMonStreamWakeup(mon_stream_t *ms)
 {
   assert( ms != NULL );
-  ms->event_flags |= ST_WAKEUP;
+  ms->strevt_flags |= ST_WAKEUP;
 
   /* MarkDirty() not needed, as Moved()
    * event is called anyway

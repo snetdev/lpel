@@ -5,6 +5,7 @@
 
 #define LPEL_MON_TASK_TIMES   (1<<0)
 #define LPEL_MON_TASK_STREAMS (1<<1)
+#define LPEL_MON_TASK_USREVT  (1<<2)
 
 
 /**
@@ -28,12 +29,14 @@ typedef struct mon_stream_t mon_stream_t;
 void LpelMonInit(char *prefix, char *postfix);
 void LpelMonCleanup(void);
 
+int LpelMonEventRegister(const char *evt_name);
+void LpelMonEventSignal(int evt);
 
-monctx_t *LpelMonContextCreate(int wid, char *name, int dbglvl);
+monctx_t *LpelMonContextCreate(int wid, const char *name, int dbglvl);
 void LpelMonContextDestroy( monctx_t *mon);
 
 mon_task_t *LpelMonTaskCreate(unsigned long tid,
-    char *name, unsigned long flags);
+    const char *name, unsigned long flags);
 
 void LpelMonTaskDestroy(mon_task_t *);
 

@@ -142,6 +142,7 @@ static void testBasic(void)
   LpelTaskMonitor(intask, "intask", LPEL_MON_TASK_TIMES);
   LpelTaskRun(intask);
 
+  LpelStart();
   LpelCleanup();
 }
 

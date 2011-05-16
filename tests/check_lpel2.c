@@ -165,6 +165,8 @@ static void testBasic(void)
   intask = LpelTaskCreate( -1, Inputter, sinp, 8192);
   LpelTaskRun(intask);
 
+  LpelStart();
+
   LpelCleanup();
 }
 

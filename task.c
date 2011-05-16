@@ -112,7 +112,7 @@ void LpelTaskDestroy( lpel_task_t *t)
 /**
  * Attach monitoring to a task
  */
-void LpelTaskMonitor( lpel_task_t *t, char *name, unsigned long flags)
+void LpelTaskMonitor( lpel_task_t *t, const char *name, unsigned long flags)
 {
   t->mon = LpelMonTaskCreate(t->uid, name, flags);
 }

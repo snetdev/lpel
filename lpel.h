@@ -53,12 +53,15 @@ typedef struct {
 int LpelInit( lpel_config_t *cfg);
 void LpelCleanup( void);
 
+void LpelStart(void);
 void LpelStop(void);
 
 int LpelGetNumCores( int *result);
 int LpelCanSetExclusive( int *result);
 
 
+int LpelMonEventRegister(const char *evt_name);
+void LpelMonEventSignal(int evt);
 
 
 /******************************************************************************/
@@ -92,6 +95,7 @@ typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 
 #define LPEL_MON_TASK_TIMES   (1<<0)
 #define LPEL_MON_TASK_STREAMS (1<<1)
+#define LPEL_MON_TASK_USREVT  (1<<2)
 
 
 
@@ -103,7 +107,8 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
     void *inarg, int stacksize );
 
 /** monitor a task */
-void LpelTaskMonitor( lpel_task_t *t, char *name, unsigned long flags);
+void LpelTaskMonitor( lpel_task_t *t, const char *name, unsigned long flags);
+
 
 unsigned int LpelTaskGetUID( lpel_task_t *t );
 
@@ -115,6 +120,7 @@ void LpelTaskRun( lpel_task_t *t );
 lpel_task_t *LpelTaskSelf(void);
 void LpelTaskExit(void *outarg);
 void LpelTaskYield(void);
+void LpelTaskUsrEvt(int evt);
 
 
 
