@@ -1,10 +1,9 @@
 #ifndef _TASK_H_
 #define _TASK_H_
 
-#include <pcl.h>    /* tasks are executed in user-space with help of
-                       GNU Portable Coroutine Library  */
 
 #include "arch/atomic.h"
+#include "arch/mctx.h"
 
 #include "scheduler.h"
 
@@ -13,7 +12,7 @@
  * If a task size <= 0 is specified,
  * use the default size
  */
-#define LPEL_TASK_SIZE_DEFAULT  8192  /* 8k */
+#define LPEL_TASK_SIZE_DEFAULT  8192  /* 8k size*/
 
 
 struct lpel_task_t;
@@ -65,8 +64,8 @@ typedef struct lpel_task_t {
   struct mon_task_t *mon;
 
   /* CODE */
+  mctx_t mctx;          /** machine context of the task*/
   int size;             /** complete size of the task, incl stack */
-  coroutine_t mctx;     /** machine context of the task*/
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
   void *outarg;         /** output argument  */

@@ -1,17 +1,12 @@
 CFLAGS = -g -Wall -DNODEBUG -pthread
-LDFLAGS = -lpthread -lcap -lpcl -lrt
+LDFLAGS = -lpthread -lcap  -lrt
 
 all: lpel
 .PHONY: all
 
 
-mpsctq:
-	gcc -c -g check_mpsctq.c
-	gcc -c -g ../mpsctq.c
-	gcc -o check_mpsctq check_mpsctq.o mpsctq.o $(LDFLAGS) -lpthread
-	./check_mpsctq
-
 timing:
+	rm -f check_*.o $(CFLAGS)
 	gcc -c check_timing.c
 	gcc -o check_timing check_timing.o $(LDFLAGS) -lrt
 	./check_timing

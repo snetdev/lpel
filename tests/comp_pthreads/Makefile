@@ -1,5 +1,5 @@
-CFLAGS = -g -Wall -I../../
-LDFLAGS = -lcap -lpcl -lpthread -lrt
+CFLAGS = -g -Wall -pthread -I../../
+LDFLAGS = -lcap -lpthread -lrt
 
 .PHONY: all clean
 
