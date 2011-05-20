@@ -22,6 +22,12 @@
 #define MON_USREVT_BUFSIZE 64
 
 
+#define PrintTiming(t, file)  PrintTimingNs((t),(file))
+#define PrintNormTS(t, file)  PrintNormTSns((t),(file))
+
+
+
+
 typedef struct mon_usrevt_t mon_usrevt_t;
 
 /**
@@ -162,7 +168,7 @@ static struct {
 /**
  * Print a time in usec
  */
-static inline void PrintTiming( const timing_t *t, FILE *file)
+static inline void PrintTimingUs( const timing_t *t, FILE *file)
 {
   if (t->tv_sec == 0) {
     (void) fprintf( file, "%lu ", t->tv_nsec / 1000);
@@ -174,17 +180,46 @@ static inline void PrintTiming( const timing_t *t, FILE *file)
 }
 
 /**
- * Print a normalized timestamp
+ * Print a time in nsec
  */
-static inline void PrintNormTS( const timing_t *t, FILE *file)
+static inline void PrintTimingNs( const timing_t *t, FILE *file)
+{
+  if (t->tv_sec == 0) {
+    (void) fprintf( file, "%lu ", t->tv_nsec);
+  } else {
+    (void) fprintf( file, "%lu%09lu ",
+        (unsigned long) t->tv_sec, (t->tv_nsec)
+        );
+  }
+}
+
+/**
+ * Print a normalized timestamp usec
+ */
+static inline void PrintNormTSus( const timing_t *t, FILE *file)
 {
   timing_t norm_ts;
 
   TimingDiff(&norm_ts, &monitoring_begin, t);
   (void) fprintf( file,
-      "%lu%06lu ",
+      "%lu.%06lu ",
       (unsigned long) norm_ts.tv_sec,
       (norm_ts.tv_nsec / 1000)
+      );
+}
+
+/**
+ * Print a normalized timestamp nsec
+ */
+static inline void PrintNormTSns( const timing_t *t, FILE *file)
+{
+  timing_t norm_ts;
+
+  TimingDiff(&norm_ts, &monitoring_begin, t);
+  (void) fprintf( file,
+      "%lu.%09lu ",
+      (unsigned long) norm_ts.tv_sec,
+      (norm_ts.tv_nsec)
       );
 }
 
@@ -455,13 +490,13 @@ void LpelMonContextDestroy(monctx_t *mon)
 {
   if (mon->wid < 0) {
     LpelMonDebug( mon,
-        "Wrapper exited. wait_cnt %u, wait_time %lu%06lu\n",
+        "Wrapper exited. wait_cnt %u, wait_time %lu.%06lu sec\n",
         mon->wait_cnt,
         (unsigned long) mon->wait_total.tv_sec, (mon->wait_total.tv_nsec / 1000)
         );
   } else {
     LpelMonDebug( mon,
-        "Worker %d exited. wait_cnt %u, wait_time %lu%06lu\n",
+        "Worker %d exited. wait_cnt %u, wait_time %lu.%06lu sec\n",
         mon->wid, mon->wait_cnt,
         (unsigned long) mon->wait_total.tv_sec, (mon->wait_total.tv_nsec / 1000)
         );
@@ -566,9 +601,9 @@ void LpelMonWorkerWaitStop(monctx_t *mon)
   TimingAdd(&mon->wait_total, &mon->wait_current);
 
   LpelMonDebug( mon,
-      "worker %d waited (%u) for %lu%06lu\n",
+      "worker %d waited (%u) for %lu.%09lu\n",
       mon->wid, mon->wait_cnt,
-      (unsigned long) mon->wait_current.tv_sec, (mon->wait_current.tv_nsec / 1000)
+      (unsigned long) mon->wait_current.tv_sec, (mon->wait_current.tv_nsec)
       );
 }
 

@@ -279,12 +279,17 @@ int LpelThreadAssign( int core)
       if( res != 0) return LPEL_ERR_ASSIGN;
 
       /* make non-preemptible */
-      if ( LPEL_ICFG(cfg->flags & LPEL_FLAG_EXCLUSIVE)) {
+      if ( LPEL_ICFG(LPEL_FLAG_EXCLUSIVE)) {
         struct sched_param param;
-        param.sched_priority = 1; /* lowest real-time, TODO other? */
-        if (0!=sched_setscheduler(tid, SCHED_FIFO, &param)) {
+        int sp = SCHED_FIFO;
+        /* highest real-time */
+        param.sched_priority = sched_get_priority_max(sp);
+        if (-1 == sched_setscheduler(tid, sp, &param)) {
           /* we do best effort at this point */
           //return LPEL_ERR_EXCL;
+        } else {
+          fprintf(stderr, "set realtime priority %d for worker %d.\n",
+              param.sched_priority, core);
         }
       }
     } else {

@@ -14,14 +14,25 @@ typedef struct timespec timing_t;
 
 #define DO_TIMING
 
+
+
+#if defined(_POSIX_CPUTIME)
+#  define TIMING_CLOCK  CLOCK_PROCESS_CPUTIME_ID
+#elif defined(_POSIX_MONOTONIC_CLOCK)
+#  define TIMING_CLOCK  CLOCK_MONOTONIC
+#else
+#  define TIMING_CLOCK  CLOCK_REALTIME
+#endif
+
+
+
 /**
  * Current timestamp
  * @param t   pointer to timing_t
  */
 #if defined(__linux__) && defined(DO_TIMING)
 # define TIMESTAMP(t) do { \
-    /*TODO check if CLOCK_MONOTONIC is available */ \
-    (void) clock_gettime(CLOCK_MONOTONIC, (t) ); \
+    (void) clock_gettime(TIMING_CLOCK, (t)); \
   } while (0)
 #else
 # define TIMESTAMP(t) /*NOP*/
@@ -50,7 +61,7 @@ static inline void TimingStart(timing_t *t)
 static inline void TimingEnd(timing_t *t)
 {
   timing_t start, end;
-  
+
   /* get end time  */
   TIMESTAMP( &end);
   /* store start time */
@@ -117,7 +128,7 @@ static inline void TimingZero(timing_t *t)
 
 static inline int TimingEquals(const timing_t *t1, const timing_t *t2)
 {
-  return ( (t1->tv_sec  == t2->tv_sec) && 
+  return ( (t1->tv_sec  == t2->tv_sec) &&
            (t1->tv_nsec == t2->tv_nsec) );
 }
 
@@ -132,7 +143,7 @@ static inline double TimingToNSec(const timing_t *t)
  *
  * Updates t by last with weight factor alpha
  * tnew = last*alpha + thist*(1-alpha)
- * 
+ *
  * Precond: alpha in [0,1]
  */
 static inline void TimingExpAvg(timing_t *t,
