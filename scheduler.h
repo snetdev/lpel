@@ -4,7 +4,6 @@
 
 struct lpel_task_t;
 
-//#define SCHED_LIFO
 #define SCHED_NUM_PRIO  2
 
 typedef struct schedctx schedctx_t;

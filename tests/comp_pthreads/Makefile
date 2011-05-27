@@ -1,11 +1,15 @@
 CFLAGS = -g -Wall -I../../
 LDFLAGS = -lcap -lpcl -lpthread -lrt
 
-.PHONY: all clean
+.PHONY: all clean ring pipe
 
 TARGETS = pthr_ringtest ringtest pthr_pipetest pipetest
 
 all: $(TARGETS)
+
+ring: ringtest pthr_ringtest
+
+pipe: pipetest pthr_pipetest
 
 pthr_ringtest: pthr_ringtest.o pthr_streams.o
 	gcc -o $@ $^ $(LDFLAGS) 
@@ -20,7 +24,7 @@ pipetest: pipetest.o liblpel.a
 	gcc -o $@ $^ $(LDFLAGS) 
 
 %.o: %.c
-	gcc -c $< $(CFLAGS)
+	gcc -c $< $(CFLAGS) $(DEFINES)
 
 
 clean:

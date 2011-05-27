@@ -5,10 +5,29 @@
 #include "lpel.h"
 #include "arch/timing.h"
 
+
+#ifndef RING_SIZE
 #define RING_SIZE 100
+#endif
+
+#ifndef ROUNDS
+#define ROUNDS 10000
+#endif
+
+#ifdef BENCHMARK
+static struct {
+  unsigned long msg_cnt;
+  double msg_time;
+  unsigned long task_cnt;
+  double task_time;
+} bench_stats;
+#endif
+
+
+
+
 #define STACK_SIZE (16*1024) /* 16k */
 
-#define ROUNDS 10000
 
 static int ids[RING_SIZE];
 static lpel_stream_t *streams[RING_SIZE];
@@ -40,7 +59,9 @@ void *Process(void *arg)
   if (id==0) {
     in = LpelStreamOpen(streams[RING_SIZE-1], 'r');
 
+#ifndef BENCHMARK
     printf("Sending message, ringsize %d, rounds %d\n", RING_SIZE, ROUNDS);
+#endif
     /* send the first message */
     msg = malloc( sizeof *msg);
     msg->round = 1;
@@ -75,7 +96,12 @@ void *Process(void *arg)
     TimingEnd( &ts);
     msg->hopcnt++;
     PrintEOR(msg);
+#ifndef BENCHMARK
     printf("Time to pass the message %u times: %.2f ms\n", msg->hopcnt, TimingToMSec( &ts));
+#else
+    bench_stats.msg_cnt = msg->hopcnt;
+    bench_stats.msg_time = TimingToNSec(&ts);
+#endif
     free(msg);
   }
 
@@ -116,7 +142,12 @@ static void CreateRing(void)
     CreateTask(i);
   }
   TimingEnd( &ts) ;
+#ifndef BENCHMARK
   printf("Time to create %d tasks: %.2f ms\n", RING_SIZE, TimingToMSec( &ts));
+#else
+    bench_stats.task_cnt = RING_SIZE;
+    bench_stats.task_time = TimingToNSec(&ts);
+#endif
 }
 
 
@@ -148,7 +179,16 @@ static void testBasic(void)
 int main(void)
 {
   testBasic();
+#ifndef BENCHMARK
   printf("test finished\n");
+#else
+  printf("%lu %.1f %lu %.1f\n",
+      bench_stats.msg_cnt,
+      bench_stats.msg_time,
+      bench_stats.task_cnt,
+      bench_stats.task_time
+      );
+#endif
   return 0;
 }
 

@@ -7,13 +7,35 @@
 #include "arch/timing.h"
 
 #ifndef PIPE_DEPTH
-#define PIPE_DEPTH 100 /* min 3*/
+#define PIPE_DEPTH 128 /* min 3*/
 #endif
 
 #ifndef NUM_MSGS
 #define NUM_MSGS 100000L
 #endif
 
+#ifdef BENCHMARK
+static struct {
+  unsigned long msg_cnt;
+  double msg_time;
+} bench_stats;
+#endif
+
+#ifndef NUM_WORKERS
+#define NUM_WORKERS 2
+#endif
+
+#ifndef PARTS
+#define PARTS       4
+#endif
+
+#ifndef PLACEMENT
+#define PLACEMENT   PLACE_CONST
+#endif
+
+#define PLACE_CONST(id)   0
+#define PLACE_RR(id)      ((id) % NUM_WORKERS)
+#define PLACE_PARTS(id)   (((id) / (PIPE_DEPTH/PARTS)) % NUM_WORKERS)
 
 
 #define STACK_SIZE (16*1024) /* 16k */
@@ -33,7 +55,9 @@ void *Source(void *inarg)
   lpel_stream_desc_t *out;
   void *msg;
 
+#ifndef BENCHMARK
   printf("Starting message transfer, pipe length %d msgs %lu\n", PIPE_DEPTH, NUM_MSGS);
+#endif
   TimingStart( &ts);
 
   out = LpelStreamOpen((lpel_stream_t *)inarg, 'w');
@@ -73,8 +97,13 @@ void *Sink(void *inarg)
   LpelStreamClose( in, 1);
 
   TimingEnd( &ts);
+#ifndef BENCHMARK
   printf("End of message stream, cnt %lu duration %.2f ms\n",
       cnt, TimingToMSec(&ts));
+#else
+  bench_stats.msg_cnt = cnt;
+  bench_stats.msg_time = TimingToNSec(&ts);
+#endif
 
   return NULL;
 }
@@ -110,10 +139,7 @@ static void CreateTask(task_arg_t *arg)
   lpel_task_t *t;
   int place;
 
-  place = 0;
-  place = arg->id % 2;
-  //place = (arg->id < PIPE_DEPTH/2) ? 0 : 1;
-  place = (arg->id / (PIPE_DEPTH/(1<<2))) % 2;
+  place = PLACEMENT(arg->id);
 
   t = LpelTaskCreate( place, Relay, arg, STACK_SIZE);
   LpelTaskRun(t);
@@ -181,7 +207,15 @@ static void testBasic(void)
 int main(void)
 {
   testBasic();
+#ifndef BENCHMARK
   printf("test finished\n");
+#else
+  printf("%lu %.1f %u\n",
+      bench_stats.msg_cnt,
+      bench_stats.msg_time,
+      PIPE_DEPTH
+      );
+#endif
   return 0;
 }
 

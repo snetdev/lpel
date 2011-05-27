@@ -12,13 +12,19 @@
 #include "arch/timing.h"
 
 #ifndef PIPE_DEPTH
-#define PIPE_DEPTH 100 /* min 3*/
+#define PIPE_DEPTH 128 /* min 3*/
 #endif
 
 #ifndef NUM_MSGS
 #define NUM_MSGS 100000L
 #endif
 
+#ifdef BENCHMARK
+static struct {
+  unsigned long msg_cnt;
+  double msg_time;
+} bench_stats;
+#endif
 
 #define STACK_SIZE (16*1024) /* 16k */
 #define MSG_TERM ((void*)-1)
@@ -38,8 +44,10 @@ void *Source(void *inarg)
   pthr_stream_desc_t *out;
   void *msg;
 
+#ifndef BENCHMARK
   printf("Starting message transfer, pipe length %d msgs %lu\n",
       PIPE_DEPTH, NUM_MSGS);
+#endif
   TimingStart( &ts);
 
   out = PthrStreamOpen( (pthr_stream_t *)inarg, 'w');
@@ -80,8 +88,14 @@ void *Sink(void *inarg)
   PthrStreamClose( in, 1);
 
   TimingEnd( &ts);
+
+#ifndef BENCHMARK
   printf("End of message stream, cnt %lu duration %.2f ms\n",
       cnt, TimingToMSec(&ts));
+#else
+  bench_stats.msg_cnt = cnt;
+  bench_stats.msg_time = TimingToNSec(&ts);
+#endif
 
   pthread_exit(NULL);
 }
@@ -96,7 +110,7 @@ void *Relay(void *inarg)
 
   in = PthrStreamOpen( arg->in, 'r');
   out = PthrStreamOpen( arg->out, 'w');
-  
+
   while(!term) {
     msg = PthrStreamRead( in);
     if (msg==MSG_TERM) term = 1;
@@ -182,7 +196,7 @@ static void CreatePipe(void)
   if (res != 0) {
     error(1, res, "Cannot create pthread!");
   }
-  
+
   res = pthread_create( &sink, &attr, Sink, glob_out);
   if (res != 0) {
     error(1, res, "Cannot create pthread!");
@@ -210,6 +224,14 @@ static void testBasic(void)
 int main(void)
 {
   testBasic();
+#ifndef BENCHMARK
   printf("test finished\n");
+#else
+  printf("%lu %.1f %u\n",
+      bench_stats.msg_cnt,
+      bench_stats.msg_time,
+      PIPE_DEPTH
+      );
+#endif
   return 0;
 }

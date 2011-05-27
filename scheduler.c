@@ -42,12 +42,7 @@ void SchedMakeReady( schedctx_t* sc, lpel_task_t *t)
 
   if (prio < 0) prio = 0;
   if (prio >= SCHED_NUM_PRIO) prio = SCHED_NUM_PRIO-1;
-#ifdef SCHED_LIFO
   TaskqueuePushBack( &sc->queue[prio], t);
-#else
-  TaskqueuePushBack( &sc->queue[prio], t);
-#endif
-
 }
 
 
