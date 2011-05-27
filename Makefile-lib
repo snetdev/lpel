@@ -3,11 +3,12 @@
 #
 
 CFLAGS = -g -Wall
-LDFLAGS = -lpcl -cap -lpthread -lrt
+LDFLAGS = -lcap -lpthread -lrt
 
-OBJS = buffer.o  mailbox.o  monitoring.o  scheduler.o  stream.o  \
+OBJS = buffer.o  mailbox-lf.o  monitoring.o  scheduler.o  stream.o  \
           streamset.o  task.o  taskqueue.o  lpel_main.o  worker.o \
-          # mailbox-lf.o  
+          ctx_amd64.o
+          # mailbox-lf.o
 
 
 all: liblpel.a
@@ -16,6 +17,9 @@ liblpel.a: $(OBJS)
 	ar ru $@ $(OBJS)
 
 %.o: %.c
+	gcc -c $< $(CFLAGS)
+
+%.o: %.S
 	gcc -c $< $(CFLAGS)
 
 clean:
