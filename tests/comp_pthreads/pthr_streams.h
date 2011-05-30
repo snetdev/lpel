@@ -2,7 +2,7 @@
 
 #include <pthread.h>
 
-#define PTHR_STREAM_BUFFER_SIZE 10
+#define PTHR_STREAM_BUFFER_SIZE 16
 
 
 

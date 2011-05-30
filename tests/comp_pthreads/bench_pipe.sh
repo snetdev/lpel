@@ -2,7 +2,7 @@
 
 LOWER=10
 UPPER=1000
-SAMPLES=19
+SAMPLES=9
 
 NUM_WORKERS=`grep ^processor /proc/cpuinfo | wc -l`
 

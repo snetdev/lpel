@@ -12,7 +12,7 @@
 #include "arch/timing.h"
 
 #ifndef PIPE_DEPTH
-#define PIPE_DEPTH 128 /* min 3*/
+#define PIPE_DEPTH 100 /* min 3*/
 #endif
 
 #ifndef NUM_MSGS
