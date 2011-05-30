@@ -4,7 +4,7 @@
 F_LPEL=results_ring_lpel
 F_PTHR=results_ring_pthr
 
-for i in `octave --silent --eval "printf(\"%d \", round(logspace(1,5,19)));"`
+for i in `./space.py log 1 5 19`
 do
   echo -n $i" "
   expr 1000000 / $i

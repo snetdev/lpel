@@ -11,8 +11,7 @@ F_PTHR=results_pipe_pthr
 
 place="PLACE_CONST PLACE_RR PLACE_PARTS"
 
-for i in `octave --silent --eval \
-  "printf(\"%d \", round(linspace(${LOWER},${UPPER},${SAMPLES})));"`
+for i in `./space.py lin $LOWER $UPPER $SAMPLES`
 do
   echo $i" "
 done > tmp
