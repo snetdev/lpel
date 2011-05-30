@@ -7,7 +7,7 @@
 #include "arch/timing.h"
 
 #ifndef PIPE_DEPTH
-#define PIPE_DEPTH 128 /* min 3*/
+#define PIPE_DEPTH 100 /* min 3*/
 #endif
 
 #ifndef NUM_MSGS
@@ -25,12 +25,14 @@ static struct {
 #define NUM_WORKERS 2
 #endif
 
-#ifndef PARTS
-#define PARTS       4
+#ifndef PART_MOD
+#define PART_MOD 1
 #endif
 
+#define PARTS       ((NUM_WORKERS)*(PART_MOD))
+
 #ifndef PLACEMENT
-#define PLACEMENT   PLACE_CONST
+#define PLACEMENT   PLACE_PARTS
 #endif
 
 #define PLACE_CONST(id)   0
@@ -186,8 +188,8 @@ static void testBasic(void)
 {
   lpel_config_t cfg;
 
-  cfg.num_workers = 2;
-  cfg.proc_workers = 2;
+  cfg.num_workers = NUM_WORKERS;
+  cfg.proc_workers = NUM_WORKERS;
   cfg.proc_others = 0;
   cfg.flags = 0;
   cfg.node = 0;
