@@ -1,9 +1,24 @@
 
 #include <stdlib.h>
+#include <pthread.h>
 #include <assert.h>
 #include "mailbox.h"
 
 
+/* mailbox structures */
+
+typedef struct mailbox_node_t {
+  struct mailbox_node_t *next;
+  workermsg_t msg;
+} mailbox_node_t;
+
+struct mailbox_t {
+  pthread_mutex_t  lock_free;
+  pthread_mutex_t  lock_inbox;
+  pthread_cond_t   notempty;
+  mailbox_node_t  *list_free;
+  mailbox_node_t  *list_inbox;
+};
 
 
 /******************************************************************************/
@@ -47,21 +62,25 @@ static void PutFree( mailbox_t *mbox, mailbox_node_t *node)
 /******************************************************************************/
 
 
-void MailboxInit( mailbox_t *mbox)
+mailbox_t *MailboxCreate(void)
 {
+  mailbox_t *mbox = (mailbox_t *)malloc(sizeof(mailbox_t));
+
   pthread_mutex_init( &mbox->lock_free,  NULL);
   pthread_mutex_init( &mbox->lock_inbox, NULL);
   pthread_cond_init(  &mbox->notempty,   NULL);
   mbox->list_free  = NULL;
   mbox->list_inbox = NULL;
+
+  return mbox;
 }
 
 
 
-void MailboxCleanup( mailbox_t *mbox)
+void MailboxDestroy( mailbox_t *mbox)
 {
   mailbox_node_t *node;
-  
+
   assert( mbox->list_inbox == NULL);
   #if 0
   pthread_mutex_lock( &mbox->lock_inbox);
@@ -90,6 +109,8 @@ void MailboxCleanup( mailbox_t *mbox)
   pthread_mutex_destroy( &mbox->lock_free);
   pthread_mutex_destroy( &mbox->lock_inbox);
   pthread_cond_destroy(  &mbox->notempty);
+
+  free(mbox);
 }
 
 void MailboxSend( mailbox_t *mbox, workermsg_t *msg)

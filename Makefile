@@ -1,6 +1,33 @@
+#
+# create libraries
+#
 
-all:
-	make -f Makefile-lib clean
-	make -f Makefile-lib
-	make -f Makefile-so clean
-	make -f Makefile-so
+CFLAGS = -g -Wall -pthread -fPIC -I.
+LDFLAGS = -shared -lpthread -pthread -lcap -lrt -lpcl
+
+OBJS = buffer.o mailbox.o monitoring.o scheduler.o stream.o \
+       streamset.o task.o taskqueue.o lpel_main.o worker.o \
+
+
+LIB_ST = liblpel.a
+LIB_DYN = liblpel.so
+
+.PHONY: all clean static dynamic
+
+all: static dynamic
+
+static: $(LIB_ST)
+
+dynamic: $(LIB_DYN)
+
+$(LIB_ST): $(OBJS)
+	ar ru $@ $(OBJS)
+
+$(LIB_DYN): $(OBJS)
+	gcc $(LDFLAGS) -o $@ $(OBJS)
+
+%.o: %.c
+	gcc -c $(CFLAGS) $(FPIC) $<
+
+clean:
+	rm -fr $(OBJS) $(LIB_ST) $(LIB_DYN)
