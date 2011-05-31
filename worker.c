@@ -20,8 +20,7 @@
 #include "lpel_main.h"
 #include "monitoring.h"
 
-#include "mailbox-lf.h"
-//#include "mailbox.h"
+#include "mailbox.h"
 
 struct workerctx_t {
   int wid;
@@ -33,7 +32,7 @@ struct workerctx_t {
   lpel_task_t  *current_task;
   lpel_task_t  *marked_del;
   monctx_t     *mon;
-  mailbox_t     mailbox;
+  mailbox_t    *mailbox;
   schedctx_t   *sched;
   lpel_task_t  *wraptask;
   char          padding[64];
@@ -82,7 +81,7 @@ static inline void SendAssign( workerctx_t *target, lpel_task_t *t)
 
 
   /* send */
-  MailboxSend( &target->mailbox, &msg);
+  MailboxSend( target->mailbox, &msg);
 }
 
 
@@ -94,7 +93,7 @@ static inline void SendWakeup( workerctx_t *target, lpel_task_t *t)
   msg.type = WORKER_MSG_WAKEUP;
   msg.body.task = t;
   /* send */
-  MailboxSend( &target->mailbox, &msg);
+  MailboxSend(target->mailbox, &msg);
 }
 
 
@@ -148,7 +147,7 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
   workers = (workerctx_t **) malloc( num_workers * sizeof(workerctx_t*) );
   /* allocate worker contexts */
   for (i=0; i<num_workers; i++) {
-    workers[i] = (workerctx_t *) valloc( sizeof(workerctx_t) );
+    workers[i] = (workerctx_t *) malloc( sizeof(workerctx_t) );
   }
 
   /* prepare data structures */
@@ -165,11 +164,13 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
     snprintf( wname, 24, "worker%02d", i);
     wc->mon = LpelMonContextCreate( wc->wid, wname, config.do_print_workerinfo);
 
+    /* mailbox */
+    wc->mailbox = MailboxCreate();
+
     /* taskqueue of free tasks */
     //TaskqueueInit( &wc->free_tasks);
-
-    /* mailbox */
-    MailboxInit( &wc->mailbox);
+    /* taskqueue of free tasks */
+    //TaskqueueInit( &wc->free_tasks);
   }
 }
 
@@ -194,7 +195,7 @@ void LpelWorkerCleanup(void)
   /* cleanup the data structures */
   for( i=0; i<num_workers; i++) {
     wc = WORKER_PTR(i);
-    MailboxCleanup( &wc->mailbox);
+    MailboxDestroy(wc->mailbox);
     SchedDestroy( wc->sched);
     free(wc);
   }
@@ -348,7 +349,7 @@ void LpelWorkerTerminate(void)
     wc = WORKER_PTR(i);
 
     /* send */
-    MailboxSend( &wc->mailbox, &msg);
+    MailboxSend(wc->mailbox, &msg);
   }
 }
 
@@ -371,10 +372,10 @@ workerctx_t *LpelWorkerGetContext(int id) {
     wc->sched = NULL;
     wc->wraptask = NULL;
     wc->mon = NULL;
+    /* mailbox */
+    wc->mailbox = MailboxCreate();
     /* taskqueue of free tasks */
     //TaskqueueInit( &wc->free_tasks);
-    /* mailbox */
-    MailboxInit( &wc->mailbox);
     (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
     (void) pthread_detach( wc->thread);
 
@@ -510,7 +511,7 @@ static void WaitForNewMessage( workerctx_t *wc)
   workermsg_t msg;
 
   if (wc->mon) LpelMonWorkerWaitStart(wc->mon);
-  MailboxRecv( &wc->mailbox, &msg);
+  MailboxRecv(wc->mailbox, &msg);
   if (wc->mon) LpelMonWorkerWaitStop(wc->mon);
 
   ProcessMessage( wc, &msg);
@@ -520,8 +521,8 @@ static void WaitForNewMessage( workerctx_t *wc)
 static void FetchAllMessages( workerctx_t *wc)
 {
   workermsg_t msg;
-  while( MailboxHasIncoming( &wc->mailbox) ) {
-    MailboxRecv( &wc->mailbox, &msg);
+  while( MailboxHasIncoming(wc->mailbox) ) {
+    MailboxRecv(wc->mailbox, &msg);
     ProcessMessage( wc, &msg);
   }
 }
@@ -627,7 +628,7 @@ static void *WorkerThread( void *arg)
   /* on a wrapper, we also can cleanup more*/
   if (wc->wid < 0) {
     /* clean up the mailbox for the worker */
-    MailboxCleanup( &wc->mailbox);
+    MailboxDestroy(wc->mailbox);
 
     /* free the worker context */
     free( wc);

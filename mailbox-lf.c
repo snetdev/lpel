@@ -1,11 +1,46 @@
 
 #include <stdlib.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include <assert.h>
 
 #include "arch/atomic.h"
-#include "mailbox-lf.h"
+#include "mailbox.h"
 
 
+//#define MAILBOX_USE_SPINLOCK
+
+typedef struct mailbox_node_t {
+  struct mailbox_node_t *volatile next;
+  workermsg_t msg;
+  char padding0[64];
+} mailbox_node_t;
+
+
+struct mailbox_t {
+  /* free node stack */
+  struct {
+    mailbox_node_t  *volatile top;
+    unsigned long    volatile out_cnt;
+  } stack_free __attribute__((aligned(16)));
+  char padding0[48];
+  /* head */
+  mailbox_node_t  *in_head;
+  char padding1[56];
+  /* tail */
+  struct {
+    mailbox_node_t     *node;
+#ifdef MAILBOX_USE_SPINLOCK
+    pthread_spinlock_t  lock;
+#else
+    pthread_mutex_t     lock;
+#endif
+  } tail;
+  char padding2[64];
+  /* counting semaphore */
+  sem_t            counter;
+  char padding3[64-sizeof(sem_t)];
+};
 
 
 /******************************************************************************/
@@ -22,7 +57,7 @@ static mailbox_node_t *MailboxGetFree( mailbox_t *mbox)
     if (!top) return NULL;
   } while( !CAS2( (void**) &mbox->stack_free.top, top, ocnt, top->next, ocnt+1));
   //} while( !compare_and_swap( (void**) &mbox->stack_free.top, top, top->next));
-  
+
   top->next = NULL;
   return top;
 }
@@ -51,15 +86,16 @@ static void MailboxPutFree( mailbox_t *mbox, mailbox_node_t *node)
 /******************************************************************************/
 
 
-void MailboxInit( mailbox_t *mbox)
+mailbox_t *MailboxCreate(void)
 {
   mailbox_node_t *n;
+  mailbox_t *mbox = (mailbox_t *)malloc(sizeof(mailbox_t));
   int i;
 
 #ifdef MAILBOX_USE_SPINLOCK
-  (void) pthread_spin_init( &mbox->lock_inbox, PTHREAD_PROCESS_PRIVATE);
+  (void) pthread_spin_init( &mbox->tail.lock, PTHREAD_PROCESS_PRIVATE);
 #else
-  (void) pthread_mutex_init( &mbox->lock_inbox, NULL);
+  (void) pthread_mutex_init( &mbox->tail.lock, NULL);
 #endif
   (void) sem_init( &mbox->counter, 0, 0);
 
@@ -75,14 +111,16 @@ void MailboxInit( mailbox_t *mbox)
 
   /* dummy node */
   n = MailboxAllocateNode();
-    
+
   mbox->in_head = n;
-  mbox->in_tail = n;
+  mbox->tail.node = n;
+
+  return mbox;
 }
 
 
 
-void MailboxCleanup( mailbox_t *mbox)
+void MailboxDestroy( mailbox_t *mbox)
 {
   mailbox_node_t * volatile top;
 
@@ -95,7 +133,7 @@ void MailboxCleanup( mailbox_t *mbox)
 
   /* free dummy */
   MailboxPutFree( mbox, mbox->in_head);
-  
+
   /* free list_free */
   do {
     do {
@@ -108,11 +146,13 @@ void MailboxCleanup( mailbox_t *mbox)
 
   /* destroy sync primitives */
 #ifdef MAILBOX_USE_SPINLOCK
-  (void) pthread_spin_destroy( &mbox->lock_inbox);
+  (void) pthread_spin_destroy( &mbox->tail.lock);
 #else
-  (void) pthread_mutex_destroy( &mbox->lock_inbox);
+  (void) pthread_mutex_destroy( &mbox->tail.lock);
 #endif
   (void) sem_destroy( &mbox->counter);
+
+  free(mbox);
 }
 
 
@@ -131,19 +171,19 @@ void MailboxSend( mailbox_t *mbox, workermsg_t *msg)
 
   /* aquire tail lock */
 #ifdef MAILBOX_USE_SPINLOCK
-  pthread_spin_lock( &mbox->lock_inbox);
+  pthread_spin_lock( &mbox->tail.lock);
 #else
-  pthread_mutex_lock( &mbox->lock_inbox);
+  pthread_mutex_lock( &mbox->tail.lock);
 #endif
   /* link node at the end of the linked list */
-  mbox->in_tail->next = node;
+  mbox->tail.node->next = node;
   /* swing tail to node */
-  mbox->in_tail = node;
+  mbox->tail.node = node;
   /* release tail lock */
 #ifdef MAILBOX_USE_SPINLOCK
-  pthread_spin_unlock( &mbox->lock_inbox);
+  pthread_spin_unlock( &mbox->tail.lock);
 #else
-  pthread_mutex_unlock( &mbox->lock_inbox);
+  pthread_mutex_unlock( &mbox->tail.lock);
 #endif
 
   /* signal semaphore */
