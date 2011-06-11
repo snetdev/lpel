@@ -1,7 +1,14 @@
 
 #include <stdlib.h>
 #include <pthread.h>
+
+//FIXME in build system?
+#define MAILBOX_SEMAPHORE
+
+#ifdef MAILBOX_SEMAPHORE
 #include <semaphore.h>
+#endif /* MAILBOX_SEMAPHORE */
+
 #include <assert.h>
 
 #include "arch/atomic.h"
@@ -37,9 +44,11 @@ struct mailbox_t {
 #endif
   } tail;
   char padding2[64];
+#ifdef MAILBOX_SEMAPHORE
   /* counting semaphore */
   sem_t            counter;
   char padding3[64-sizeof(sem_t)];
+#endif /* MAILBOX_SEMAPHORE */
 };
 
 
@@ -97,7 +106,10 @@ mailbox_t *MailboxCreate(void)
 #else
   (void) pthread_mutex_init( &mbox->tail.lock, NULL);
 #endif
+
+#ifdef MAILBOX_SEMAPHORE
   (void) sem_init( &mbox->counter, 0, 0);
+#endif /* MAILBOX_SEMAPHORE */
 
   mbox->stack_free.top     = NULL;
   mbox->stack_free.out_cnt = 0;
@@ -150,7 +162,10 @@ void MailboxDestroy( mailbox_t *mbox)
 #else
   (void) pthread_mutex_destroy( &mbox->tail.lock);
 #endif
+
+#ifdef MAILBOX_SEMAPHORE
   (void) sem_destroy( &mbox->counter);
+#endif /* MAILBOX_SEMAPHORE */
 
   free(mbox);
 }
@@ -186,26 +201,37 @@ void MailboxSend( mailbox_t *mbox, workermsg_t *msg)
   pthread_mutex_unlock( &mbox->tail.lock);
 #endif
 
+#ifdef MAILBOX_SEMAPHORE
   /* signal semaphore */
   (void) sem_post( &mbox->counter);
+#endif /* MAILBOX_SEMAPHORE */
 }
 
 
 void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
 {
+#ifndef MAILBOX_SEMAPHORE
+  mailbox_node_t *volatile node, *volatile new_head;
+#else /* MAILBOX_SEMAPHORE */
   mailbox_node_t *node, *new_head;
+#endif /* MAILBOX_SEMAPHORE */
 
+#ifndef MAILBOX_SEMAPHORE
+  do {
+#else /* MAILBOX_SEMAPHORE */
   /* wait semaphore */
   (void) sem_wait( &mbox->counter);
+#endif /* MAILBOX_SEMAPHORE */
 
-  //do {
+    /* read head (dummy) */
+    node = mbox->in_head;
+    /* read next pointer */
+    new_head = node->next;
 
-  /* read head (dummy) */
-  node = mbox->in_head;
-  /* read next pointer */
-  new_head = node->next;
-
-  //} while (new_head == NULL);
+#ifndef MAILBOX_SEMAPHORE
+    /*TODO burn some cycles */
+  } while (new_head == NULL);
+#endif /* MAILBOX_SEMAPHORE */
 
   /* is queue empty? */
   //if (new_head == NULL) return NULL;
@@ -223,7 +249,7 @@ void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
 
 /**
  * @return 1 if there is an incoming msg, 0 otherwise
- * @note: does not need to be locked as a 'missed' msg 
+ * @note: does not need to be locked as a 'missed' msg
  *        will be eventually fetched in the next worker loop
  */
 int MailboxHasIncoming( mailbox_t *mbox)
