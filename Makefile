@@ -5,7 +5,7 @@
 CFLAGS = -g -Wall -pthread -fPIC -I.
 LDFLAGS = -shared -lpthread -pthread -lcap -lrt -lpcl
 
-OBJS = buffer.o mailbox.o monitoring.o scheduler.o stream.o \
+OBJS = buffer.o mailbox-lf.o monitoring.o scheduler.o stream.o \
        streamset.o task.o taskqueue.o lpel_main.o worker.o \
 
 

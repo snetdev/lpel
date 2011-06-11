@@ -1,6 +1,9 @@
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <sched.h>
 
 #include <error.h>
 #include <pthread.h>
@@ -56,6 +59,14 @@ void *Process(void *arg)
   msg_t *msg;
   int term = 0;
   timing_t ts;
+  cpu_set_t cpuset;
+
+
+  CPU_ZERO( &cpuset );
+  CPU_SET(id % 2, &cpuset );
+
+  pthread_t self = pthread_self();
+  pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset);
 
   out = PthrStreamOpen(streams[id], 'w');
 

@@ -119,7 +119,7 @@ static void CreateTask(int id)
   int i;
 
   i = 0;
-  // i = id % 2;
+  i = id % 2;
   // i = (id < RING_SIZE/2) ? 0 : 1;
 
   t = LpelTaskCreate( i, Process, &ids[id], STACK_SIZE);
@@ -155,13 +155,15 @@ static void testBasic(void)
 {
   lpel_config_t cfg;
   /*
-  cfg.num_workers = 2;
-  cfg.proc_workers = 2;
-  */
   cfg.num_workers = 1;
   cfg.proc_workers = 1;
+  cfg.flags = 0;
+  */
+  cfg.num_workers = 2;
+  cfg.proc_workers = 2;
 
   cfg.proc_others = 0;
+  //cfg.flags = LPEL_FLAG_EXCLUSIVE | LPEL_FLAG_PINNED;
   cfg.flags = 0;
   cfg.node = 0;
 

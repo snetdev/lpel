@@ -14,14 +14,14 @@ done
 
 for f in $lpel_files
 do
-  awk '{print $1, $3 / 1000, $2 / $3 }' <(join $F_PTHR $f) > $f.d
+  awk '{print $1, $2 / 1000000000 }' <(cat $f) > $f.d
 done
 
 
-awk '{print $1, $2 / 1000, 1 }' $F_PTHR > $F_PTHR.d
+awk '{print $1, $2 / 1000000000, 1 }' $F_PTHR > $F_PTHR.d
 
 
-TITLE="Throughput speedup for a pipeline"
+TITLE="Comparison of pipeline throughput, AMD Opteron quad-core"
 gnuplot <(sed -e "s/%TITLE%/$TITLE/g"  \
               -e "s/%F_LPEL%/$F_LPEL/g"\
               -e "s/%F_PTHR%/$F_PTHR/g"\
