@@ -65,7 +65,10 @@ mon_stream_t *LpelMonStreamOpen(mon_task_t *mt, unsigned int sid, char mode);
 void LpelMonStreamClose(mon_stream_t *ms);
 void LpelMonStreamReplace(mon_stream_t *ms, unsigned int new_sid);
 
-void LpelMonStreamMoved(mon_stream_t *ms, void *item);
+void LpelMonStreamReadPrepare(mon_stream_t *ms);
+void LpelMonStreamReadFinish(mon_stream_t *ms, void *item);
+void LpelMonStreamWritePrepare(mon_stream_t *ms, void *item);
+void LpelMonStreamWriteFinish(mon_stream_t *ms);
 void LpelMonStreamBlockon(mon_stream_t *ms);
 void LpelMonStreamWakeup(mon_stream_t *ms);
 

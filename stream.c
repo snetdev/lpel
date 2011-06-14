@@ -260,12 +260,15 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
 
   assert( sd->mode == 'r');
 
+  /* MONITORING CALLBACK */
+  if (sd->mon) LpelMonStreamReadPrepare(sd->mon);
+
   /* quasi P(n_sem) */
   if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
     /* MONITORING CALLBACK */
     if (sd->mon) LpelMonStreamBlockon(sd->mon);
     /* wait on stream: */
-    LpelTaskBlock( self, BLOCKED_ON_INPUT);
+    LpelTaskBlockStream( self);
   }
 
 
@@ -287,7 +290,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
   }
 
   /* MONITORING CALLBACK */
-  if (sd->mon) LpelMonStreamMoved(sd->mon, item);
+  if (sd->mon) LpelMonStreamReadFinish(sd->mon, item);
 
   return item;
 }
@@ -314,12 +317,15 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   assert( sd->mode == 'w' );
   assert( item != NULL );
 
+  /* MONITORING CALLBACK */
+  if (sd->mon) LpelMonStreamWritePrepare(sd->mon, item);
+
   /* quasi P(e_sem) */
   if ( fetch_and_dec( &sd->stream->e_sem)== 0) {
     /* MONITORING CALLBACK */
     if (sd->mon) LpelMonStreamBlockon(sd->mon);
     /* wait on stream: */
-    LpelTaskBlock( self, BLOCKED_ON_OUTPUT);
+    LpelTaskBlockStream( self);
   }
 
   /* writing to the buffer and checking if consumer polls must be atomic */
@@ -361,7 +367,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   }
 
   /* MONITORING CALLBACK */
-  if (sd->mon) LpelMonStreamMoved(sd->mon, item);
+  if (sd->mon) LpelMonStreamWriteFinish(sd->mon);
 }
 
 
@@ -456,7 +462,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   /* context switch */
   if (do_ctx_switch) {
     /* set task as blocked */
-    LpelTaskBlock( self, BLOCKED_ON_ANYIN);
+    LpelTaskBlockStream( self);
   }
   assert( atomic_read( &self->poll_token) == 0);
 

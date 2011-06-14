@@ -183,7 +183,6 @@ static void CreateCpusets( void)
  */
 int LpelInit( lpel_config_t *cfg)
 {
-  workercfg_t worker_config;
   int res;
   char node_prefix[16];
 
@@ -200,15 +199,13 @@ int LpelInit( lpel_config_t *cfg)
   /* Init libPCL */
   co_thread_init();
 
-  worker_config.node = _lpel_global_config.node;
-  worker_config.do_print_workerinfo = _lpel_global_config.worker_dbg;
 
   /* initialise monitoring module */
   (void) snprintf(node_prefix, 16, "mon_n%02d_", _lpel_global_config.node);
   LpelMonInit(node_prefix, ".log");
 
   /* initialise workers */
-  LpelWorkerInit( _lpel_global_config.num_workers, &worker_config);
+  LpelWorkerInit( _lpel_global_config.num_workers);
 
   return 0;
 }

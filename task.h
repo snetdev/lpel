@@ -15,7 +15,7 @@
  */
 #define LPEL_TASK_SIZE_DEFAULT  8192  /* 8k */
 
-
+struct workerctx_t;
 struct lpel_task_t;
 struct mon_task_t;
 
@@ -30,14 +30,9 @@ typedef enum taskstate_t {
   TASK_RUNNING = 'U',
   TASK_READY   = 'R',
   TASK_BLOCKED = 'B',
+  TASK_MUTEX   = 'X',
   TASK_ZOMBIE  = 'Z'
 } taskstate_t;
-
-typedef enum {
-  BLOCKED_ON_INPUT  = 'i',
-  BLOCKED_ON_OUTPUT = 'o',
-  BLOCKED_ON_ANYIN  = 'a',
-} taskstate_blocked_t;
 
 
 /**
@@ -48,7 +43,6 @@ typedef struct lpel_task_t {
   struct lpel_task_t *prev, *next;
   unsigned int uid;    /** unique identifier */
   taskstate_t state;   /** state */
-  taskstate_blocked_t blocked_on; /** on which event the task is waiting */
 
   struct workerctx_t *worker_context;  /** worker context for this task */
 
@@ -90,7 +84,7 @@ void LpelTaskYield(void);
 
 unsigned int LpelTaskGetUID( lpel_task_t *t);
 
-void LpelTaskBlock( lpel_task_t *ct, taskstate_blocked_t block_on);
+void LpelTaskBlockStream( lpel_task_t *ct);
 void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
 
 

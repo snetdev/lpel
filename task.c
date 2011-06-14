@@ -7,6 +7,7 @@
 #include "task.h"
 
 #include "worker.h"
+#include "workerctx.h"
 #include "stream.h"
 
 #include "monitoring.h"
@@ -22,7 +23,7 @@ static void TaskStartup(void *data);
 
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
-static void TaskBlock( lpel_task_t *t, taskstate_t state);
+static void TaskBlock( lpel_task_t *t);
 
 
 #define TASK_STACK_ALIGN  16 // 256 /* co_create does align the stack to 256 */
@@ -157,7 +158,9 @@ void LpelTaskExit(void *outarg)
   ct->outarg = outarg;
 
   /* context switch happens, this task is cleaned up then */
-  TaskBlock( ct, TASK_ZOMBIE);
+  ct->state = TASK_ZOMBIE;
+  LpelWorkerSelfTaskExit(ct);
+  TaskBlock( ct );
   /* execution never comes back here */
   assert(0);
 }
@@ -173,7 +176,9 @@ void LpelTaskYield(void)
   lpel_task_t *ct = LpelTaskSelf();
   assert( ct->state == TASK_RUNNING );
 
-  TaskBlock( ct, TASK_READY);
+  ct->state = TASK_READY;
+  LpelWorkerSelfTaskYield(ct);
+  TaskBlock( ct );
 }
 
 
@@ -188,10 +193,11 @@ unsigned int LpelTaskGetUID( lpel_task_t *t)
 /**
  * Block a task
  */
-void LpelTaskBlock(lpel_task_t *ct, taskstate_blocked_t block_on)
+void LpelTaskBlockStream(lpel_task_t *t)
 {
-  ct->blocked_on = block_on;
-  TaskBlock( ct, TASK_BLOCKED);
+  /* a reference to it is held in the stream */
+  t->state = TASK_BLOCKED;
+  TaskBlock( t );
 }
 
 
@@ -227,7 +233,9 @@ static void TaskStartup( void *data)
   t->outarg = t->func(t->inarg);
 
   /* if task function returns, exit properly */
-  TaskBlock( t, TASK_ZOMBIE);
+  t->state = TASK_ZOMBIE;
+  LpelWorkerSelfTaskExit(t);
+  TaskBlock( t );
   /* execution never comes back here */
   assert(0);
 }
@@ -253,14 +261,9 @@ static void TaskStop( lpel_task_t *t)
 }
 
 
-static void TaskBlock( lpel_task_t *t, taskstate_t state)
+static void TaskBlock( lpel_task_t *t )
 {
-
-  assert( t->state == TASK_RUNNING);
-  assert( state == TASK_READY || state == TASK_ZOMBIE || state == TASK_BLOCKED);
-
-  /* set new state */
-  t->state = state;
+  assert( t->state != TASK_RUNNING);
 
   TaskStop( t);
   LpelWorkerDispatcher( t);

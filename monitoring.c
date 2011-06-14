@@ -729,11 +729,16 @@ void LpelMonStreamReplace(mon_stream_t *ms, unsigned int new_sid)
   MarkDirty(ms);
 }
 
+/**
+ * @pre ms != NULL
+ */
+void LpelMonStreamReadPrepare(mon_stream_t *ms)
+{ return; }
 
 /**
  * @pre ms != NULL
  */
-void LpelMonStreamMoved(mon_stream_t *ms, void *item)
+void LpelMonStreamReadFinish(mon_stream_t *ms, void *item)
 {
   assert( ms != NULL );
 
@@ -741,6 +746,25 @@ void LpelMonStreamMoved(mon_stream_t *ms, void *item)
   ms->strevt_flags |= ST_MOVED;
   MarkDirty(ms);
 }
+
+/**
+ * @pre ms != NULL
+ */
+void LpelMonStreamWritePrepare(mon_stream_t *ms, void *item)
+{ return; }
+
+/**
+ * @pre ms != NULL
+ */
+void LpelMonStreamWriteFinish(mon_stream_t *ms)
+{
+  assert( ms != NULL );
+
+  ms->counter++;
+  ms->strevt_flags |= ST_MOVED;
+  MarkDirty(ms);
+}
+
 
 
 

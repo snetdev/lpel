@@ -74,7 +74,9 @@ static inline int compare_and_swap( void**ptr, void* oldval, void* newval)
 }
 
 
-static inline char CAS2 (volatile void * addr, volatile void * v1, volatile long v2, void * n1, long n2) 
+static inline char CAS2 (volatile void * addr,
+    volatile void * v1, volatile long v2,
+    void * n1, long n2)
 {
         register char ret;
         __asm__ __volatile__ (

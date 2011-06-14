@@ -16,6 +16,7 @@
 
 #include "worker.h"
 
+#include "workerctx.h"
 #include "workermsg.h"
 
 #include "task.h"
@@ -30,28 +31,12 @@
  */
 #define WORKER_USE_TLSSPEC
 
-struct workerctx_t {
-  int wid;
-  pthread_t     thread;
-  coroutine_t   mctx;
-  int           terminate;
-  unsigned int  num_tasks;
-  //taskqueue_t   free_tasks;
-  lpel_task_t  *current_task;
-  lpel_task_t  *marked_del;
-  monctx_t     *mon;
-  mailbox_t    *mailbox;
-  schedctx_t   *sched;
-  lpel_task_t  *wraptask;
-  char          padding[64];
-};
 
 
 #define WORKER_PTR(i) (workers[(i)])
 
 static int num_workers = -1;
 static workerctx_t **workers;
-static workercfg_t  config;
 
 
 
@@ -66,8 +51,8 @@ static pthread_key_t workerctx_key;
 static void *WorkerThread( void *arg);
 
 
-static void RescheduleTask( workerctx_t *wc, lpel_task_t *t);
 static void FetchAllMessages( workerctx_t *wc);
+static void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t);
 
 
 
@@ -122,24 +107,15 @@ static inline workerctx_t *GetCurrentWorker(void)
  * Initialise worker globally
  *
  *
- * @param size  size of the worker set, i.e., the total number of workers
- * @param cfg   additional configuration
+ * @param size    size of the worker set, i.e., the total number of workers
  */
-void LpelWorkerInit(int size, workercfg_t *cfg)
+void LpelWorkerInit(int size)
 {
   int i;
 
   assert(0 <= size);
   num_workers = size;
 
-  /* handle configuration */
-  if (cfg != NULL) {
-    /* copy configuration for local use */
-    config = *cfg;
-  } else {
-    config.node = 0;
-    config.do_print_workerinfo = 0;
-  }
 
 #ifndef WORKER_USE_TLSSPEC
   /* init key for thread specific data */
@@ -165,7 +141,7 @@ void LpelWorkerInit(int size, workercfg_t *cfg)
     wc->wraptask = NULL;
 
     snprintf( wname, 24, "worker%02d", i);
-    wc->mon = LpelMonContextCreate( wc->wid, wname, config.do_print_workerinfo);
+    wc->mon = LpelMonContextCreate( wc->wid, wname, _lpel_global_config.worker_dbg);
 
     /* mailbox */
     wc->mailbox = MailboxCreate();
@@ -212,7 +188,7 @@ void LpelWorkerCleanup(void)
 
 
 /**
- * Assign a task to the worker by sending an assign message to that task
+ * Assign a task to the worker by sending an assign message to that worker
  */
 void LpelWorkerRunTask( lpel_task_t *t)
 {
@@ -252,8 +228,6 @@ lpel_task_t *LpelWorkerCurrentTask(void)
 void LpelWorkerDispatcher( lpel_task_t *t)
 {
   workerctx_t *wc = t->worker_context;
-
-  RescheduleTask(wc, t);
 
   /* dependent of worker or wrapper */
   if (wc->wid != -1) {
@@ -387,6 +361,30 @@ workerctx_t *LpelWorkerGetContext(int id) {
 
 
 
+void LpelWorkerSelfTaskExit(lpel_task_t *t)
+{
+  workerctx_t *wc = t->worker_context;
+
+  CleanupTaskContext(wc,t);
+  wc->num_tasks--;
+  /* wrappers can terminate if their task terminates */
+  if (wc->wid < 0) {
+    wc->terminate = 1;
+  }
+}
+
+
+void LpelWorkerSelfTaskYield(lpel_task_t *t)
+{
+  workerctx_t *wc = t->worker_context;
+
+  if (wc->wid < 0) {
+    wc->wraptask = t;
+  } else {
+    SchedMakeReady( wc->sched, t);
+  }
+}
+
 
 
 
@@ -397,7 +395,7 @@ workerctx_t *LpelWorkerGetContext(int id) {
 /**
  * Deferred deletion of a task
  */
-static inline void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t)
+static void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t)
 {
   /* delete task marked before */
   if (wc->marked_del != NULL) {
@@ -411,46 +409,6 @@ static inline void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t)
   }
 }
 
-
-/**
- * Reschedule workers own task, returning from a call
- */
-static void RescheduleTask( workerctx_t *wc, lpel_task_t *t)
-{
-  /* reschedule task */
-  switch(t->state) {
-
-    /* task exited by calling TaskExit() */
-    case TASK_ZOMBIE:
-      //FIXME LpelMonitoringDebug( wc->mon, "Killed task %d.\n", t->uid);
-      /* mark t for deletion */
-      CleanupTaskContext(wc,t);
-      wc->num_tasks--;
-
-      /* wrappers can terminate if their task terminates */
-      if (wc->wid < 0) {
-        wc->terminate = 1;
-      }
-      break;
-
-    /* task returned from a blocking call*/
-    case TASK_BLOCKED:
-      /* do nothing */
-      break;
-
-    /* task yielded execution  */
-    case TASK_READY:
-      if (wc->wid < 0) {
-        SendWakeup( wc, t);
-      } else {
-        SchedMakeReady( wc->sched, t);
-      }
-      break;
-
-    /* should not be reached */
-    default: assert(0);
-  }
-}
 
 
 
@@ -493,7 +451,9 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
         wc->wraptask = t;
         /* create monitoring context if necessary */
         if (t->mon) {
-          wc->mon = LpelMonContextCreate(-1, LpelMonTaskGetName(t->mon), config.do_print_workerinfo);
+          /* MONITORING */
+          wc->mon = LpelMonContextCreate(-1,
+              LpelMonTaskGetName(t->mon), _lpel_global_config.worker_dbg);
           LpelMonWorkerWaitStart(wc->mon);
         }
       } else {
@@ -566,9 +526,8 @@ static void WrapperLoop( workerctx_t *wc)
     if (t != NULL) {
       /* execute task */
       wc->current_task = t;
-      co_call(t->mctx);
-
       wc->wraptask = NULL;
+      co_call(t->mctx);
     } else {
       /* no ready tasks */
       WaitForNewMessage( wc);
