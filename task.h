@@ -30,7 +30,6 @@ typedef enum taskstate_t {
   TASK_RUNNING = 'U',
   TASK_READY   = 'R',
   TASK_BLOCKED = 'B',
-  TASK_MUTEX   = 'X',
   TASK_ZOMBIE  = 'Z'
 } taskstate_t;
 
@@ -85,6 +84,7 @@ void LpelTaskYield(void);
 unsigned int LpelTaskGetUID( lpel_task_t *t);
 
 void LpelTaskBlockStream( lpel_task_t *ct);
+void LpelTaskBlock( lpel_task_t *ct);
 void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
 
 

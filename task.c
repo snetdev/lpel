@@ -23,7 +23,6 @@ static void TaskStartup(void *data);
 
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
-static void TaskBlock( lpel_task_t *t);
 
 
 #define TASK_STACK_ALIGN  16 // 256 /* co_create does align the stack to 256 */
@@ -160,7 +159,7 @@ void LpelTaskExit(void *outarg)
   /* context switch happens, this task is cleaned up then */
   ct->state = TASK_ZOMBIE;
   LpelWorkerSelfTaskExit(ct);
-  TaskBlock( ct );
+  LpelTaskBlock( ct );
   /* execution never comes back here */
   assert(0);
 }
@@ -178,7 +177,7 @@ void LpelTaskYield(void)
 
   ct->state = TASK_READY;
   LpelWorkerSelfTaskYield(ct);
-  TaskBlock( ct );
+  LpelTaskBlock( ct );
 }
 
 
@@ -197,7 +196,7 @@ void LpelTaskBlockStream(lpel_task_t *t)
 {
   /* a reference to it is held in the stream */
   t->state = TASK_BLOCKED;
-  TaskBlock( t );
+  LpelTaskBlock( t );
 }
 
 
@@ -235,7 +234,7 @@ static void TaskStartup( void *data)
   /* if task function returns, exit properly */
   t->state = TASK_ZOMBIE;
   LpelWorkerSelfTaskExit(t);
-  TaskBlock( t );
+  LpelTaskBlock( t );
   /* execution never comes back here */
   assert(0);
 }
@@ -261,7 +260,7 @@ static void TaskStop( lpel_task_t *t)
 }
 
 
-static void TaskBlock( lpel_task_t *t )
+void LpelTaskBlock( lpel_task_t *t )
 {
   assert( t->state != TASK_RUNNING);
 

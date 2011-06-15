@@ -299,8 +299,10 @@ void LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
     if ( !by || (by->worker_context != whom->worker_context)) {
       SendWakeup( wc, whom);
     } else {
-      whom->state = TASK_READY;
-      SchedMakeReady( wc->sched, whom);
+      if (whom->state != TASK_READY) {
+        whom->state = TASK_READY;
+        SchedMakeReady( wc->sched, whom);
+      }
     }
   }
 }
@@ -424,13 +426,14 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
        * just wakeup to continue loop
        */
       t = msg->body.task;
-      assert(t->state == TASK_BLOCKED);
-      t->state = TASK_READY;
-      //FIXME LpelMonitoringDebug( wc->mon, "Received wakeup for %d.\n", t->uid);
-      if (wc->wid < 0) {
-        wc->wraptask = t;
-      } else {
-        SchedMakeReady( wc->sched, t);
+      if (t->state != TASK_READY) {
+        t->state = TASK_READY;
+        //FIXME LpelMonitoringDebug( wc->mon, "Received wakeup for %d.\n", t->uid);
+        if (wc->wid < 0) {
+          wc->wraptask = t;
+        } else {
+          SchedMakeReady( wc->sched, t);
+        }
       }
       break;
 
