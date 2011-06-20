@@ -6,6 +6,7 @@
 
 #include "arch/atomic.h"
 
+#include "lpel_main.h"
 #include "scheduler.h"
 
 
@@ -25,14 +26,6 @@ struct mon_task_t;
 typedef void *(*lpel_taskfunc_t)(void *inarg);
 
 
-typedef enum taskstate_t {
-  TASK_CREATED = 'C',
-  TASK_RUNNING = 'U',
-  TASK_READY   = 'R',
-  TASK_BLOCKED = 'B',
-  TASK_MUTEX   = 'X',
-  TASK_ZOMBIE  = 'Z'
-} taskstate_t;
 
 
 /**
@@ -42,7 +35,7 @@ typedef struct lpel_task_t {
   /** intrinsic pointers for organizing tasks in a list*/
   struct lpel_task_t *prev, *next;
   unsigned int uid;    /** unique identifier */
-  taskstate_t state;   /** state */
+  lpel_taskstate_t state;   /** state */
 
   struct workerctx_t *worker_context;  /** worker context for this task */
 

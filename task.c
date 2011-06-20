@@ -10,7 +10,7 @@
 #include "workerctx.h"
 #include "stream.h"
 
-#include "monitoring.h"
+#include "lpel_main.h"
 
 
 
@@ -100,7 +100,9 @@ void LpelTaskDestroy( lpel_task_t *t)
   assert( t->state == TASK_ZOMBIE);
 
   /* if task had a monitoring object, destroy it */
-  if (t->mon) LpelMonTaskDestroy(t->mon);
+  if (t->mon && MON_CB(task_destroy)) {
+    MON_CB(task_destroy)(t->mon);
+  }
 
   atomic_destroy( &t->poll_token);
   /* delete the coroutine */
@@ -115,7 +117,10 @@ void LpelTaskDestroy( lpel_task_t *t)
  */
 void LpelTaskMonitor( lpel_task_t *t, const char *name, unsigned long flags)
 {
-  t->mon = LpelMonTaskCreate(t->uid, name, flags);
+  //FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME
+  //FIXME t->mon = LpelMonTaskCreate(t->uid, name, flags);
+  //FIXME  proper creation and assignment
+  //FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME
 }
 
 
@@ -246,7 +251,9 @@ static void TaskStart( lpel_task_t *t)
   assert( t->state == TASK_READY );
 
   /* MONITORING CALLBACK */
-  if (t->mon) LpelMonTaskStart(t->mon);
+  if (t->mon && MON_CB(task_start)) {
+    MON_CB(task_start)(t->mon);
+  }
 
   t->state = TASK_RUNNING;
 }
@@ -257,7 +264,9 @@ static void TaskStop( lpel_task_t *t)
   assert( t->state != TASK_RUNNING);
 
   /* MONITORING CALLBACK */
-  if (t->mon) LpelMonTaskStop(t->mon, t->state);
+  if (t->mon && MON_CB(task_stop)) {
+    MON_CB(task_stop)(t->mon, t->state);
+  }
 }
 
 

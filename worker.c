@@ -21,7 +21,6 @@
 
 #include "task.h"
 #include "lpel_main.h"
-#include "monitoring.h"
 
 #include "mailbox.h"
 
@@ -40,7 +39,6 @@ static workerctx_t **workers;
 
 
 
-
 #ifdef WORKER_USE_TLSSPEC
 static __thread workerctx_t *workerctx_cur;
 #else
@@ -53,6 +51,7 @@ static void *WorkerThread( void *arg);
 
 static void FetchAllMessages( workerctx_t *wc);
 static void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t);
+
 
 
 
@@ -132,7 +131,6 @@ void LpelWorkerInit(int size)
   /* prepare data structures */
   for( i=0; i<num_workers; i++) {
     workerctx_t *wc = WORKER_PTR(i);
-    char wname[24];
     wc->wid = i;
     wc->num_tasks = 0;
     wc->terminate = 0;
@@ -140,9 +138,12 @@ void LpelWorkerInit(int size)
     wc->sched = SchedCreate( i);
     wc->wraptask = NULL;
 
-    snprintf( wname, 24, "worker%02d", i);
-    wc->mon = LpelMonContextCreate( wc->wid, wname, _lpel_global_config.worker_dbg);
-
+    //FIXME wc->mon = LpelMonContextCreate( wc->wid, wname, _lpel_global_config.worker_dbg);
+    if (MON_CB(worker_create)) {
+      wc->mon = MON_CB(worker_create)(wc->wid);
+    } else {
+      wc->mon = NULL;
+    }
     /* mailbox */
     wc->mailbox = MailboxCreate();
 
@@ -452,15 +453,25 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
         /* create monitoring context if necessary */
         if (t->mon) {
           /* MONITORING */
-          wc->mon = LpelMonContextCreate(-1,
-              LpelMonTaskGetName(t->mon), _lpel_global_config.worker_dbg);
-          LpelMonWorkerWaitStart(wc->mon);
+          //FIXME wc->mon = LpelMonContextCreate(-1,
+          //    LpelMonTaskGetName(t->mon),
+          //    _lpel_global_config.worker_dbg);
+          if (MON_CB(worker_create_wrapper)) {
+            wc->mon = MON_CB(worker_create_wrapper)(t->mon);
+          } else {
+            wc->mon = NULL;
+          }
+          if ( wc->mon && MON_CB(worker_waitstart)) {
+            MON_CB(worker_waitstart)(wc->mon);
+          }
         }
       } else {
         SchedMakeReady( wc->sched, t);
       }
       /* assign monitoring context to taskmon */
-      if (t->mon) LpelMonTaskAssign(t->mon, wc->mon);
+      if (t->mon && MON_CB(task_assign)) {
+        MON_CB(task_assign)(t->mon, wc->mon);
+      }
       break;
     default: assert(0);
   }
@@ -471,9 +482,15 @@ static void WaitForNewMessage( workerctx_t *wc)
 {
   workermsg_t msg;
 
-  if (wc->mon) LpelMonWorkerWaitStart(wc->mon);
+  if (wc->mon && MON_CB(worker_waitstart)) {
+    MON_CB(worker_waitstart)(wc->mon);
+  }
+
   MailboxRecv(wc->mailbox, &msg);
-  if (wc->mon) LpelMonWorkerWaitStop(wc->mon);
+
+  if (wc->mon && MON_CB(worker_waitstop)) {
+    MON_CB(worker_waitstop)(wc->mon);
+  }
 
   ProcessMessage( wc, &msg);
 }
@@ -576,7 +593,9 @@ static void *WorkerThread( void *arg)
   /*******************************************************/
 
   /* cleanup monitoring */
-  if (wc->mon) LpelMonContextDestroy( wc->mon);
+  if (wc->mon && MON_CB(worker_destroy)) {
+    MON_CB(worker_destroy)(wc->mon);
+  }
 
 
   /* destroy all the free tasks */
