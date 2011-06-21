@@ -22,6 +22,50 @@
 /*  GENERAL CONFIGURATION AND SETUP                                           */
 /******************************************************************************/
 
+enum lpel_taskstate_t {
+  TASK_CREATED = 'C',
+  TASK_RUNNING = 'U',
+  TASK_READY   = 'R',
+  TASK_BLOCKED = 'B',
+  TASK_MUTEX   = 'X',
+  TASK_ZOMBIE  = 'Z'
+};
+
+
+typedef struct mon_worker_t mon_worker_t;
+typedef struct mon_task_t   mon_task_t;
+typedef struct mon_stream_t mon_stream_t;
+typedef enum lpel_taskstate_t lpel_taskstate_t;
+
+typedef struct {
+  /* worker callbacks*/
+  mon_worker_t *(*worker_create)(int);
+  mon_worker_t *(*worker_create_wrapper)(mon_task_t *);
+  void (*worker_destroy)(mon_worker_t*);
+  void (*worker_waitstart)(mon_worker_t*);
+  void (*worker_waitstop)(mon_worker_t*);
+  /* task callbacks */
+  /* note: no callback for task creation
+   * - manual attachment required
+   */
+  void (*task_destroy)(mon_task_t*);
+  void (*task_assign)(mon_task_t*, mon_worker_t*);
+  void (*task_start)(mon_task_t*);
+  void (*task_stop)(mon_task_t*, lpel_taskstate_t);
+  /* stream callbacks */
+  mon_stream_t *(*stream_open)(mon_task_t*, unsigned int, char);
+  void (*stream_close)(mon_stream_t*);
+  void (*stream_replace)(mon_stream_t*, unsigned int);
+  void (*stream_readprepare)(mon_stream_t*);
+  void (*stream_readfinish)(mon_stream_t*, void*);
+  void (*stream_writeprepare)(mon_stream_t*, void*);
+  void (*stream_writefinish)(mon_stream_t*);
+  void (*stream_blockon)(mon_stream_t*);
+  void (*stream_wakeup)(mon_stream_t*);
+  /* general purpose debug */
+  void (*debug)(mon_worker_t*, const char *fmt, ...);
+} lpel_monitoring_cb_t;
+
 /**
  * Specification for configuration:
  *
@@ -40,9 +84,10 @@ typedef struct {
   int proc_workers;
   int proc_others;
   int flags;
-  int node;
   int worker_dbg;
+  lpel_monitoring_cb_t mon;
 } lpel_config_t;
+
 
 #define LPEL_FLAG_NONE           (0)
 #define LPEL_FLAG_PINNED      (1<<0)
@@ -58,10 +103,6 @@ void LpelStop(void);
 
 int LpelGetNumCores( int *result);
 int LpelCanSetExclusive( int *result);
-
-
-int LpelMonEventRegister(const char *evt_name);
-void LpelMonEventSignal(int evt);
 
 
 /******************************************************************************/
@@ -91,12 +132,6 @@ typedef lpel_stream_desc_t          *lpel_streamset_t;
 typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 
 
-/* monitoring */
-
-#define LPEL_MON_TASK_TIMES   (1<<0)
-#define LPEL_MON_TASK_STREAMS (1<<1)
-#define LPEL_MON_TASK_USREVT  (1<<2)
-
 
 
 /******************************************************************************/
@@ -107,10 +142,10 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
     void *inarg, int stacksize );
 
 /** monitor a task */
-void LpelTaskMonitor( lpel_task_t *t, const char *name, unsigned long flags);
+void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
 
 
-unsigned int LpelTaskGetUID( lpel_task_t *t );
+unsigned int LpelTaskGetID( lpel_task_t *t );
 
 /** let the previously created task run */
 void LpelTaskRun( lpel_task_t *t );
@@ -120,7 +155,6 @@ void LpelTaskRun( lpel_task_t *t );
 lpel_task_t *LpelTaskSelf(void);
 void LpelTaskExit(void *outarg);
 void LpelTaskYield(void);
-void LpelTaskUsrEvt(int evt);
 
 
 

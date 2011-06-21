@@ -4,6 +4,7 @@
 #include <string.h>
 #include <assert.h>
 #include "../lpel.h"
+#include "../modimpl/monitoring.h"
 
 
 
@@ -60,11 +61,13 @@ lpel_stream_t *PipeElement(lpel_stream_t *in, int depth)
   channels_t *ch;
   lpel_task_t *t;
   int wid = depth % 2;
+  mon_task_t *mt;
 
   out = LpelStreamCreate(0);
   ch = ChannelsCreate( in, out, depth);
   t = LpelTaskCreate( wid, Relay, ch, 8192);
-  LpelTaskMonitor( t, NULL, LPEL_MON_TASK_TIMES | LPEL_MON_TASK_STREAMS);
+  mt = LpelMonTaskCreate(LpelTaskGetID(t), NULL, LPEL_MON_TASK_TIMES | LPEL_MON_TASK_STREAMS);
+  LpelTaskMonitor(t, mt);
   LpelTaskRun(t);
 
   printf("Created Relay %d\n", depth );
@@ -122,28 +125,33 @@ static void testBasic(void)
   lpel_stream_t *in, *out;
   lpel_config_t cfg;
   lpel_task_t *intask, *outtask;
+  mon_task_t *mt;
 
   cfg.num_workers = 2;
   cfg.proc_workers = 2;
   cfg.proc_others = 0;
   cfg.flags = 0;
-  cfg.node = 0;
 
+  LpelMonInit(&cfg.mon);
   LpelInit(&cfg);
+
 
   in = LpelStreamCreate(0);
   out = PipeElement(in, cfg.num_workers*20 - 1);
 
   outtask = LpelTaskCreate( -1, Outputter, out, 8192);
-  LpelTaskMonitor(outtask, "outtask", LPEL_MON_TASK_TIMES);
+  mt = LpelMonTaskCreate( LpelTaskGetID(outtask), "outtask", LPEL_MON_TASK_TIMES);
+  LpelTaskMonitor(outtask, mt);
   LpelTaskRun(outtask);
 
   intask = LpelTaskCreate( -1, Inputter, in, 8192);
-  LpelTaskMonitor(intask, "intask", LPEL_MON_TASK_TIMES);
+  mt = LpelMonTaskCreate( LpelTaskGetID(intask), "intask", LPEL_MON_TASK_TIMES);
+  LpelTaskMonitor(intask, mt);
   LpelTaskRun(intask);
 
   LpelStart();
   LpelCleanup();
+  LpelMonCleanup();
 }
 
 

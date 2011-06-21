@@ -10,10 +10,9 @@
 #include "arch/timing.h"
 
 #include "monitoring.h"
-#include "lpel_main.h"
 
 
-#define MON_TASKNAME_MAXLEN  32
+#define MON_TASKNAME_MAXLEN  64
 
 #define PrintTiming(t, file)  PrintTimingNs((t),(file))
 #define PrintNormTS(t, file)  PrintNormTSns((t),(file))
@@ -41,16 +40,16 @@ struct mon_worker_t {
 
 
 /**
- * Every task which is enabled for monitoring has its mon_task_t structure
+ * Every task that is enabled for monitoring has its mon_task_t structure
  * that contains the monitored information, e.g. timing information,
  * a list of dirty-streams, etc
  * It also contains a pointer to the monitoring context of
  * the worker the task is assigned to, which is set in
- * the LpelMonTaskAssign() handler.
+ * the task_assign() handler MonCbTaskAssign().
  */
 struct mon_task_t {
   char name[MON_TASKNAME_MAXLEN];
-  mon_worker_t *ctx;
+  mon_worker_t *mw;
   unsigned long tid;
   unsigned long flags; /** monitoring flags */
   unsigned long disp;  /** dispatch counter */
@@ -219,7 +218,7 @@ static inline void MarkDirty( mon_stream_t *ms)
 static void PrintDirtyList(mon_task_t *mt)
 {
   mon_stream_t *ms, *next;
-  FILE *file = mt->ctx->outfile;
+  FILE *file = mt->mw->outfile;
 
   fprintf( file,"[" );
 
@@ -342,11 +341,37 @@ static mon_worker_t *MonCbWorkerCreate(int wid)
 
 
 
-static mon_worker_t *MonCbWrapperCreate(mon_task_t *t)
+static mon_worker_t *MonCbWrapperCreate(mon_task_t *mt)
 {
-  //FIXME
-  //MonCbDebug( mon, "Wrapper %s started.\n", name);
-  return NULL;
+  char fname[MON_FNAME_MAXLEN+1];
+
+  mon_worker_t *mon = (mon_worker_t *) malloc( sizeof(mon_worker_t));
+  mon->wid = -1;
+
+  /* build filename */
+  memset(fname, 0, MON_FNAME_MAXLEN+1);
+  if (strlen(mt->name)>0) {
+    snprintf( fname, MON_FNAME_MAXLEN,
+      "%s%s%s", prefix, mt->name, suffix);
+  } else {
+    snprintf( fname, MON_FNAME_MAXLEN,
+      "%swrapper%02lu%s", prefix, mt->tid, suffix);
+  }
+
+  /* open logfile */
+  mon->outfile = fopen(fname, "w");
+  assert( mon->outfile != NULL);
+
+  /* default values */
+  mon->disp = 0;
+  mon->wait_cnt = 0;
+  TimingZero(&mon->wait_total);
+  TimingZero(&mon->wait_current);
+
+  /* start message */
+  MonCbDebug( mon, "Wrapper %s started.\n", fname);
+
+  return mon;
 }
 
 
@@ -424,11 +449,11 @@ static void MonCbTaskDestroy(mon_task_t *mt)
  *
  * Sets the monitoring context of mt accordingly.
  */
-static void MonCbTaskAssign(mon_task_t *mt, mon_worker_t *ctx)
+static void MonCbTaskAssign(mon_task_t *mt, mon_worker_t *mw)
 {
   assert( mt != NULL );
-  assert( mt->ctx == NULL );
-  mt->ctx = ctx;
+  assert( mt->mw == NULL );
+  mt->mw = mw;
 }
 
 
@@ -446,7 +471,7 @@ static void MonCbTaskStart(mon_task_t *mt)
   /* increment dispatch counter of task */
   mt->disp++;
   /* increment task dispatched counter of monitoring context */
-  mt->ctx->disp++;
+  if (mt->mw) mt->mw->disp++;
 }
 
 
@@ -454,7 +479,9 @@ static void MonCbTaskStart(mon_task_t *mt)
 
 static void MonCbTaskStop(mon_task_t *mt, lpel_taskstate_t state)
 {
-  FILE *file = mt->ctx->outfile;
+  if (mt->mw==NULL) return;
+
+  FILE *file = mt->mw->outfile;
   timing_t et;
   assert( mt != NULL );
 
@@ -689,7 +716,7 @@ mon_task_t *LpelMonTaskCreate(unsigned long tid, const char *name, unsigned long
     mt->name[MON_TASKNAME_MAXLEN-1] = '\0';
   }
 
-  mt->ctx = NULL;
+  mt->mw = NULL;
   mt->tid = tid;
   mt->flags = flags;
   mt->disp = 0;

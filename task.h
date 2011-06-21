@@ -68,15 +68,16 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 void LpelTaskDestroy( lpel_task_t *t);
 
 
-void LpelTaskMonitor( lpel_task_t *t, const char *name, unsigned long flags);
+void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
 void LpelTaskRun( lpel_task_t *t);
 
 lpel_task_t *LpelTaskSelf(void);
 void LpelTaskExit(void *outarg);
 void LpelTaskYield(void);
 
-unsigned int LpelTaskGetUID( lpel_task_t *t);
+unsigned int LpelTaskGetID(lpel_task_t *t);
 
+void LpelTaskBlock( lpel_task_t *t );
 void LpelTaskBlockStream( lpel_task_t *ct);
 void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
 

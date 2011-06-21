@@ -6,7 +6,7 @@
 #define LPEL_MON_TASK_TIMES   (1<<0)
 #define LPEL_MON_TASK_STREAMS (1<<1)
 
-#include "lpel_main.h"
+#include "lpel.h"
 
 struct mon_worker_t;
 struct mon_task_t;

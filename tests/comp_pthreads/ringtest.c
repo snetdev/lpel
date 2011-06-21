@@ -154,6 +154,7 @@ static void CreateRing(void)
 static void testBasic(void)
 {
   lpel_config_t cfg;
+  memset(&cfg, 0, sizeof(lpel_config_t));
   /*
   cfg.num_workers = 1;
   cfg.proc_workers = 1;
@@ -165,7 +166,6 @@ static void testBasic(void)
   cfg.proc_others = 0;
   //cfg.flags = LPEL_FLAG_EXCLUSIVE | LPEL_FLAG_PINNED;
   cfg.flags = 0;
-  cfg.node = 0;
 
   LpelInit(&cfg);
 

@@ -1,4 +1,4 @@
-CFLAGS = -g -Wall -DNODEBUG -pthread
+CFLAGS = -g -Wall -DNODEBUG -pthread -I.. -I.
 LDFLAGS = -lpthread -lcap -lpcl -lrt
 
 all: lpel
