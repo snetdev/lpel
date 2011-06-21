@@ -27,7 +27,6 @@ typedef void *(*lpel_taskfunc_t)(void *inarg);
 
 
 
-
 /**
  * TASK CONTROL BLOCK
  */
@@ -35,7 +34,7 @@ typedef struct lpel_task_t {
   /** intrinsic pointers for organizing tasks in a list*/
   struct lpel_task_t *prev, *next;
   unsigned int uid;    /** unique identifier */
-  lpel_taskstate_t state;   /** state */
+  enum lpel_taskstate_t state;   /** state */
 
   struct workerctx_t *worker_context;  /** worker context for this task */
 
@@ -76,6 +75,7 @@ void LpelTaskExit(void *outarg);
 void LpelTaskYield(void);
 
 unsigned int LpelTaskGetID(lpel_task_t *t);
+mon_task_t *LpelTaskGetMon( lpel_task_t *t );
 
 void LpelTaskBlock( lpel_task_t *t );
 void LpelTaskBlockStream( lpel_task_t *ct);

@@ -22,6 +22,7 @@
 /*  GENERAL CONFIGURATION AND SETUP                                           */
 /******************************************************************************/
 
+
 enum lpel_taskstate_t {
   TASK_CREATED = 'C',
   TASK_RUNNING = 'U',
@@ -51,7 +52,7 @@ typedef struct {
   void (*task_destroy)(mon_task_t*);
   void (*task_assign)(mon_task_t*, mon_worker_t*);
   void (*task_start)(mon_task_t*);
-  void (*task_stop)(mon_task_t*, lpel_taskstate_t);
+  void (*task_stop)(mon_task_t*, enum lpel_taskstate_t);
   /* stream callbacks */
   mon_stream_t *(*stream_open)(mon_task_t*, unsigned int, char);
   void (*stream_close)(mon_stream_t*);
@@ -146,6 +147,7 @@ void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
 
 
 unsigned int LpelTaskGetID( lpel_task_t *t );
+mon_task_t *LpelTaskGetMon( lpel_task_t *t );
 
 /** let the previously created task run */
 void LpelTaskRun( lpel_task_t *t );

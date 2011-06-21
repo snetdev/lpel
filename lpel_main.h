@@ -25,7 +25,8 @@
 typedef struct mon_worker_t mon_worker_t;
 typedef struct mon_task_t   mon_task_t;
 typedef struct mon_stream_t mon_stream_t;
-typedef enum lpel_taskstate_t lpel_taskstate_t;
+
+enum lpel_taskstate_t;
 
 typedef struct {
   /* worker callbacks*/
@@ -41,7 +42,7 @@ typedef struct {
   void (*task_destroy)(mon_task_t*);
   void (*task_assign)(mon_task_t*, mon_worker_t*);
   void (*task_start)(mon_task_t*);
-  void (*task_stop)(mon_task_t*, lpel_taskstate_t);
+  void (*task_stop)(mon_task_t*, enum lpel_taskstate_t);
   /* stream callbacks */
   mon_stream_t *(*stream_open)(mon_task_t*, unsigned int, char);
   void (*stream_close)(mon_stream_t*);

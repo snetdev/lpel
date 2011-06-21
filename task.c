@@ -24,6 +24,7 @@ static void TaskStartup(void *data);
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
 
+typedef enum lpel_taskstate_t lpel_taskstate_t;
 
 #define TASK_STACK_ALIGN  16 // 256 /* co_create does align the stack to 256 */
 #define TASK_MINSIZE  8192
@@ -114,6 +115,11 @@ void LpelTaskDestroy( lpel_task_t *t)
 unsigned int LpelTaskGetID(lpel_task_t *t)
 {
   return t->uid;
+}
+
+mon_task_t *LpelTaskGetMon( lpel_task_t *t )
+{
+  return t->mon;
 }
 
 
