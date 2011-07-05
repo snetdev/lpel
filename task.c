@@ -7,9 +7,10 @@
 #include "task.h"
 
 #include "worker.h"
+#include "workerctx.h"
 #include "stream.h"
 
-#include "monitoring.h"
+#include "lpel_main.h"
 
 
 
@@ -23,8 +24,8 @@ static void TaskStartup( void *arg);
 
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
-static void TaskBlock( lpel_task_t *t, taskstate_t state);
 
+typedef enum lpel_taskstate_t lpel_taskstate_t;
 
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096
@@ -55,7 +56,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   }
   assert( size >= TASK_MINSIZE );
 
-  /* aligned at page boundary */
+  /* aligned to page boundary */
   t = valloc( size );
 
   /* calc stackaddr */
@@ -81,8 +82,10 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 
   t->mon = NULL;
 
+  /* function, argument (data), stack base address, stacksize */
   mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
-  // if (t->mctx == NULL) assert(0);
+  assert(t->mctx != NULL);
+
   return t;
 }
 
@@ -97,23 +100,33 @@ void LpelTaskDestroy( lpel_task_t *t)
   assert( t->state == TASK_ZOMBIE);
 
   /* if task had a monitoring object, destroy it */
-  if (t->mon) LpelMonTaskDestroy(t->mon);
+  if (t->mon && MON_CB(task_destroy)) {
+    MON_CB(task_destroy)(t->mon);
+  }
 
   atomic_destroy( &t->poll_token);
 
+
+  /* free the TCB itself*/
   free(t);
 }
 
 
-/**
- * Attach monitoring to a task
- */
-void LpelTaskMonitor( lpel_task_t *t, const char *name, unsigned long flags)
+unsigned int LpelTaskGetID(lpel_task_t *t)
 {
-  t->mon = LpelMonTaskCreate(t->uid, name, flags);
+  return t->uid;
+}
+
+mon_task_t *LpelTaskGetMon( lpel_task_t *t )
+{
+  return t->mon;
 }
 
 
+void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt)
+{
+  t->mon = mt;
+}
 
 
 /**
@@ -125,6 +138,7 @@ void LpelTaskRun( lpel_task_t *t)
 
   LpelWorkerRunTask( t);
 }
+
 
 
 /**
@@ -152,7 +166,9 @@ void LpelTaskExit(void *outarg)
   ct->outarg = outarg;
 
   /* context switch happens, this task is cleaned up then */
-  TaskBlock( ct, TASK_ZOMBIE);
+  ct->state = TASK_ZOMBIE;
+  LpelWorkerSelfTaskExit(ct);
+  LpelTaskBlock( ct );
   /* execution never comes back here */
   assert(0);
 }
@@ -168,15 +184,9 @@ void LpelTaskYield(void)
   lpel_task_t *ct = LpelTaskSelf();
   assert( ct->state == TASK_RUNNING );
 
-  TaskBlock( ct, TASK_READY);
-}
-
-
-
-
-unsigned int LpelTaskGetUID( lpel_task_t *t)
-{
-  return t->uid;
+  ct->state = TASK_READY;
+  LpelWorkerSelfTaskYield(ct);
+  LpelTaskBlock( ct );
 }
 
 
@@ -185,10 +195,11 @@ unsigned int LpelTaskGetUID( lpel_task_t *t)
 /**
  * Block a task
  */
-void LpelTaskBlock(lpel_task_t *ct, taskstate_blocked_t block_on)
+void LpelTaskBlockStream(lpel_task_t *t)
 {
-  ct->blocked_on = block_on;
-  TaskBlock( ct, TASK_BLOCKED);
+  /* a reference to it is held in the stream */
+  t->state = TASK_BLOCKED;
+  LpelTaskBlock( t );
 }
 
 
@@ -212,13 +223,12 @@ void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
  * Startup function for user specified task,
  * calls task function with proper signature
  *
+ * @param data  the previously allocated lpel_task_t TCB
  */
-//static void TaskStartup( unsigned int y, unsigned int x)
-static void TaskStartup( void *arg)
+static void TaskStartup( void *data)
 {
-  lpel_task_t *t;
+  lpel_task_t *t = (lpel_task_t *)data;
 
-  t = (lpel_task_t *)arg;
 #if 0
   unsigned long z;
 
@@ -233,7 +243,9 @@ static void TaskStartup( void *arg)
   t->outarg = t->func(t->inarg);
 
   /* if task function returns, exit properly */
-  TaskBlock( t, TASK_ZOMBIE);
+  t->state = TASK_ZOMBIE;
+  LpelWorkerSelfTaskExit(t);
+  LpelTaskBlock( t );
   /* execution never comes back here */
   assert(0);
 }
@@ -244,7 +256,9 @@ static void TaskStart( lpel_task_t *t)
   assert( t->state == TASK_READY );
 
   /* MONITORING CALLBACK */
-  if (t->mon) LpelMonTaskStart(t->mon);
+  if (t->mon && MON_CB(task_start)) {
+    MON_CB(task_start)(t->mon);
+  }
 
   t->state = TASK_RUNNING;
 }
@@ -255,18 +269,15 @@ static void TaskStop( lpel_task_t *t)
   assert( t->state != TASK_RUNNING);
 
   /* MONITORING CALLBACK */
-  if (t->mon) LpelMonTaskStop(t->mon, t->state);
+  if (t->mon && MON_CB(task_stop)) {
+    MON_CB(task_stop)(t->mon, t->state);
+  }
 }
 
 
-static void TaskBlock( lpel_task_t *t, taskstate_t state)
+void LpelTaskBlock( lpel_task_t *t )
 {
-
-  assert( t->state == TASK_RUNNING);
-  assert( state == TASK_READY || state == TASK_ZOMBIE || state == TASK_BLOCKED);
-
-  /* set new state */
-  t->state = state;
+  assert( t->state != TASK_RUNNING);
 
   TaskStop( t);
   LpelWorkerDispatcher( t);

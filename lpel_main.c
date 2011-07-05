@@ -21,7 +21,6 @@
 #include "arch/mctx.h"
 
 #include "lpel_main.h"
-#include "monitoring.h"
 #include "worker.h"
 
 /*!! link with -lcap */
@@ -179,18 +178,16 @@ static void CreateCpusets( void)
  * EXCLUSIVE: only valid, if
  *       #proc_avail >= proc_workers + proc_others &&
  *       proc_others != 0 &&
- *       num_workers == proc_workers 
+ *       num_workers == proc_workers
  *
  */
 int LpelInit( lpel_config_t *cfg)
 {
-  workercfg_t worker_config;
   int res;
-  char node_prefix[16];
 
   /* store a local copy of cfg */
   _lpel_global_config = *cfg;
-  
+
   /* check the config */
   res = CheckConfig();
   if (res!=0) return res;
@@ -201,15 +198,9 @@ int LpelInit( lpel_config_t *cfg)
   /* initialize machine context for main thread */
   mctx_thread_init();
 
-  worker_config.node = _lpel_global_config.node;
-  worker_config.do_print_workerinfo = _lpel_global_config.worker_dbg;
-
-  /* initialise monitoring module */
-  (void) snprintf(node_prefix, 16, "mon_n%02d_", _lpel_global_config.node);
-  LpelMonInit(node_prefix, ".log");
 
   /* initialise workers */
-  LpelWorkerInit( _lpel_global_config.num_workers, &worker_config);
+  LpelWorkerInit( _lpel_global_config.num_workers);
 
 
   return 0;
@@ -239,9 +230,6 @@ void LpelCleanup(void)
   /* Cleanup workers */
   LpelWorkerCleanup();
 
-  /* Cleanup moitoring module */
-  LpelMonCleanup();
-  
   /* cleanup machine context for main thread */
   mctx_thread_cleanup();
 }

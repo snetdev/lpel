@@ -140,11 +140,11 @@ static void testBasic(void)
   int i;
   lpel_task_t *trelay, *tcons, *intask;
 
+  memset(&cfg, 0, sizeof(lpel_config_t));
   cfg.num_workers = 2;
   cfg.proc_workers = 2;
   cfg.proc_others = 0;
   cfg.flags = 0;
-  cfg.node = 0;
 
   LpelInit(&cfg);
 

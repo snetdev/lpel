@@ -187,12 +187,12 @@ static void CreatePipe(void)
 static void testBasic(void)
 {
   lpel_config_t cfg;
+  memset(&cfg, 0, sizeof(lpel_config_t));
 
   cfg.num_workers = NUM_WORKERS;
   cfg.proc_workers = NUM_WORKERS;
   cfg.proc_others = 0;
   cfg.flags = 0;
-  cfg.node = 0;
 
   LpelInit(&cfg);
 
