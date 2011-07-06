@@ -195,8 +195,10 @@ int LpelInit( lpel_config_t *cfg)
   /* create the cpu affinity set for used threads */
   CreateCpusets();
 
+#ifdef USE_MCTX_PCL
   /* initialize machine context for main thread */
-  mctx_thread_init();
+  assert( 0 == co_thread_init());
+#endif
 
 
   /* initialise workers */
@@ -230,8 +232,10 @@ void LpelCleanup(void)
   /* Cleanup workers */
   LpelWorkerCleanup();
 
+#ifdef USE_MCTX_PCL
   /* cleanup machine context for main thread */
-  mctx_thread_cleanup();
+  co_thread_cleanup();
+#endif
 }
 
 

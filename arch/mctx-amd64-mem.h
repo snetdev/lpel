@@ -27,7 +27,3 @@ static inline void mctx_switch(mctx_t *octx, mctx_t *nctx)
   ctx_swap_internal(octx->regs, nctx->regs);
 }
 
-
-static inline void mctx_thread_init(void) {}
-
-static inline void mctx_thread_cleanup(void) {}

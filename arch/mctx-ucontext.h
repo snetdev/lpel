@@ -44,7 +44,3 @@ static inline void mctx_switch(mctx_t *octx, mctx_t *nctx)
   (void) swapcontext(octx, nctx);
 }
 
-
-static inline void mctx_thread_init(void) {}
-
-static inline void mctx_thread_cleanup(void) {}

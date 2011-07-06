@@ -577,7 +577,11 @@ static void *WorkerThread( void *arg)
 #endif /* WORKER_USE_TLSSPEC */
 
 
-  mctx_thread_init();
+//FIXME
+#ifdef USE_MCTX_PCL
+  assert( 0 == co_thread_init());
+  wc->mctx = co_current();
+#endif
 
 
   wc->current_task = NULL;
@@ -619,7 +623,9 @@ static void *WorkerThread( void *arg)
     free( wc);
   }
 
-  mctx_thread_cleanup();
+#ifdef USE_MCTX_PCL
+  co_thread_cleanup();
+#endif
 
   return NULL;
 }
