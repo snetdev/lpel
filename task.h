@@ -68,6 +68,7 @@ void LpelTaskDestroy( lpel_task_t *t);
 
 
 void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
+void LpelTaskPrio(lpel_task_t *t, int prio);
 void LpelTaskRun( lpel_task_t *t);
 
 lpel_task_t *LpelTaskSelf(void);

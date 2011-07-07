@@ -145,6 +145,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 /** monitor a task */
 void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
 
+void LpelTaskPrio(lpel_task_t *t, int prio);
 
 unsigned int LpelTaskGetID( lpel_task_t *t );
 mon_task_t *LpelTaskGetMon( lpel_task_t *t );

@@ -68,6 +68,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   /* obtain a usable worker context */
   t->worker_context = LpelWorkerGetContext(worker);
 
+  t->sched_info.prio = 0;
 
   t->uid = fetch_and_inc( &taskseq);  /* obtain a unique task id */
   t->func = func;
@@ -126,6 +127,12 @@ mon_task_t *LpelTaskGetMon( lpel_task_t *t )
 void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt)
 {
   t->mon = mt;
+}
+
+
+void LpelTaskPrio(lpel_task_t *t, int prio)
+{
+  t->sched_info.prio = prio;
 }
 
 
