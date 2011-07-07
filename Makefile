@@ -18,7 +18,7 @@ OBJS = buffer.o mailbox.o modimpl/monitoring.o scheduler.o stream.o \
 LIB_ST = liblpel.a
 LIB_DYN = liblpel.so
 
-.PHONY: all clean static dynamic
+.PHONY: all clean static dynamic hgtar
 
 all: static dynamic
 
@@ -44,3 +44,6 @@ ctx/%.o: ctx/%.S
 
 clean:
 	rm -fr $(OBJS) $(PCL_OBJS) $(LIB_ST) $(LIB_DYN)
+
+hgtar:
+	hg archive -t tgz "lpel-r%R.tgz"
