@@ -62,11 +62,11 @@ int LpelStreamsetRemove( lpel_streamset_t *set, lpel_stream_desc_t *node)
   lpel_stream_desc_t *prev, *cur;
   assert( *set != NULL);
 
-  prev = *set;
+  cur = *set;
   do {
-    cur = NODE_NEXT(prev);
     prev = cur;
-  } while (cur != node && prev != *set);
+    cur = NODE_NEXT(cur);
+  } while (cur != node && cur != *set);
 
   if (cur != node) return -1;
 

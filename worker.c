@@ -337,13 +337,16 @@ void LpelWorkerTerminate(void)
  * Get a worker context from the worker id
  */
 workerctx_t *LpelWorkerGetContext(int id) {
+
+  workerctx_t *wc = NULL;
+
   if (id >= 0 && id < num_workers) {
-    return WORKER_PTR(id);
+    wc = WORKER_PTR(id);
   }
 
   /* create a new worker context for a wrapper */
   if (id == -1) {
-    workerctx_t *wc = (workerctx_t *) malloc( sizeof( workerctx_t));
+    wc = (workerctx_t *) malloc( sizeof( workerctx_t));
     wc->wid = -1;
     wc->terminate = 0;
     /* Wrapper is excluded from scheduling module */
@@ -356,10 +359,10 @@ workerctx_t *LpelWorkerGetContext(int id) {
     //TaskqueueInit( &wc->free_tasks);
     (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
     (void) pthread_detach( wc->thread);
-
-    return wc;
   }
-  return NULL;
+
+  assert(wc != NULL);
+  return wc;
 }
 
 

@@ -443,11 +443,25 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   /* get 'self', i.e. the task calling LpelStreamPoll() */
   self = (*set)->task;
 
+  iter = LpelStreamIterCreate( set);
+
+  /* fast path*/
+  while( LpelStreamIterHasNext( iter)) {
+    lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
+    lpel_stream_t *s = sd->stream;
+    if ( _LpelBufferTop( &s->buffer) != NULL) {
+      LpelStreamIterDestroy(iter);
+      *set = sd;
+      return sd;
+    }
+  }
+
+
   /* place a poll token */
   atomic_set( &self->poll_token, 1);
 
   /* for each stream in the set */
-  iter = LpelStreamIterCreate( set);
+  LpelStreamIterReset(iter, set);
   while( LpelStreamIterHasNext( iter)) {
     lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
     lpel_stream_t *s = sd->stream;
