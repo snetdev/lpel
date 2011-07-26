@@ -21,7 +21,7 @@
 /**
  * Initialise a taskqueue
  */
-void TaskqueueInit(taskqueue_t *tq)
+void LPEL_EXPORT(TaskqueueInit)(taskqueue_t *tq)
 {
   tq->head = NULL;
   tq->tail = NULL;
@@ -33,7 +33,7 @@ void TaskqueueInit(taskqueue_t *tq)
  * Enqueue a task at the tail
  *
  */
-void TaskqueuePushBack(taskqueue_t *tq, lpel_task_t *t)
+void LPEL_EXPORT(TaskqueuePushBack)(taskqueue_t *tq, lpel_task_t *t)
 {
   assert( t->prev==NULL && t->next==NULL );
 
@@ -57,7 +57,7 @@ void TaskqueuePushBack(taskqueue_t *tq, lpel_task_t *t)
  * Enqueue a task at the head
  *
  */
-void TaskqueuePushFront(taskqueue_t *tq, lpel_task_t *t)
+void LPEL_EXPORT(TaskqueuePushFront)(taskqueue_t *tq, lpel_task_t *t)
 {
   assert( t->prev==NULL && t->next==NULL );
 
@@ -82,12 +82,12 @@ void TaskqueuePushFront(taskqueue_t *tq, lpel_task_t *t)
  *
  * @return NULL if taskqueue is empty
  */
-lpel_task_t *TaskqueuePopFront(taskqueue_t *tq)
+lpel_task_t *LPEL_EXPORT(TaskqueuePopFront)(taskqueue_t *tq)
 {
   lpel_task_t *t;
 
   if ( tq->head == NULL ) return NULL;
-  
+
   t = tq->head;
   /* t->prev == NULL by invariant */
   if ( t->next == NULL ) {
@@ -113,12 +113,12 @@ lpel_task_t *TaskqueuePopFront(taskqueue_t *tq)
  *
  * @return NULL if taskqueue is empty
  */
-lpel_task_t *TaskqueuePopBack(taskqueue_t *tq)
+lpel_task_t *LPEL_EXPORT(TaskqueuePopBack)(taskqueue_t *tq)
 {
   lpel_task_t *t;
 
   if ( tq->tail == NULL ) return NULL;
-  
+
   t = tq->tail;
   /* t->next == NULL by invariant */
   if ( t->prev == NULL ) {
@@ -153,7 +153,7 @@ lpel_task_t *TaskqueuePopBack(taskqueue_t *tq)
  * @param action  callback for the action after unlinking
  * @param arg     argument (context) for the callback functions
  */
-int TaskqueueIterateRemove(taskqueue_t *tq, 
+int LPEL_EXPORT(TaskqueueIterateRemove)(taskqueue_t *tq,
   int (*cond)(lpel_task_t*, void*), void (*action)(lpel_task_t*, void*), void *arg )
 {
   int cnt_removed = 0;
@@ -177,7 +177,7 @@ int TaskqueueIterateRemove(taskqueue_t *tq,
         tq->tail = cur->prev;
       }
       cur = cur->next;
-      
+
       p->prev = NULL;
       p->next = NULL;
       /* decrement task count */

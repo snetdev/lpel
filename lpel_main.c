@@ -57,7 +57,7 @@ static cpu_set_t cpuset_workers;
 /**
  * Get the number of available cores
  */
-int LpelGetNumCores( int *result)
+int LPEL_EXPORT(GetNumCores)( int *result)
 {
   int proc_avail = -1;
   /* query the number of CPUs */
@@ -70,7 +70,7 @@ int LpelGetNumCores( int *result)
   return 0;
 }
 
-int LpelCanSetExclusive( int *result)
+int LPEL_EXPORT(CanSetExclusive)( int *result)
 {
 #if defined(__linux__) && defined(LPEL_USE_CAPABILITIES)
   cap_t caps;
@@ -106,7 +106,7 @@ static int CheckConfig( void)
   }
 
   /* check if there are enough processors (if we can check) */
-  if (0 == LpelGetNumCores( &proc_avail)) {
+  if (0 == LPEL_EXPORT(GetNumCores)( &proc_avail)) {
     if (cfg->proc_workers + cfg->proc_others > proc_avail) {
       return LPEL_ERR_INVAL;
     }
@@ -127,7 +127,7 @@ static int CheckConfig( void)
       return LPEL_ERR_INVAL;
     }
     /* check permissions to set exclusive (if we can check) */
-    if ( 0==LpelCanSetExclusive(&can_rt) && !can_rt ) {
+    if ( 0==LPEL_EXPORT(CanSetExclusive)(&can_rt) && !can_rt ) {
       return LPEL_ERR_EXCL;
     }
   }
@@ -181,7 +181,7 @@ static void CreateCpusets( void)
  *       num_workers == proc_workers
  *
  */
-int LpelInit( lpel_config_t *cfg)
+int LPEL_EXPORT(Init)(lpel_config_t *cfg)
 {
   int res;
 
@@ -202,22 +202,22 @@ int LpelInit( lpel_config_t *cfg)
 
 
   /* initialise workers */
-  LpelWorkerInit( _lpel_global_config.num_workers);
+  LPEL_EXPORT(WorkerInit)( _lpel_global_config.num_workers);
 
 
   return 0;
 }
 
 
-void LpelStart(void)
+void LPEL_EXPORT(Start)(void)
 {
-  LpelWorkerSpawn();
+  LPEL_EXPORT(WorkerSpawn)();
 }
 
 
-void LpelStop(void)
+void LPEL_EXPORT(Stop)(void)
 {
-  LpelWorkerTerminate();
+  LPEL_EXPORT(WorkerTerminate)();
 }
 
 
@@ -227,10 +227,10 @@ void LpelStop(void)
  * - wait for the workers to finish
  * - free the data structures of worker threads
  */
-void LpelCleanup(void)
+void LPEL_EXPORT(Cleanup)(void)
 {
   /* Cleanup workers */
-  LpelWorkerCleanup();
+  LPEL_EXPORT(WorkerCleanup)();
 
 #ifdef USE_MCTX_PCL
   /* cleanup machine context for main thread */
@@ -244,7 +244,7 @@ void LpelCleanup(void)
 /**
  * @pre core in [0, num_workers] or -1
  */
-int LpelThreadAssign( int core)
+int LPEL_EXPORT(ThreadAssign)( int core)
 {
   #ifdef __linux__
   lpel_config_t *cfg = &_lpel_global_config;

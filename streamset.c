@@ -35,7 +35,7 @@ struct lpel_stream_iter_t {
  * @pre   it is NOT safe to put elements to the set while iterating,
  *        use StreamIterAppend() instead!
  */
-void LpelStreamsetPut( lpel_streamset_t *set, lpel_stream_desc_t *node)
+void LPEL_EXPORT(StreamsetPut)( lpel_streamset_t *set, lpel_stream_desc_t *node)
 {
   if (*set  == NULL) {
     /* set is empty */
@@ -57,7 +57,7 @@ void LpelStreamsetPut( lpel_streamset_t *set, lpel_stream_desc_t *node)
  * @return 0 on success, -1 if node is not contained in the set
  * @note  O(n) operation
  */
-int LpelStreamsetRemove( lpel_streamset_t *set, lpel_stream_desc_t *node)
+int LPEL_EXPORT(StreamsetRemove)( lpel_streamset_t *set, lpel_stream_desc_t *node)
 {
   lpel_stream_desc_t *prev, *cur;
   assert( *set != NULL);
@@ -91,7 +91,7 @@ int LpelStreamsetRemove( lpel_streamset_t *set, lpel_stream_desc_t *node)
  * @param set   stream descriptor set
  * @return      1 if the set is empty, 0 otherwise
  */
-int LpelStreamsetIsEmpty( lpel_streamset_t *set)
+int LPEL_EXPORT(StreamsetIsEmpty)( lpel_streamset_t *set)
 {
   return (*set == NULL);
 }
@@ -110,7 +110,7 @@ int LpelStreamsetIsEmpty( lpel_streamset_t *set)
  *              the memory for the iterator
  * @return      the newly created iterator
  */
-lpel_stream_iter_t *LpelStreamIterCreate( lpel_streamset_t *set)
+lpel_stream_iter_t *LPEL_EXPORT(StreamIterCreate)( lpel_streamset_t *set)
 {
   lpel_stream_iter_t *iter =
     (lpel_stream_iter_t *) malloc( sizeof( lpel_stream_iter_t));
@@ -131,7 +131,7 @@ lpel_stream_iter_t *LpelStreamIterCreate( lpel_streamset_t *set)
  *
  * @param iter  iterator to be destroyed
  */
-void LpelStreamIterDestroy( lpel_stream_iter_t *iter)
+void LPEL_EXPORT(StreamIterDestroy)( lpel_stream_iter_t *iter)
 {
   free(iter);
 }
@@ -145,7 +145,7 @@ void LpelStreamIterDestroy( lpel_stream_iter_t *iter)
  * @param iter  iterator to be resetted
  * @pre         The stream set is not empty, i.e. *set != NULL
  */
-void LpelStreamIterReset( lpel_stream_iter_t *iter, lpel_streamset_t *set)
+void LPEL_EXPORT(StreamIterReset)( lpel_stream_iter_t *iter, lpel_streamset_t *set)
 {
   assert( set != NULL);
   iter->prev = *set;
@@ -161,7 +161,7 @@ void LpelStreamIterReset( lpel_stream_iter_t *iter, lpel_streamset_t *set)
  * @param iter  the iterator
  * @return      1 if there are stream descriptors left, 0 otherwise
  */
-int LpelStreamIterHasNext( lpel_stream_iter_t *iter)
+int LPEL_EXPORT(StreamIterHasNext)( lpel_stream_iter_t *iter)
 {
   return (*iter->set != NULL) &&
     ( (iter->cur != *iter->set) || (iter->cur == NULL) );
@@ -176,9 +176,9 @@ int LpelStreamIterHasNext( lpel_stream_iter_t *iter)
  * @pre         there must be stream descriptors left for iteration,
  *              check with StreamIterHasNext()
  */
-lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter)
+lpel_stream_desc_t *LPEL_EXPORT(StreamIterNext)( lpel_stream_iter_t *iter)
 {
-  assert( LpelStreamIterHasNext(iter) );
+  assert( LPEL_EXPORT(StreamIterHasNext)(iter) );
 
   if (iter->cur != NULL) {
     /* this also does account for the state after deleting */
@@ -200,7 +200,7 @@ lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter)
  * @param iter  iterator for the set currently in use
  * @param node  stream descriptor to be appended
  */
-void LpelStreamIterAppend( lpel_stream_iter_t *iter,
+void LPEL_EXPORT(StreamIterAppend)( lpel_stream_iter_t *iter,
     lpel_stream_desc_t *node)
 {
 #if 0
@@ -245,7 +245,7 @@ void LpelStreamIterAppend( lpel_stream_iter_t *iter,
  *       StreamIterNext(), as the current node is not a valid
  *       set node anymore. Iteration can be continued though.
  */
-void LpelStreamIterRemove( lpel_stream_iter_t *iter)
+void LPEL_EXPORT(StreamIterRemove)( lpel_stream_iter_t *iter)
 {
   /* handle case if there is only a single element */
   if (iter->prev == iter->cur) {

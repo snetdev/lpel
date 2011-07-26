@@ -62,7 +62,7 @@ static void PutFree( mailbox_t *mbox, mailbox_node_t *node)
 /******************************************************************************/
 
 
-mailbox_t *MailboxCreate(void)
+mailbox_t *LPEL_EXPORT(MailboxCreate)(void)
 {
   mailbox_t *mbox = (mailbox_t *)malloc(sizeof(mailbox_t));
 
@@ -77,7 +77,7 @@ mailbox_t *MailboxCreate(void)
 
 
 
-void MailboxDestroy( mailbox_t *mbox)
+void LPEL_EXPORT(MailboxDestroy)( mailbox_t *mbox)
 {
   mailbox_node_t *node;
 
@@ -113,7 +113,7 @@ void MailboxDestroy( mailbox_t *mbox)
   free(mbox);
 }
 
-void MailboxSend( mailbox_t *mbox, workermsg_t *msg)
+void LPEL_EXPORT(MailboxSend)( mailbox_t *mbox, workermsg_t *msg)
 {
   /* get a free node from recepient */
   mailbox_node_t *node = GetFree( mbox);
@@ -130,7 +130,7 @@ void MailboxSend( mailbox_t *mbox, workermsg_t *msg)
 
     pthread_cond_signal( &mbox->notempty);
 
-  } else { 
+  } else {
     /* insert stream between last node=list_inbox
        and first node=list_inbox->next */
     node->next = mbox->list_inbox->next;
@@ -141,7 +141,7 @@ void MailboxSend( mailbox_t *mbox, workermsg_t *msg)
 }
 
 
-void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
+void LPEL_EXPORT(MailboxRecv)( mailbox_t *mbox, workermsg_t *msg)
 {
   mailbox_node_t *node;
 
@@ -172,10 +172,10 @@ void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
 
 /**
  * @return 1 if there is an incoming msg, 0 otherwise
- * @note: does not need to be locked as a 'missed' msg 
+ * @note: does not need to be locked as a 'missed' msg
  *        will be eventually fetched in the next worker loop
  */
-int MailboxHasIncoming( mailbox_t *mbox)
+int LPEL_EXPORT(MailboxHasIncoming)( mailbox_t *mbox)
 {
   return ( mbox->list_inbox != NULL);
 }

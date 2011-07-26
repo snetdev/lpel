@@ -1,6 +1,9 @@
 #ifndef _TASK_H_
 #define _TASK_H_
 
+
+#include "lpel_name.h"
+
 #include "arch/mctx.h"
 
 
@@ -61,26 +64,26 @@ typedef struct lpel_task_t {
 
 
 
-lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
+lpel_task_t *LPEL_EXPORT(TaskCreate)( int worker, lpel_taskfunc_t func,
     void *inarg, int stacksize );
 
-void LpelTaskDestroy( lpel_task_t *t);
+void LPEL_EXPORT(TaskDestroy)( lpel_task_t *t);
 
 
-void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
-void LpelTaskPrio(lpel_task_t *t, int prio);
-void LpelTaskRun( lpel_task_t *t);
+void LPEL_EXPORT(TaskMonitor)(lpel_task_t *t, mon_task_t *mt);
+void LPEL_EXPORT(TaskPrio)(lpel_task_t *t, int prio);
+void LPEL_EXPORT(TaskRun)( lpel_task_t *t);
 
-lpel_task_t *LpelTaskSelf(void);
-void LpelTaskExit(void *outarg);
-void LpelTaskYield(void);
+lpel_task_t *LPEL_EXPORT(TaskSelf)(void);
+void LPEL_EXPORT(TaskExit)(void *outarg);
+void LPEL_EXPORT(TaskYield)(void);
 
-unsigned int LpelTaskGetID(lpel_task_t *t);
-mon_task_t *LpelTaskGetMon( lpel_task_t *t );
+unsigned int LPEL_EXPORT(TaskGetID)(lpel_task_t *t);
+mon_task_t *LPEL_EXPORT(TaskGetMon)( lpel_task_t *t );
 
-void LpelTaskBlock( lpel_task_t *t );
-void LpelTaskBlockStream( lpel_task_t *ct);
-void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
+void LPEL_EXPORT(TaskBlock)( lpel_task_t *t );
+void LPEL_EXPORT(TaskBlockStream)( lpel_task_t *ct);
+void LPEL_EXPORT(TaskUnblock)( lpel_task_t *ct, lpel_task_t *blocked);
 
 
 #endif /* _TASK_H_ */

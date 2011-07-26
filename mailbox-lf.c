@@ -56,7 +56,7 @@ struct mailbox_t {
 /* Free node pool management functions                                        */
 /******************************************************************************/
 
-static mailbox_node_t *MailboxGetFree( mailbox_t *mbox)
+static mailbox_node_t *GetFree( mailbox_t *mbox)
 {
   mailbox_node_t * volatile top;
   volatile unsigned long ocnt;
@@ -71,7 +71,7 @@ static mailbox_node_t *MailboxGetFree( mailbox_t *mbox)
   return top;
 }
 
-static mailbox_node_t *MailboxAllocateNode( void)
+static mailbox_node_t *AllocateNode( void)
 {
   /* allocate new node */
   mailbox_node_t *n = (mailbox_node_t *)malloc( sizeof( mailbox_node_t));
@@ -79,7 +79,7 @@ static mailbox_node_t *MailboxAllocateNode( void)
   return n;
 }
 
-static void MailboxPutFree( mailbox_t *mbox, mailbox_node_t *node)
+static void PutFree( mailbox_t *mbox, mailbox_node_t *node)
 {
   mailbox_node_t * volatile top;
   do {
@@ -95,7 +95,7 @@ static void MailboxPutFree( mailbox_t *mbox, mailbox_node_t *node)
 /******************************************************************************/
 
 
-mailbox_t *MailboxCreate(void)
+mailbox_t *LPEL_EXPORT(MailboxCreate)(void)
 {
   mailbox_node_t *n;
   mailbox_t *mbox = (mailbox_t *)malloc(sizeof(mailbox_t));
@@ -122,7 +122,7 @@ mailbox_t *MailboxCreate(void)
   }
 
   /* dummy node */
-  n = MailboxAllocateNode();
+  n = AllocateNode();
 
   mbox->in_head = n;
   mbox->tail.node = n;
@@ -132,19 +132,19 @@ mailbox_t *MailboxCreate(void)
 
 
 
-void MailboxDestroy( mailbox_t *mbox)
+void LPEL_EXPORT(MailboxDestroy)( mailbox_t *mbox)
 {
   mailbox_node_t * volatile top;
 
-  while( MailboxHasIncoming( mbox)) {
+  while( LPEL_EXPORT(MailboxHasIncoming)( mbox)) {
     workermsg_t msg;
-    MailboxRecv( mbox, &msg);
+    LPEL_EXPORT(MailboxRecv)( mbox, &msg);
   }
   /* inbox  empty */
   assert( mbox->in_head->next == NULL );
 
   /* free dummy */
-  MailboxPutFree( mbox, mbox->in_head);
+  PutFree( mbox, mbox->in_head);
 
   /* free list_free */
   do {
@@ -172,12 +172,12 @@ void MailboxDestroy( mailbox_t *mbox)
 
 
 
-void MailboxSend( mailbox_t *mbox, workermsg_t *msg)
+void LPEL_EXPORT(MailboxSend)( mailbox_t *mbox, workermsg_t *msg)
 {
   /* get a free node from recepient */
-  mailbox_node_t *node = MailboxGetFree( mbox);
+  mailbox_node_t *node = GetFree( mbox);
   if (node == NULL) {
-    node = MailboxAllocateNode();
+    node = AllocateNode();
   }
   assert( node != NULL);
 
@@ -208,7 +208,7 @@ void MailboxSend( mailbox_t *mbox, workermsg_t *msg)
 }
 
 
-void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
+void LPEL_EXPORT(MailboxRecv)( mailbox_t *mbox, workermsg_t *msg)
 {
 #ifndef MAILBOX_SEMAPHORE
   mailbox_node_t *volatile node, *volatile new_head;
@@ -244,7 +244,7 @@ void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
   mbox->in_head = new_head;
 
   /* put node into free pool */
-  MailboxPutFree( mbox, node);
+  PutFree( mbox, node);
 }
 
 /**
@@ -252,7 +252,7 @@ void MailboxRecv( mailbox_t *mbox, workermsg_t *msg)
  * @note: does not need to be locked as a 'missed' msg
  *        will be eventually fetched in the next worker loop
  */
-int MailboxHasIncoming( mailbox_t *mbox)
+int LPEL_EXPORT(MailboxHasIncoming)( mailbox_t *mbox)
 {
   return ( mbox->in_head->next != NULL );
 }

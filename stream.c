@@ -102,7 +102,7 @@ static atomic_t stream_seq = ATOMIC_INIT(0);
  *
  * @return pointer to the created stream
  */
-lpel_stream_t *LpelStreamCreate(int size)
+lpel_stream_t *LPEL_EXPORT(StreamCreate)(int size)
 {
   assert( size >= 0);
   if (0==size) size = STREAM_BUFFER_SIZE;
@@ -111,7 +111,7 @@ lpel_stream_t *LpelStreamCreate(int size)
   lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
 
   /* reset buffer (including buffer area) */
-  _LpelBufferInit( &s->buffer, size);
+  LPEL_EXPORT(BufferInit)( &s->buffer, size);
 
   s->uid = fetch_and_inc( &stream_seq);
   PRODLOCK_INIT( &s->prod_lock );
@@ -132,12 +132,12 @@ lpel_stream_t *LpelStreamCreate(int size)
  * @param s   stream to be freed
  * @pre       stream must not be opened by any task!
  */
-void LpelStreamDestroy( lpel_stream_t *s)
+void LPEL_EXPORT(StreamDestroy)( lpel_stream_t *s)
 {
   PRODLOCK_DESTROY( &s->prod_lock);
   atomic_destroy( &s->n_sem);
   atomic_destroy( &s->e_sem);
-  _LpelBufferCleanup( &s->buffer);
+  LPEL_EXPORT(BufferCleanup)( &s->buffer);
   free( s);
 }
 
@@ -151,10 +151,10 @@ void LpelStreamDestroy( lpel_stream_t *s)
  * @pre         only one task may open it for reading resp. writing
  *              at any given point in time
  */
-lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
+lpel_stream_desc_t *LPEL_EXPORT(StreamOpen)( lpel_stream_t *s, char mode)
 {
   lpel_stream_desc_t *sd;
-  lpel_task_t *ct = LpelTaskSelf();
+  lpel_task_t *ct = LPEL_EXPORT(TaskSelf)();
 
   assert( mode == 'r' || mode == 'w' );
   sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
@@ -186,7 +186,7 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
  * @param sd          stream descriptor
  * @param destroy_s   if != 0, destroy the stream as well
  */
-void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
+void LPEL_EXPORT(StreamClose)( lpel_stream_desc_t *sd, int destroy_s)
 {
   /* MONITORING CALLBACK */
   if (sd->mon && MON_CB(stream_close)) {
@@ -194,7 +194,7 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
   }
 
   if (destroy_s) {
-    LpelStreamDestroy( sd->stream);
+    LPEL_EXPORT(StreamDestroy)( sd->stream);
   }
   free(sd);
 }
@@ -208,11 +208,11 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
  * @param snew  the new stream
  * @pre         snew must not be opened by same or other task
  */
-void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
+void LPEL_EXPORT(StreamReplace)( lpel_stream_desc_t *sd, lpel_stream_t *snew)
 {
   assert( sd->mode == 'r');
   /* destroy old stream */
-  LpelStreamDestroy( sd->stream);
+  LPEL_EXPORT(StreamDestroy)( sd->stream);
   /* assign new stream */
   sd->stream = snew;
   /* new consumer sd of stream */
@@ -231,7 +231,7 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
  * @param sd  the stream descriptor
  * @return    the stream opened by the stream descriptor
  */
-lpel_stream_t *LpelStreamGet(lpel_stream_desc_t *sd)
+lpel_stream_t *LPEL_EXPORT(StreamGet)(lpel_stream_desc_t *sd)
 {
   return sd->stream;
 }
@@ -244,10 +244,10 @@ lpel_stream_t *LpelStreamGet(lpel_stream_desc_t *sd)
  * @param sd  stream descriptor
  * @return    the top item of the stream, or NULL if stream is empty
  */
-void *LpelStreamPeek( lpel_stream_desc_t *sd)
+void *LPEL_EXPORT(StreamPeek)( lpel_stream_desc_t *sd)
 {
   assert( sd->mode == 'r');
-  return _LpelBufferTop( &sd->stream->buffer);
+  return LPEL_EXPORT(BufferTop)( &sd->stream->buffer);
 }
 
 
@@ -261,7 +261,7 @@ void *LpelStreamPeek( lpel_stream_desc_t *sd)
  * @return    the next item of the stream
  * @pre       current task is single reader
  */
-void *LpelStreamRead( lpel_stream_desc_t *sd)
+void *LPEL_EXPORT(StreamRead)( lpel_stream_desc_t *sd)
 {
   void *item;
   lpel_task_t *self = sd->task;
@@ -280,15 +280,15 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
       MON_CB(stream_blockon)(sd->mon);
     }
     /* wait on stream: */
-    LpelTaskBlockStream( self);
+    LPEL_EXPORT(TaskBlockStream)( self);
   }
 
 
   /* read the top element */
-  item = _LpelBufferTop( &sd->stream->buffer);
+  item = LPEL_EXPORT(BufferTop)( &sd->stream->buffer);
   assert( item != NULL);
   /* pop off the top element */
-  _LpelBufferPop( &sd->stream->buffer);
+  LPEL_EXPORT(BufferPop)( &sd->stream->buffer);
 
 
   /* quasi V(e_sem) */
@@ -296,7 +296,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
     /* e_sem was -1 */
     lpel_task_t *prod = sd->stream->prod_sd->task;
     /* wakeup producer: make ready */
-    LpelTaskUnblock( self, prod);
+    LPEL_EXPORT(TaskUnblock)( self, prod);
     /* MONITORING CALLBACK */
     if (sd->mon && MON_CB(stream_wakeup)) {
       MON_CB(stream_wakeup)(sd->mon);
@@ -324,7 +324,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
  * @pre         current task is single writer
  * @pre         item != NULL
  */
-void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
+void LPEL_EXPORT(StreamWrite)( lpel_stream_desc_t *sd, void *item)
 {
   lpel_task_t *self = sd->task;
   int poll_wakeup = 0;
@@ -345,16 +345,16 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
       MON_CB(stream_blockon)(sd->mon);
     }
     /* wait on stream: */
-    LpelTaskBlockStream( self);
+    LPEL_EXPORT(TaskBlockStream)( self);
   }
 
   /* writing to the buffer and checking if consumer polls must be atomic */
   PRODLOCK_LOCK( &sd->stream->prod_lock);
   {
     /* there must be space now in buffer */
-    assert( _LpelBufferIsSpace( &sd->stream->buffer) );
+    assert( LPEL_EXPORT(BufferIsSpace)( &sd->stream->buffer) );
     /* put item into buffer */
-    _LpelBufferPut( &sd->stream->buffer, item);
+    LPEL_EXPORT(BufferPut)( &sd->stream->buffer, item);
 
     if ( sd->stream->is_poll) {
       /* get consumer's poll token */
@@ -371,7 +371,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     /* n_sem was -1 */
     lpel_task_t *cons = sd->stream->cons_sd->task;
     /* wakeup consumer: make ready */
-    LpelTaskUnblock( self, cons);
+    LPEL_EXPORT(TaskUnblock)( self, cons);
     /* MONITORING CALLBACK */
     if (sd->mon && MON_CB(stream_wakeup)) {
       MON_CB(stream_wakeup)(sd->mon);
@@ -382,7 +382,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
       lpel_task_t *cons = sd->stream->cons_sd->task;
       cons->wakeup_sd = sd->stream->cons_sd;
 
-      LpelTaskUnblock( self, cons);
+      LPEL_EXPORT(TaskUnblock)( self, cons);
       /* MONITORING CALLBACK */
       if (sd->mon && MON_CB(stream_wakeup)) {
         MON_CB(stream_wakeup)(sd->mon);
@@ -407,12 +407,12 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
  * @pre         item != NULL
  * @return 0 if the item could be written, -1 if the stream was full
  */
-int LpelStreamTryWrite( lpel_stream_desc_t *sd, void *item)
+int LPEL_EXPORT(StreamTryWrite)( lpel_stream_desc_t *sd, void *item)
 {
-  if (!_LpelBufferIsSpace(&sd->stream->buffer)) {
+  if (!LPEL_EXPORT(BufferIsSpace)(&sd->stream->buffer)) {
     return -1;
   }
-  LpelStreamWrite( sd, item );
+  LPEL_EXPORT(StreamWrite)( sd, item );
   return 0;
 }
 
@@ -431,7 +431,7 @@ int LpelStreamTryWrite( lpel_stream_desc_t *sd, void *item)
  *                caused the task to wakeup,
  *                i.e., the first stream where data arrived.
  */
-lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
+lpel_stream_desc_t *LPEL_EXPORT(StreamPoll)( lpel_streamset_t *set)
 {
   lpel_task_t *self;
   lpel_stream_iter_t *iter;
@@ -443,14 +443,14 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   /* get 'self', i.e. the task calling LpelStreamPoll() */
   self = (*set)->task;
 
-  iter = LpelStreamIterCreate( set);
+  iter = LPEL_EXPORT(StreamIterCreate)( set);
 
   /* fast path*/
-  while( LpelStreamIterHasNext( iter)) {
-    lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
+  while( LPEL_EXPORT(StreamIterHasNext)( iter)) {
+    lpel_stream_desc_t *sd = LPEL_EXPORT(StreamIterNext)( iter);
     lpel_stream_t *s = sd->stream;
-    if ( _LpelBufferTop( &s->buffer) != NULL) {
-      LpelStreamIterDestroy(iter);
+    if ( LPEL_EXPORT(BufferTop)( &s->buffer) != NULL) {
+      LPEL_EXPORT(StreamIterDestroy)(iter);
       *set = sd;
       return sd;
     }
@@ -461,15 +461,15 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   atomic_set( &self->poll_token, 1);
 
   /* for each stream in the set */
-  LpelStreamIterReset(iter, set);
-  while( LpelStreamIterHasNext( iter)) {
-    lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
+  LPEL_EXPORT(StreamIterReset)(iter, set);
+  while( LPEL_EXPORT(StreamIterHasNext)( iter)) {
+    lpel_stream_desc_t *sd = LPEL_EXPORT(StreamIterNext)( iter);
     lpel_stream_t *s = sd->stream;
     /* lock stream (prod-side) */
     PRODLOCK_LOCK( &s->prod_lock);
     { /* CS BEGIN */
       /* check if there is something in the buffer */
-      if ( _LpelBufferTop( &s->buffer) != NULL) {
+      if ( LPEL_EXPORT(BufferTop)( &s->buffer) != NULL) {
         /* yes, we can stop iterating through streams.
          * determine, if we have been woken up by another producer:
          */
@@ -502,7 +502,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   /* context switch */
   if (do_ctx_switch) {
     /* set task as blocked */
-    LpelTaskBlockStream( self);
+    LPEL_EXPORT(TaskBlockStream)( self);
   }
   assert( atomic_read( &self->poll_token) == 0);
 
@@ -517,16 +517,16 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
    *   and no entity writes a record on the stream after these records.
    * UPDATE: with static/dynamc collectors in S-Net, this is possible!
    */
-  LpelStreamIterReset(iter, set);
-  while( LpelStreamIterHasNext( iter)) {
-    lpel_stream_t *s = (LpelStreamIterNext(iter))->stream;
+  LPEL_EXPORT(StreamIterReset)(iter, set);
+  while( LPEL_EXPORT(StreamIterHasNext)( iter)) {
+    lpel_stream_t *s = (LPEL_EXPORT(StreamIterNext)(iter))->stream;
     PRODLOCK_LOCK( &s->prod_lock);
     s->is_poll = 0;
     PRODLOCK_UNLOCK( &s->prod_lock);
     if (--cnt == 0) break;
   }
 
-  LpelStreamIterDestroy(iter);
+  LPEL_EXPORT(StreamIterDestroy)(iter);
 
   /* 'rotate' set to stream descriptor for non-empty buffer */
   *set = self->wakeup_sd;
