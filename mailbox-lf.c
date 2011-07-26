@@ -3,7 +3,7 @@
 #include <pthread.h>
 
 //FIXME in build system?
-//#define MAILBOX_SEMAPHORE
+#define MAILBOX_SEMAPHORE
 
 #ifdef MAILBOX_SEMAPHORE
 #include <semaphore.h>

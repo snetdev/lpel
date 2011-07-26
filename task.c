@@ -107,6 +107,10 @@ void LpelTaskDestroy( lpel_task_t *t)
 
   atomic_destroy( &t->poll_token);
 
+//FIXME
+#ifdef USE_MCTX_PCL
+  co_delete(t->mctx);
+#endif
 
   /* free the TCB itself*/
   free(t);

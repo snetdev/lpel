@@ -1,5 +1,6 @@
 set terminal postscript eps color solid
 set autoscale
+set size 0.65,0.65
 #set logscale y
 #set logscale x
 

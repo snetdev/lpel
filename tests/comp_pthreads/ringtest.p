@@ -2,6 +2,7 @@ set terminal postscript eps color solid
 set autoscale y
 #set logscale y
 set logscale x
+set size 0.65,0.65
 
 set output "ringtest.eps"
 set xlabel "Ring size"
