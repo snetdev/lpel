@@ -21,7 +21,7 @@
 /**
  * Initialise a taskqueue
  */
-void LPEL_EXPORT(TaskqueueInit)(taskqueue_t *tq)
+void LPEL_FUNC(TaskqueueInit)(taskqueue_t *tq)
 {
   tq->head = NULL;
   tq->tail = NULL;
@@ -33,7 +33,7 @@ void LPEL_EXPORT(TaskqueueInit)(taskqueue_t *tq)
  * Enqueue a task at the tail
  *
  */
-void LPEL_EXPORT(TaskqueuePushBack)(taskqueue_t *tq, lpel_task_t *t)
+void LPEL_FUNC(TaskqueuePushBack)(taskqueue_t *tq, lpel_task_t *t)
 {
   assert( t->prev==NULL && t->next==NULL );
 
@@ -57,7 +57,7 @@ void LPEL_EXPORT(TaskqueuePushBack)(taskqueue_t *tq, lpel_task_t *t)
  * Enqueue a task at the head
  *
  */
-void LPEL_EXPORT(TaskqueuePushFront)(taskqueue_t *tq, lpel_task_t *t)
+void LPEL_FUNC(TaskqueuePushFront)(taskqueue_t *tq, lpel_task_t *t)
 {
   assert( t->prev==NULL && t->next==NULL );
 
@@ -82,7 +82,7 @@ void LPEL_EXPORT(TaskqueuePushFront)(taskqueue_t *tq, lpel_task_t *t)
  *
  * @return NULL if taskqueue is empty
  */
-lpel_task_t *LPEL_EXPORT(TaskqueuePopFront)(taskqueue_t *tq)
+lpel_task_t *LPEL_FUNC(TaskqueuePopFront)(taskqueue_t *tq)
 {
   lpel_task_t *t;
 
@@ -113,7 +113,7 @@ lpel_task_t *LPEL_EXPORT(TaskqueuePopFront)(taskqueue_t *tq)
  *
  * @return NULL if taskqueue is empty
  */
-lpel_task_t *LPEL_EXPORT(TaskqueuePopBack)(taskqueue_t *tq)
+lpel_task_t *LPEL_FUNC(TaskqueuePopBack)(taskqueue_t *tq)
 {
   lpel_task_t *t;
 
@@ -153,7 +153,7 @@ lpel_task_t *LPEL_EXPORT(TaskqueuePopBack)(taskqueue_t *tq)
  * @param action  callback for the action after unlinking
  * @param arg     argument (context) for the callback functions
  */
-int LPEL_EXPORT(TaskqueueIterateRemove)(taskqueue_t *tq,
+int LPEL_FUNC(TaskqueueIterateRemove)(taskqueue_t *tq,
   int (*cond)(lpel_task_t*, void*), void (*action)(lpel_task_t*, void*), void *arg )
 {
   int cnt_removed = 0;

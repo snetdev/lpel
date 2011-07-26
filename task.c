@@ -44,7 +44,7 @@ typedef enum lpel_taskstate_t lpel_taskstate_t;
  *
  * TODO reuse task contexts from the worker
  */
-lpel_task_t *LPEL_EXPORT(TaskCreate)( int worker, lpel_taskfunc_t func,
+lpel_task_t *LPEL_FUNC(TaskCreate)( int worker, lpel_taskfunc_t func,
     void *inarg, int size)
 {
   lpel_task_t *t;
@@ -66,7 +66,7 @@ lpel_task_t *LPEL_EXPORT(TaskCreate)( int worker, lpel_taskfunc_t func,
 
 
   /* obtain a usable worker context */
-  t->worker_context = LPEL_EXPORT(WorkerGetContext)(worker);
+  t->worker_context = LPEL_FUNC(WorkerGetContext)(worker);
 
   t->sched_info.prio = 0;
 
@@ -96,7 +96,7 @@ lpel_task_t *LPEL_EXPORT(TaskCreate)( int worker, lpel_taskfunc_t func,
  * Destroy a task
  * - completely free the memory for that task
  */
-void LPEL_EXPORT(TaskDestroy)( lpel_task_t *t)
+void LPEL_FUNC(TaskDestroy)( lpel_task_t *t)
 {
   assert( t->state == TASK_ZOMBIE);
 
@@ -117,24 +117,24 @@ void LPEL_EXPORT(TaskDestroy)( lpel_task_t *t)
 }
 
 
-unsigned int LPEL_EXPORT(TaskGetID)(lpel_task_t *t)
+unsigned int LPEL_FUNC(TaskGetID)(lpel_task_t *t)
 {
   return t->uid;
 }
 
-mon_task_t *LPEL_EXPORT(TaskGetMon)( lpel_task_t *t )
+mon_task_t *LPEL_FUNC(TaskGetMon)( lpel_task_t *t )
 {
   return t->mon;
 }
 
 
-void LPEL_EXPORT(TaskMonitor)(lpel_task_t *t, mon_task_t *mt)
+void LPEL_FUNC(TaskMonitor)(lpel_task_t *t, mon_task_t *mt)
 {
   t->mon = mt;
 }
 
 
-void LPEL_EXPORT(TaskPrio)(lpel_task_t *t, int prio)
+void LPEL_FUNC(TaskPrio)(lpel_task_t *t, int prio)
 {
   t->sched_info.prio = prio;
 }
@@ -143,11 +143,11 @@ void LPEL_EXPORT(TaskPrio)(lpel_task_t *t, int prio)
 /**
  * Let the task run on the worker
  */
-void LPEL_EXPORT(TaskRun)( lpel_task_t *t)
+void LPEL_FUNC(TaskRun)( lpel_task_t *t)
 {
   assert( t->state == TASK_CREATED );
 
-  LPEL_EXPORT(WorkerRunTask)( t);
+  LPEL_FUNC(WorkerRunTask)( t);
 }
 
 
@@ -157,9 +157,9 @@ void LPEL_EXPORT(TaskRun)( lpel_task_t *t)
  *
  * @pre This call must be made from within a LPEL task!
  */
-lpel_task_t *LPEL_EXPORT(TaskSelf)(void)
+lpel_task_t *LPEL_FUNC(TaskSelf)(void)
 {
-  return LPEL_EXPORT(WorkerCurrentTask)();
+  return LPEL_FUNC(WorkerCurrentTask)();
 }
 
 
@@ -169,17 +169,17 @@ lpel_task_t *LPEL_EXPORT(TaskSelf)(void)
  * @param outarg  output argument of the task
  * @pre This call must be made from within a LPEL task!
  */
-void LPEL_EXPORT(TaskExit)(void *outarg)
+void LPEL_FUNC(TaskExit)(void *outarg)
 {
-  lpel_task_t *ct = LPEL_EXPORT(TaskSelf)();
+  lpel_task_t *ct = LPEL_FUNC(TaskSelf)();
   assert( ct->state == TASK_RUNNING );
 
   ct->outarg = outarg;
 
   /* context switch happens, this task is cleaned up then */
   ct->state = TASK_ZOMBIE;
-  LPEL_EXPORT(WorkerSelfTaskExit)(ct);
-  LPEL_EXPORT(TaskBlock)( ct );
+  LPEL_FUNC(WorkerSelfTaskExit)(ct);
+  LPEL_FUNC(TaskBlock)( ct );
   /* execution never comes back here */
   assert(0);
 }
@@ -190,14 +190,14 @@ void LPEL_EXPORT(TaskExit)(void *outarg)
  *
  * @pre This call must be made from within a LPEL task!
  */
-void LPEL_EXPORT(TaskYield)(void)
+void LPEL_FUNC(TaskYield)(void)
 {
-  lpel_task_t *ct = LPEL_EXPORT(TaskSelf)();
+  lpel_task_t *ct = LPEL_FUNC(TaskSelf)();
   assert( ct->state == TASK_RUNNING );
 
   ct->state = TASK_READY;
-  LPEL_EXPORT(WorkerSelfTaskYield)(ct);
-  LPEL_EXPORT(TaskBlock)( ct );
+  LPEL_FUNC(WorkerSelfTaskYield)(ct);
+  LPEL_FUNC(TaskBlock)( ct );
 }
 
 
@@ -206,23 +206,23 @@ void LPEL_EXPORT(TaskYield)(void)
 /**
  * Block a task
  */
-void LPEL_EXPORT(TaskBlockStream)(lpel_task_t *t)
+void LPEL_FUNC(TaskBlockStream)(lpel_task_t *t)
 {
   /* a reference to it is held in the stream */
   t->state = TASK_BLOCKED;
-  LPEL_EXPORT(TaskBlock)( t );
+  LPEL_FUNC(TaskBlock)( t );
 }
 
 
 /**
  * Unblock a task. Called from StreamRead/StreamWrite procedures
  */
-void LPEL_EXPORT(TaskUnblock)( lpel_task_t *ct, lpel_task_t *blocked)
+void LPEL_FUNC(TaskUnblock)( lpel_task_t *ct, lpel_task_t *blocked)
 {
   assert(ct != NULL);
   assert(blocked != NULL);
 
-  LPEL_EXPORT(WorkerTaskWakeup)( ct, blocked);
+  LPEL_FUNC(WorkerTaskWakeup)( ct, blocked);
 }
 
 
@@ -255,8 +255,8 @@ static void TaskStartup( void *data)
 
   /* if task function returns, exit properly */
   t->state = TASK_ZOMBIE;
-  LPEL_EXPORT(WorkerSelfTaskExit)(t);
-  LPEL_EXPORT(TaskBlock)( t );
+  LPEL_FUNC(WorkerSelfTaskExit)(t);
+  LPEL_FUNC(TaskBlock)( t );
   /* execution never comes back here */
   assert(0);
 }
@@ -286,12 +286,12 @@ static void TaskStop( lpel_task_t *t)
 }
 
 
-void LPEL_EXPORT(TaskBlock)( lpel_task_t *t )
+void LPEL_FUNC(TaskBlock)( lpel_task_t *t )
 {
   assert( t->state != TASK_RUNNING);
 
   TaskStop( t);
-  LPEL_EXPORT(WorkerDispatcher)( t);
+  LPEL_FUNC(WorkerDispatcher)( t);
   TaskStart( t);
 }
 

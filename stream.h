@@ -34,22 +34,22 @@ struct lpel_stream_desc_t {
 
 
 
-lpel_stream_t *LPEL_EXPORT(StreamCreate)( int);
-void LPEL_EXPORT(StreamDestroy)( lpel_stream_t *s);
+lpel_stream_t *LPEL_FUNC(StreamCreate)( int);
+void LPEL_FUNC(StreamDestroy)( lpel_stream_t *s);
 
 lpel_stream_desc_t *
-LPEL_EXPORT(StreamOpen)( lpel_stream_t *s, char mode);
+LPEL_FUNC(StreamOpen)( lpel_stream_t *s, char mode);
 
-void  LPEL_EXPORT(StreamClose)(    lpel_stream_desc_t *sd, int destroy_s);
-void  LPEL_EXPORT(StreamReplace)(  lpel_stream_desc_t *sd, lpel_stream_t *snew);
-void *LPEL_EXPORT(StreamPeek)(     lpel_stream_desc_t *sd);
-void *LPEL_EXPORT(StreamRead)(     lpel_stream_desc_t *sd);
-void  LPEL_EXPORT(StreamWrite)(    lpel_stream_desc_t *sd, void *item);
-int   LPEL_EXPORT(StreamTryWrite)( lpel_stream_desc_t *sd, void *item);
+void  LPEL_FUNC(StreamClose)(    lpel_stream_desc_t *sd, int destroy_s);
+void  LPEL_FUNC(StreamReplace)(  lpel_stream_desc_t *sd, lpel_stream_t *snew);
+void *LPEL_FUNC(StreamPeek)(     lpel_stream_desc_t *sd);
+void *LPEL_FUNC(StreamRead)(     lpel_stream_desc_t *sd);
+void  LPEL_FUNC(StreamWrite)(    lpel_stream_desc_t *sd, void *item);
+int   LPEL_FUNC(StreamTryWrite)( lpel_stream_desc_t *sd, void *item);
 
-lpel_stream_t *LPEL_EXPORT(StreamGet)(lpel_stream_desc_t *sd);
+lpel_stream_t *LPEL_FUNC(StreamGet)(lpel_stream_desc_t *sd);
 
-lpel_stream_desc_t *LPEL_EXPORT(StreamPoll)( lpel_stream_desc_t **set);
+lpel_stream_desc_t *LPEL_FUNC(StreamPoll)( lpel_stream_desc_t **set);
 
 
 

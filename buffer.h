@@ -22,12 +22,12 @@ typedef struct {
 } buffer_t;
 
 
-void  LPEL_EXPORT(BufferInit)(buffer_t *buf, unsigned int size);
-void  LPEL_EXPORT(BufferCleanup)(buffer_t *buf);
+void  LPEL_FUNC(BufferInit)(buffer_t *buf, unsigned int size);
+void  LPEL_FUNC(BufferCleanup)(buffer_t *buf);
 
-void *LPEL_EXPORT(BufferTop)(buffer_t *buf);
-void  LPEL_EXPORT(BufferPop)(buffer_t *buf);
-int   LPEL_EXPORT(BufferIsSpace)(buffer_t *buf);
-void  LPEL_EXPORT(BufferPut)(buffer_t *buf, void *item);
+void *LPEL_FUNC(BufferTop)(buffer_t *buf);
+void  LPEL_FUNC(BufferPop)(buffer_t *buf);
+int   LPEL_FUNC(BufferIsSpace)(buffer_t *buf);
+void  LPEL_FUNC(BufferPut)(buffer_t *buf, void *item);
 
 #endif /* _BUFFER_H_ */

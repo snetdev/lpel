@@ -62,7 +62,7 @@ static void PutFree( mailbox_t *mbox, mailbox_node_t *node)
 /******************************************************************************/
 
 
-mailbox_t *LPEL_EXPORT(MailboxCreate)(void)
+mailbox_t *LPEL_FUNC(MailboxCreate)(void)
 {
   mailbox_t *mbox = (mailbox_t *)malloc(sizeof(mailbox_t));
 
@@ -77,7 +77,7 @@ mailbox_t *LPEL_EXPORT(MailboxCreate)(void)
 
 
 
-void LPEL_EXPORT(MailboxDestroy)( mailbox_t *mbox)
+void LPEL_FUNC(MailboxDestroy)( mailbox_t *mbox)
 {
   mailbox_node_t *node;
 
@@ -113,7 +113,7 @@ void LPEL_EXPORT(MailboxDestroy)( mailbox_t *mbox)
   free(mbox);
 }
 
-void LPEL_EXPORT(MailboxSend)( mailbox_t *mbox, workermsg_t *msg)
+void LPEL_FUNC(MailboxSend)( mailbox_t *mbox, workermsg_t *msg)
 {
   /* get a free node from recepient */
   mailbox_node_t *node = GetFree( mbox);
@@ -141,7 +141,7 @@ void LPEL_EXPORT(MailboxSend)( mailbox_t *mbox, workermsg_t *msg)
 }
 
 
-void LPEL_EXPORT(MailboxRecv)( mailbox_t *mbox, workermsg_t *msg)
+void LPEL_FUNC(MailboxRecv)( mailbox_t *mbox, workermsg_t *msg)
 {
   mailbox_node_t *node;
 
@@ -175,7 +175,7 @@ void LPEL_EXPORT(MailboxRecv)( mailbox_t *mbox, workermsg_t *msg)
  * @note: does not need to be locked as a 'missed' msg
  *        will be eventually fetched in the next worker loop
  */
-int LPEL_EXPORT(MailboxHasIncoming)( mailbox_t *mbox)
+int LPEL_FUNC(MailboxHasIncoming)( mailbox_t *mbox)
 {
   return ( mbox->list_inbox != NULL);
 }

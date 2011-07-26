@@ -14,11 +14,11 @@ typedef struct {
 } sched_task_t;
 
 
-schedctx_t *LPEL_EXPORT(SchedCreate)( int wid);
-void LPEL_EXPORT(SchedDestroy)( schedctx_t *sc);
+schedctx_t *LPEL_FUNC(SchedCreate)( int wid);
+void LPEL_FUNC(SchedDestroy)( schedctx_t *sc);
 
-void LPEL_EXPORT(SchedMakeReady)( schedctx_t* sc, struct lpel_task_t *t);
-struct lpel_task_t *LPEL_EXPORT(SchedFetchReady)( schedctx_t *sc);
+void LPEL_FUNC(SchedMakeReady)( schedctx_t* sc, struct lpel_task_t *t);
+struct lpel_task_t *LPEL_FUNC(SchedFetchReady)( schedctx_t *sc);
 
 
 

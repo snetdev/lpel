@@ -104,14 +104,14 @@ enum lpel_taskstate_t {
 
 
 
-int  LPEL_EXPORT(Init)( lpel_config_t *cfg);
-void LPEL_EXPORT(Cleanup)( void);
+int  LPEL_FUNC(Init)( lpel_config_t *cfg);
+void LPEL_FUNC(Cleanup)( void);
 
-void LPEL_EXPORT(Stop)(void);
+void LPEL_FUNC(Stop)(void);
 
-int LPEL_EXPORT(GetNumCores)( int *result);
-int LPEL_EXPORT(CanSetExclusive)( int *result);
-int LPEL_EXPORT(ThreadAssign)( int core);
+int LPEL_FUNC(GetNumCores)( int *result);
+int LPEL_FUNC(CanSetExclusive)( int *result);
+int LPEL_FUNC(ThreadAssign)( int core);
 
 
 extern lpel_config_t    _lpel_global_config;
