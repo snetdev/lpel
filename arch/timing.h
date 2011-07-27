@@ -2,19 +2,18 @@
 #define _TIMING_H_
 
 
-
 /*
  * Link with librt:
  *   -lrt
  */
 #include <time.h>
-
+#include <unistd.h>
 
 typedef struct timespec timing_t;
 
-#define DO_TIMING
 
 
+#if _POSIX_TIMERS > 0
 
 #if defined(_POSIX_CPUTIME)
 #  define TIMING_CLOCK  CLOCK_PROCESS_CPUTIME_ID
@@ -24,23 +23,34 @@ typedef struct timespec timing_t;
 #  define TIMING_CLOCK  CLOCK_REALTIME
 #endif
 
+/**
+ * Current timestamp
+ * @param t   pointer to timing_t
+ */
+#define TIMESTAMP(t) do { \
+  (void) clock_gettime(TIMING_CLOCK, (t)); \
+} while (0)
 
+#else  /* _POSIX_TIMERS > 0 */
+
+
+#include <sys/time.h>
 
 /**
  * Current timestamp
  * @param t   pointer to timing_t
  */
-#if defined(__linux__) && defined(DO_TIMING)
-# define TIMESTAMP(t) do { \
-    (void) clock_gettime(TIMING_CLOCK, (t)); \
-  } while (0)
-#else
-# define TIMESTAMP(t) /*NOP*/
-#endif
+#define TIMESTAMP(t) do { \
+  struct timeval tv; \
+  gettimeofday(&tv, NULL); \
+  t->tv_sec = tv.tv_sec; \
+  t->tv_nsec = tv.tv_usec*1000; \
+} while (0)
+
+#endif /* _POSIX_TIMERS > 0 */
+
 
 #define TIMING_BILLION 1000000000L
-
-
 #define TIMING_INITIALIZER  {0,0}
 
 /**
@@ -132,11 +142,23 @@ static inline int TimingEquals(const timing_t *t1, const timing_t *t2)
            (t1->tv_nsec == t2->tv_nsec) );
 }
 
+
+/**
+ * Get nanoseconds as double type from timing
+ */
 static inline double TimingToNSec(const timing_t *t)
 {
   return ((double)t->tv_sec)*1000000000.0 + (double)t->tv_nsec;
 }
 
+
+/**
+ * Get milliseconds as double type from timing
+ */
+static inline double TimingToMSec(const timing_t *t)
+{
+  return (((double)t->tv_sec) * 1000.0f) + (((double)t->tv_nsec) / 1000000.0f);
+}
 
 /**
  * Calculate the exponential average
@@ -160,14 +182,6 @@ static inline void TimingExpAvg(timing_t *t,
   t->tv_nsec  = (unsigned long)(dnew - (double)t->tv_sec*1000000000);
 }
 
-
-/**
- * Get milliseconds from timing
- */
-static inline double TimingToMSec(const timing_t *t)
-{
-  return (((double)t->tv_sec) * 1000.0f) + (((double)t->tv_nsec) / 1000000.0f);
-}
 
 
 #endif /* _TIMING_H_ */
