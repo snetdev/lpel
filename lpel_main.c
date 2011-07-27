@@ -280,7 +280,7 @@ int LPEL_FUNC(ThreadAssign)( int core)
         param.sched_priority = sched_get_priority_max(sp);
         if (-1 == sched_setscheduler(tid, sp, &param)) {
           /* we do best effort at this point */
-          //return LPEL_ERR_EXCL;
+          return LPEL_ERR_EXCL;
         } else {
           fprintf(stderr, "set realtime priority %d for worker %d.\n",
               param.sched_priority, core);
