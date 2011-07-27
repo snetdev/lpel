@@ -28,8 +28,9 @@
 /**
  * FIXME define in configure/make system!
  */
+#ifdef __linux__
 #define WORKER_USE_TLSSPEC
-
+#endif
 
 #define WORKER_PTR(i) (workers[(i)])
 

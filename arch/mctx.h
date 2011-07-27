@@ -4,12 +4,16 @@
 
 //FIXME
 //#define USE_MCTX_PCL
+//#define USE_MCTX_SETJMP
 
 #ifdef USE_MCTX_PCL
 
-
 #include "mctx-pcl.h"
 
+
+#elif defined(USE_MCTX_SETJMP)
+
+#include "mctx-setjmp.h"
 
 #elif defined(__amd64__) || defined(__i386__)
 
@@ -21,7 +25,7 @@
 
 #else
 
-#include "mctx-setjmp.h"
+#error "No suitable context switching found!"
 
 #endif
 

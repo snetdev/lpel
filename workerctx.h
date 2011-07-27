@@ -4,7 +4,7 @@
 /* includes for the datatypes defined in workerctx_t struct */
 
 #include <pthread.h>
-#include <pcl.h>
+#include "arch/mctx.h"
 #include "lpel_main.h"
 #include "task.h"
 #include "scheduler.h"
@@ -15,7 +15,7 @@
 typedef struct workerctx_t {
   int wid;
   pthread_t     thread;
-  coroutine_t   mctx;
+  mctx_t        mctx;
   int           terminate;
   unsigned int  num_tasks;
   //taskqueue_t   free_tasks;

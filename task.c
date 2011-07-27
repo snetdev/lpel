@@ -85,7 +85,9 @@ lpel_task_t *LPEL_FUNC(TaskCreate)( int worker, lpel_taskfunc_t func,
 
   /* function, argument (data), stack base address, stacksize */
   mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
+#ifdef USE_MCTX_PCL
   assert(t->mctx != NULL);
+#endif
 
   return t;
 }
