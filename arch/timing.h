@@ -43,8 +43,8 @@ typedef struct timespec timing_t;
 #define TIMESTAMP(t) do { \
   struct timeval tv; \
   gettimeofday(&tv, NULL); \
-  t->tv_sec = tv.tv_sec; \
-  t->tv_nsec = tv.tv_usec*1000; \
+  (t)->tv_sec  = tv.tv_sec; \
+  (t)->tv_nsec = tv.tv_usec*1000; \
 } while (0)
 
 #endif /* _POSIX_TIMERS > 0 */
