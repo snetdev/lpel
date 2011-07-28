@@ -13,6 +13,7 @@ LT_PREREQ([2.4])
 LT_INIT
 
 AC_ARG_WITH([pcl], [AC_HELP_STRING([--with-pcl=DIR], [look up PCL sources in DIR])], [], [with_pcl=no])
+AC_MSG_CHECKING([for pcl in $with_pcl])
 LIBPCL_LA=
 if test x"$with_pcl" != xno; then
    if test -r "$with_pcl/lib/libpcl.la"; then
@@ -25,9 +26,12 @@ if test x"$with_pcl" != xno; then
    fi
 fi
 if test x"$with_pcl" != xno; then
+  AC_MSG_RESULT([yes])
   CPPFLAGS="$CPPFLAGS -I$with_pcl/include"
   AC_SUBST([LIBPCL_LA])
   AC_DEFINE([HAVE_PCL], [1], [Define to 1 if PCL is available.])
+else
+  AC_MSG_RESULT([no])
 fi
 
 AC_ARG_WITH([mctx], [AC_HELP_STRING([--with-mctx=TYPE], [use context handling TYPE (can be pcl,i386-linux,x86_64-linux,x86_64-linux-mem,ucontext)])],
