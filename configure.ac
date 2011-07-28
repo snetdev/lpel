@@ -90,5 +90,7 @@ AC_LANG_POP([C])
 
 # FIXME: mctx selection
 
-AC_OUTPUT([Makefile])
+AC_OUTPUT([Makefile
+           tests/Makefile
+           tests/comp_pthreads/Makefile])
 

@@ -1,11 +1,9 @@
-#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
 #include <sched.h>
 
-#include <error.h>
 #include <pthread.h>
 
 
@@ -33,6 +31,8 @@ static struct {
 
 #define STACK_SIZE  (16*1024) /* 16k */
 
+void error(int exitcode, int val, const char *msg);
+
 
 static int ids[RING_SIZE];
 static pthr_stream_t *streams[RING_SIZE];
@@ -59,14 +59,16 @@ void *Process(void *arg)
   msg_t *msg;
   int term = 0;
   timing_t ts;
-  cpu_set_t cpuset;
 
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
+  cpu_set_t cpuset;
 
   CPU_ZERO( &cpuset );
   CPU_SET(id % 2, &cpuset );
 
   pthread_t self = pthread_self();
   pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset);
+#endif
 
   out = PthrStreamOpen(streams[id], 'w');
 

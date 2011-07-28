@@ -1,3 +1,4 @@
+SUBDIRS = . tests
 include_HEADERS = lpel.h
 lib_LTLIBRARIES = liblpel.la liblpel_mon.la
 

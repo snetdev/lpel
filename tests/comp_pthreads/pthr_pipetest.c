@@ -3,7 +3,6 @@
 #include <string.h>
 
 
-#include <error.h>
 #include <pthread.h>
 
 #include "pthr_streams.h"
@@ -37,6 +36,8 @@ typedef struct {
 
 static timing_t ts;
 
+
+void error(int exitcode, int val, const char *msg);
 
 void *Source(void *inarg)
 {
