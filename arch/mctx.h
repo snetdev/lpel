@@ -15,11 +15,11 @@
 
 #include "mctx-setjmp.h"
 
-#elif defined(__amd64__) || defined(__i386__)
+#elif defined(USE_MCTX_X86) || defined(USE_MCTX_X86_64) || defined(USE_MCTX_X86_64_MEM)
 
 #include "mctx-x86.h"
 
-#elif defined(__linux__)
+#elif defined(USE_MCTX_UCONTEXT)
 
 #include "mctx-ucontext.h"
 

@@ -13,7 +13,7 @@ typedef struct timespec timing_t;
 
 
 
-#if _POSIX_TIMERS > 0
+#if defined(HAVE_POSIX_TIMERS) && _POSIX_TIMERS > 0
 
 #if defined(_POSIX_CPUTIME)
 #  define TIMING_CLOCK  CLOCK_PROCESS_CPUTIME_ID

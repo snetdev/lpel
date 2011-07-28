@@ -3,13 +3,12 @@
  *
  */
 
-#define _GNU_SOURCE
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
 
+#include <errno.h>
 #include <sched.h>
 #include <unistd.h>  /* sysconf() */
 #include <sys/types.h> /* pid_t */
@@ -23,8 +22,8 @@
 #include "lpel_main.h"
 #include "worker.h"
 
-/*!! link with -lcap */
-#if defined(__linux__) && defined(LPEL_USE_CAPABILITIES)
+
+#ifdef HAVE_PROC_CAPABILITIES
 #  include <sys/capability.h>
 #endif
 
@@ -41,7 +40,7 @@ lpel_config_t    _lpel_global_config;
 /* test if flags are set in lpel config */
 #define LPEL_ICFG(f)   ( (_lpel_global_config.flags & (f)) == (f) )
 
-#ifdef __linux__
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
 /* cpuset for others-threads */
 static cpu_set_t cpuset_others;
 
@@ -50,7 +49,7 @@ static cpu_set_t cpuset_others;
  * is only used if not FLAG_PINNED is set
  */
 static cpu_set_t cpuset_workers;
-#endif /* __linux__ */
+#endif /* HAVE_PTHREAD_SETAFFINITY_NP */
 
 
 
@@ -60,10 +59,20 @@ static cpu_set_t cpuset_workers;
 int LPEL_FUNC(GetNumCores)( int *result)
 {
   int proc_avail = -1;
+#ifdef HAVE_SYSCONF
   /* query the number of CPUs */
   proc_avail = sysconf(_SC_NPROCESSORS_ONLN);
+#endif
   if (proc_avail == -1) {
-    /* _SC_NPROCESSORS_ONLN not available! */
+      char *p = getenv("LPEL_NUM_WORKERS");
+      if (p != 0)
+      {
+          unsigned long n = strtoul(p, 0, 0);
+          if (errno != EINVAL)
+              proc_avail = n;
+      }
+  }
+  if (proc_avail == -1) {
     return LPEL_ERR_FAIL;
   }
   *result = proc_avail;
@@ -72,7 +81,7 @@ int LPEL_FUNC(GetNumCores)( int *result)
 
 int LPEL_FUNC(CanSetExclusive)( int *result)
 {
-#if defined(__linux__) && defined(LPEL_USE_CAPABILITIES)
+#ifdef HAVE_PROC_CAPABILITIES
   cap_t caps;
   cap_flag_value_t cap;
   /* obtain caps of process */
@@ -138,7 +147,7 @@ static int CheckConfig( void)
 
 static void CreateCpusets( void)
 {
-  #ifdef __linux__
+  #ifdef HAVE_PTHREAD_SETAFFINITY_NP
   lpel_config_t *cfg = &_lpel_global_config;
   int  i;
 
@@ -163,7 +172,7 @@ static void CreateCpusets( void)
       CPU_SET(i, &cpuset_others);
     }
   }
-  #endif /* __linux__ */
+  #endif /* HAVE_PTHREAD_SETAFFINITY_NP */
 }
 
 
@@ -246,7 +255,7 @@ void LPEL_FUNC(Cleanup)(void)
  */
 int LPEL_FUNC(ThreadAssign)( int core)
 {
-  #ifdef __linux__
+  #ifdef HAVE_PTHREAD_SETAFFINITY_NP
   lpel_config_t *cfg = &_lpel_global_config;
   pid_t tid;
   int res;
@@ -293,7 +302,7 @@ int LPEL_FUNC(ThreadAssign)( int core)
     }
   }
 
-  #endif /* __linux__ */
+  #endif /* HAVE_PTHREAD_SETAFFINITY_NP */
   return 0;
 }
 

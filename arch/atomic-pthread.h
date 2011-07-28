@@ -10,7 +10,9 @@
 
 #include <pthread.h>
 
+#ifdef HAVE_PTHREAD_SPIN_INIT
 #define ATOMIC_PTHREAD_USE_SPINLOCK
+#endif
 
 typedef struct {
   int counter;
