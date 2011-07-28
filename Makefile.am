@@ -1,4 +1,5 @@
-lib_LTLIBRARIES = liblpel.la
+include_HEADERS = lpel.h
+lib_LTLIBRARIES = liblpel.la liblpel_mon.la
 
 liblpel_la_SOURCES = \
 	arch/atomic-pthread.h \
@@ -14,8 +15,6 @@ liblpel_la_SOURCES = \
 	arch/mctx-ucontext.h \
 	mailbox.c \
 	mailbox.h \
-	modimpl/monitoring.c \
-	modimpl/monitoring.h \
 	buffer.c \
 	buffer.h \
 	scheduler.c \
@@ -36,6 +35,10 @@ liblpel_la_SOURCES = \
 	worker.h \
 	workerctx.h \
 	workermsg.h
+
+liblpel_mon_la_SOURCES = \
+	modimpl/monitoring.c \
+	modimpl/monitoring.h
 
 if USE_MCTX_PCL
 liblpel_la_LIBADD = $(LIBPCL_LA)
