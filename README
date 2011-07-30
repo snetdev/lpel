@@ -1,10 +1,46 @@
 
-Dependencies
-============
+Building
+========
 
-libpcl     - GNU Portable Coroutine Library, currently v1.10
-libcap-dev - capabilities, for checking CAP_SYS_NICE in cpuassign module
-             (headers, only for compiling; libcap is available on all(?) systems anyway)
+If you want to use libpcl context switching (suggested),
+you need to install
 
-timing module needs to be linked with librt (clock_gettime())
+libpcl - GNU Portable Coroutine Library, currently v1.12
+
+available at
+
+http://www.xmailserver.org/libpcl.html
+
+
+Run configure with following parameters:
+
+./configure --with-pcl=<pcl_install_dir> --prefix=<your_lpel_install_dir>
+
+and
+
+make
+make install
+
+In order to build the LPEL backend for the S-Net runtime system,
+you'll need to set the environment variable LPELROOT:
+
+export LPELROOT=<your_lpel_install_dir>
+
+
+Don't forget to (re-)run ./configure in your $SNETBASE directory.
+
+
+
+Example
+-------
+
+I have installed pcl in the default system-wide installation dir.
+To build LPEL, I use
+
+./configure --with-pcl=/usr/local/ --prefix=/home/daniel/local/
+make
+make install
+export LPELROOT=/home/daniel/local
+
+
 
