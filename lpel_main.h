@@ -6,7 +6,6 @@
 
 
 #include <pthread.h>
-#include "lpel_name.h"
 
 
 /******************************************************************************/
@@ -104,14 +103,14 @@ enum lpel_taskstate_t {
 
 
 
-int  LPEL_FUNC(Init)( lpel_config_t *cfg);
-void LPEL_FUNC(Cleanup)( void);
+int  LpelInit( lpel_config_t *cfg);
+void LpelCleanup( void);
 
-void LPEL_FUNC(Stop)(void);
+void LpelStop(void);
 
-int LPEL_FUNC(GetNumCores)( int *result);
-int LPEL_FUNC(CanSetExclusive)( int *result);
-int LPEL_FUNC(ThreadAssign)( int core);
+int LpelGetNumCores( int *result);
+int LpelCanSetExclusive( int *result);
+int LpelThreadAssign( int core);
 
 
 extern lpel_config_t    _lpel_global_config;

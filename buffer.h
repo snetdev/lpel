@@ -2,7 +2,6 @@
 #define _BUFFER_H_
 
 
-#include "lpel_name.h"
 #include "arch/sysdep.h"
 
 /* 64bytes is the common size of a cache line */
@@ -22,12 +21,12 @@ typedef struct {
 } buffer_t;
 
 
-void  LPEL_FUNC(BufferInit)(buffer_t *buf, unsigned int size);
-void  LPEL_FUNC(BufferCleanup)(buffer_t *buf);
+void  LpelBufferInit(buffer_t *buf, unsigned int size);
+void  LpelBufferCleanup(buffer_t *buf);
 
-void *LPEL_FUNC(BufferTop)(buffer_t *buf);
-void  LPEL_FUNC(BufferPop)(buffer_t *buf);
-int   LPEL_FUNC(BufferIsSpace)(buffer_t *buf);
-void  LPEL_FUNC(BufferPut)(buffer_t *buf, void *item);
+void *LpelBufferTop(buffer_t *buf);
+void  LpelBufferPop(buffer_t *buf);
+int   LpelBufferIsSpace(buffer_t *buf);
+void  LpelBufferPut(buffer_t *buf, void *item);
 
 #endif /* _BUFFER_H_ */

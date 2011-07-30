@@ -2,7 +2,6 @@
 #define _STREAM_H_
 
 
-#include "lpel_name.h"
 #include "task.h"
 
 
@@ -34,22 +33,22 @@ struct lpel_stream_desc_t {
 
 
 
-lpel_stream_t *LPEL_FUNC(StreamCreate)( int);
-void LPEL_FUNC(StreamDestroy)( lpel_stream_t *s);
+lpel_stream_t *LpelStreamCreate( int);
+void LpelStreamDestroy( lpel_stream_t *s);
 
 lpel_stream_desc_t *
-LPEL_FUNC(StreamOpen)( lpel_stream_t *s, char mode);
+LpelStreamOpen( lpel_stream_t *s, char mode);
 
-void  LPEL_FUNC(StreamClose)(    lpel_stream_desc_t *sd, int destroy_s);
-void  LPEL_FUNC(StreamReplace)(  lpel_stream_desc_t *sd, lpel_stream_t *snew);
-void *LPEL_FUNC(StreamPeek)(     lpel_stream_desc_t *sd);
-void *LPEL_FUNC(StreamRead)(     lpel_stream_desc_t *sd);
-void  LPEL_FUNC(StreamWrite)(    lpel_stream_desc_t *sd, void *item);
-int   LPEL_FUNC(StreamTryWrite)( lpel_stream_desc_t *sd, void *item);
+void  LpelStreamClose(    lpel_stream_desc_t *sd, int destroy_s);
+void  LpelStreamReplace(  lpel_stream_desc_t *sd, lpel_stream_t *snew);
+void *LpelStreamPeek(     lpel_stream_desc_t *sd);
+void *LpelStreamRead(     lpel_stream_desc_t *sd);
+void  LpelStreamWrite(    lpel_stream_desc_t *sd, void *item);
+int   LpelStreamTryWrite( lpel_stream_desc_t *sd, void *item);
 
-lpel_stream_t *LPEL_FUNC(StreamGet)(lpel_stream_desc_t *sd);
+lpel_stream_t *LpelStreamGet(lpel_stream_desc_t *sd);
 
-lpel_stream_desc_t *LPEL_FUNC(StreamPoll)( lpel_stream_desc_t **set);
+lpel_stream_desc_t *LpelStreamPoll( lpel_stream_desc_t **set);
 
 
 

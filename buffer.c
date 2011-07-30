@@ -26,7 +26,7 @@
  * @param buf   pointer to buffer struct
  * @param size  number of void* elements in the buffer
  */
-void LPEL_FUNC(BufferInit)( buffer_t *buf, unsigned int size)
+void LpelBufferInit( buffer_t *buf, unsigned int size)
 {
   buf->pread = 0;
   buf->pwrite = 0;
@@ -42,7 +42,7 @@ void LPEL_FUNC(BufferInit)( buffer_t *buf, unsigned int size)
  *
  * @param buf   pointer to buffer struct
  */
-void  LPEL_FUNC(BufferCleanup)(buffer_t *buf)
+void  LpelBufferCleanup(buffer_t *buf)
 {
   free(buf->data);
 }
@@ -55,7 +55,7 @@ void  LPEL_FUNC(BufferCleanup)(buffer_t *buf)
  * @param buf   buffer to read from
  * @return      NULL if buffer is empty
  */
-void *LPEL_FUNC(BufferTop)( buffer_t *buf)
+void *LpelBufferTop( buffer_t *buf)
 {
   /* if the buffer is empty, data[pread]==NULL */
   return buf->data[buf->pread];
@@ -71,7 +71,7 @@ void *LPEL_FUNC(BufferTop)( buffer_t *buf)
  * @pre         no concurrent reads
  * @param buf   buffer to read from
  */
-void LPEL_FUNC(BufferPop)( buffer_t *buf)
+void LpelBufferPop( buffer_t *buf)
 {
   /* clear, and advance pread */
   buf->data[buf->pread]=NULL;
@@ -85,7 +85,7 @@ void LPEL_FUNC(BufferPop)( buffer_t *buf)
  * @param buf   buffer to check
  * @pre         no concurrent calls
  */
-int LPEL_FUNC(BufferIsSpace)( buffer_t *buf)
+int LpelBufferIsSpace( buffer_t *buf)
 {
   /* if there is space in the buffer, the location at pwrite holds NULL */
   return ( buf->data[buf->pwrite] == NULL );
@@ -107,10 +107,10 @@ int LPEL_FUNC(BufferIsSpace)( buffer_t *buf)
  * @pre         there has to be space in the buffer
  *              (check with BufferIsSpace)
  */
-void LPEL_FUNC(BufferPut)( buffer_t *buf, void *item)
+void LpelBufferPut( buffer_t *buf, void *item)
 {
   assert( item != NULL );
-  assert( LPEL_FUNC(BufferIsSpace)(buf) );
+  assert( LpelBufferIsSpace(buf) );
 
   /* WRITE TO BUFFER */
   /* Write Memory Barrier: ensure all previous memory write

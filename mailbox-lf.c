@@ -95,7 +95,7 @@ static void PutFree( mailbox_t *mbox, mailbox_node_t *node)
 /******************************************************************************/
 
 
-mailbox_t *LPEL_FUNC(MailboxCreate)(void)
+mailbox_t *LpelMailboxCreate(void)
 {
   mailbox_node_t *n;
   mailbox_t *mbox = (mailbox_t *)malloc(sizeof(mailbox_t));
@@ -132,13 +132,13 @@ mailbox_t *LPEL_FUNC(MailboxCreate)(void)
 
 
 
-void LPEL_FUNC(MailboxDestroy)( mailbox_t *mbox)
+void LpelMailboxDestroy( mailbox_t *mbox)
 {
   mailbox_node_t * volatile top;
 
-  while( LPEL_FUNC(MailboxHasIncoming)( mbox)) {
+  while( LpelMailboxHasIncoming( mbox)) {
     workermsg_t msg;
-    LPEL_FUNC(MailboxRecv)( mbox, &msg);
+    LpelMailboxRecv( mbox, &msg);
   }
   /* inbox  empty */
   assert( mbox->in_head->next == NULL );
@@ -172,7 +172,7 @@ void LPEL_FUNC(MailboxDestroy)( mailbox_t *mbox)
 
 
 
-void LPEL_FUNC(MailboxSend)( mailbox_t *mbox, workermsg_t *msg)
+void LpelMailboxSend( mailbox_t *mbox, workermsg_t *msg)
 {
   /* get a free node from recepient */
   mailbox_node_t *node = GetFree( mbox);
@@ -208,7 +208,7 @@ void LPEL_FUNC(MailboxSend)( mailbox_t *mbox, workermsg_t *msg)
 }
 
 
-void LPEL_FUNC(MailboxRecv)( mailbox_t *mbox, workermsg_t *msg)
+void LpelMailboxRecv( mailbox_t *mbox, workermsg_t *msg)
 {
 #ifndef MAILBOX_SEMAPHORE
   mailbox_node_t *volatile node, *volatile new_head;
@@ -252,7 +252,7 @@ void LPEL_FUNC(MailboxRecv)( mailbox_t *mbox, workermsg_t *msg)
  * @note: does not need to be locked as a 'missed' msg
  *        will be eventually fetched in the next worker loop
  */
-int LPEL_FUNC(MailboxHasIncoming)( mailbox_t *mbox)
+int LpelMailboxHasIncoming( mailbox_t *mbox)
 {
   return ( mbox->in_head->next != NULL );
 }

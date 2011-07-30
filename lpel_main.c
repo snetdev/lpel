@@ -23,11 +23,6 @@
 #  include <sys/capability.h>
 #endif
 
-/* macro using syscall for gettid, as glibc doesn't provide a wrapper */
-#define gettid() syscall( __NR_gettid )
-
-
-
 
 
 /* Keep copy of the (checked) configuration provided at LpelInit() */
@@ -52,7 +47,7 @@ static cpu_set_t cpuset_workers;
 /**
  * Get the number of available cores
  */
-int LPEL_FUNC(GetNumCores)( int *result)
+int LpelGetNumCores( int *result)
 {
   int proc_avail = -1;
 #ifdef HAVE_SYSCONF
@@ -75,7 +70,7 @@ int LPEL_FUNC(GetNumCores)( int *result)
   return 0;
 }
 
-int LPEL_FUNC(CanSetExclusive)( int *result)
+int LpelCanSetExclusive( int *result)
 {
 #ifdef HAVE_PROC_CAPABILITIES
   cap_t caps;
@@ -111,7 +106,7 @@ static int CheckConfig( void)
   }
 
   /* check if there are enough processors (if we can check) */
-  if (0 == LPEL_FUNC(GetNumCores)( &proc_avail)) {
+  if (0 == LpelGetNumCores( &proc_avail)) {
     if (cfg->proc_workers + cfg->proc_others > proc_avail) {
       return LPEL_ERR_INVAL;
     }
@@ -132,7 +127,7 @@ static int CheckConfig( void)
       return LPEL_ERR_INVAL;
     }
     /* check permissions to set exclusive (if we can check) */
-    if ( 0==LPEL_FUNC(CanSetExclusive)(&can_rt) && !can_rt ) {
+    if ( 0==LpelCanSetExclusive(&can_rt) && !can_rt ) {
       return LPEL_ERR_EXCL;
     }
   }
@@ -186,7 +181,7 @@ static void CreateCpusets( void)
  *       num_workers == proc_workers
  *
  */
-int LPEL_FUNC(Init)(lpel_config_t *cfg)
+int LpelInit(lpel_config_t *cfg)
 {
   int res;
 
@@ -207,22 +202,22 @@ int LPEL_FUNC(Init)(lpel_config_t *cfg)
 
 
   /* initialise workers */
-  LPEL_FUNC(WorkerInit)( _lpel_global_config.num_workers);
+  LpelWorkerInit( _lpel_global_config.num_workers);
 
 
   return 0;
 }
 
 
-void LPEL_FUNC(Start)(void)
+void LpelStart(void)
 {
-  LPEL_FUNC(WorkerSpawn)();
+  LpelWorkerSpawn();
 }
 
 
-void LPEL_FUNC(Stop)(void)
+void LpelStop(void)
 {
-  LPEL_FUNC(WorkerTerminate)();
+  LpelWorkerTerminate();
 }
 
 
@@ -232,10 +227,10 @@ void LPEL_FUNC(Stop)(void)
  * - wait for the workers to finish
  * - free the data structures of worker threads
  */
-void LPEL_FUNC(Cleanup)(void)
+void LpelCleanup(void)
 {
   /* Cleanup workers */
-  LPEL_FUNC(WorkerCleanup)();
+  LpelWorkerCleanup();
 
 #ifdef USE_MCTX_PCL
   /* cleanup machine context for main thread */
@@ -249,7 +244,7 @@ void LPEL_FUNC(Cleanup)(void)
 /**
  * @pre core in [0, num_workers] or -1
  */
-int LPEL_FUNC(ThreadAssign)( int core)
+int LpelThreadAssign( int core)
 {
   #ifdef HAVE_PTHREAD_SETAFFINITY_NP
   lpel_config_t *cfg = &_lpel_global_config;

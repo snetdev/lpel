@@ -2,7 +2,6 @@
 #define _WORKER_H_
 
 
-#include "lpel_name.h"
 #include "task.h"
 
 
@@ -12,19 +11,19 @@
 
 
 
-void LPEL_FUNC(WorkerInit)( int size);
-void LPEL_FUNC(WorkerCleanup)( void);
-void LPEL_FUNC(WorkerRunTask)( lpel_task_t *t);
+void LpelWorkerInit( int size);
+void LpelWorkerCleanup( void);
+void LpelWorkerRunTask( lpel_task_t *t);
 
 
-void LPEL_FUNC(WorkerDispatcher)( lpel_task_t *t);
-void LPEL_FUNC(WorkerSpawn)(void);
-void LPEL_FUNC(WorkerTaskWakeup)( lpel_task_t *by, lpel_task_t *whom);
-void LPEL_FUNC(WorkerTerminate)(void);
-workerctx_t *LPEL_FUNC(WorkerGetContext)(int id);
-lpel_task_t *LPEL_FUNC(WorkerCurrentTask)(void);
+void LpelWorkerDispatcher( lpel_task_t *t);
+void LpelWorkerSpawn(void);
+void LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom);
+void LpelWorkerTerminate(void);
+workerctx_t *LpelWorkerGetContext(int id);
+lpel_task_t *LpelWorkerCurrentTask(void);
 
-void LPEL_FUNC(WorkerSelfTaskExit)(lpel_task_t *t);
-void LPEL_FUNC(WorkerSelfTaskYield)(lpel_task_t *t);
+void LpelWorkerSelfTaskExit(lpel_task_t *t);
+void LpelWorkerSelfTaskYield(lpel_task_t *t);
 
 #endif /* _WORKER_H_ */

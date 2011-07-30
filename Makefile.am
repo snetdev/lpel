@@ -30,7 +30,6 @@ liblpel_la_SOURCES = \
 	taskqueue.h \
 	lpel_main.c \
 	lpel_main.h \
-	lpel_name.h \
 	lpel.h \
 	worker.c \
 	worker.h \
