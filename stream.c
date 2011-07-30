@@ -89,6 +89,7 @@ struct lpel_stream_t {
   lpel_stream_desc_t *cons_sd;   /** points to the sd of the consumer */
   atomic_t n_sem;           /** counter for elements in the stream */
   atomic_t e_sem;           /** counter for empty space in the stream */
+  void *usr_data;           /** arbitrary user data */
 };
 
 static atomic_t stream_seq = ATOMIC_INIT(0);
@@ -120,6 +121,7 @@ lpel_stream_t *LpelStreamCreate(int size)
   s->is_poll = 0;
   s->prod_sd = NULL;
   s->cons_sd = NULL;
+  s->usr_data = NULL;
   return s;
 }
 
@@ -139,6 +141,25 @@ void LpelStreamDestroy( lpel_stream_t *s)
   atomic_destroy( &s->e_sem);
   LpelBufferCleanup( &s->buffer);
   free( s);
+}
+
+
+/**
+ * Store arbitrary user data in stream
+ * CAUTION use at own risk
+ */
+void LpelStreamSetUsrData(lpel_stream_t *s, void *usr_data)
+{
+  s->usr_data = usr_data;
+}
+
+/**
+ * Load user data from stream
+ * CAUTION use at own risk
+ */
+void *LpelStreamGetUsrData(lpel_stream_t *s)
+{
+  return s->usr_data;
 }
 
 

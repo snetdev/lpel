@@ -36,6 +36,9 @@ struct lpel_stream_desc_t {
 lpel_stream_t *LpelStreamCreate( int);
 void LpelStreamDestroy( lpel_stream_t *s);
 
+void LpelStreamSetUsrData(lpel_stream_t *s, void *usr_data);
+void *LpelStreamGetUsrData(lpel_stream_t *s);
+
 lpel_stream_desc_t *
 LpelStreamOpen( lpel_stream_t *s, char mode);
 
