@@ -11,11 +11,7 @@
 #include <errno.h>
 #include <sched.h>
 #include <unistd.h>  /* sysconf() */
-#include <sys/types.h> /* pid_t */
-#include <sys/syscall.h>
-
 #include <pthread.h> /* worker threads are OS threads */
-
 
 #include "arch/mctx.h"
 
@@ -257,15 +253,12 @@ int LPEL_FUNC(ThreadAssign)( int core)
 {
   #ifdef HAVE_PTHREAD_SETAFFINITY_NP
   lpel_config_t *cfg = &_lpel_global_config;
-  pid_t tid;
+  pthread_t pt = pthread_self();
   int res;
-
-  /* get thread id */
-  tid = gettid();
 
   if ( core == -1) {
     /* assign an others thread to others cpuset */
-    res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset_others);
+    res = pthread_setaffinity_np(pt, sizeof(cpu_set_t), &cpuset_others);
     if( res != 0) return LPEL_ERR_ASSIGN;
 
   } else {
@@ -278,7 +271,7 @@ int LPEL_FUNC(ThreadAssign)( int core)
 
       CPU_ZERO(&cpuset);
       CPU_SET( core % cfg->proc_workers, &cpuset);
-      res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
+      res = pthread_setaffinity_np(pt, sizeof(cpu_set_t), &cpuset_others);
       if( res != 0) return LPEL_ERR_ASSIGN;
 
       /* make non-preemptible */
@@ -287,7 +280,8 @@ int LPEL_FUNC(ThreadAssign)( int core)
         int sp = SCHED_FIFO;
         /* highest real-time */
         param.sched_priority = sched_get_priority_max(sp);
-        if (-1 == sched_setscheduler(tid, sp, &param)) {
+        res = pthread_setschedparam(pt, sp, &param);
+        if ( res != 0) {
           /* we do best effort at this point */
           return LPEL_ERR_EXCL;
         } else {
@@ -297,7 +291,7 @@ int LPEL_FUNC(ThreadAssign)( int core)
       }
     } else {
       /* assign along all workers */
-      res = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset_workers);
+      res = pthread_setaffinity_np(pt, sizeof(cpu_set_t), &cpuset_workers);
       if( res != 0) return LPEL_ERR_ASSIGN;
     }
   }

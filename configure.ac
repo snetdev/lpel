@@ -9,7 +9,7 @@ AC_PROG_CC_C99
 AC_USE_SYSTEM_EXTENSIONS
 AM_PROG_AS
 
-LT_PREREQ([2.4])
+LT_PREREQ([2.2])
 LT_INIT
 
 AC_ARG_WITH([pcl], [AC_HELP_STRING([--with-pcl=DIR], [look up PCL sources in DIR])], [], [with_pcl=no])
