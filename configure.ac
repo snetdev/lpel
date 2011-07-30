@@ -81,14 +81,14 @@ AC_CHECK_FUNCS([pthread_setaffinity_np])
 
 AC_SEARCH_LIBS([sem_init], [rt], 
                [AC_DEFINE([HAVE_POSIX_SEMAPHORES],[1],[Set to 1 if sem_init and semaphores are available.])])
-AC_SEARCH_LIBS([clock_gettime], [rt], 
-               [AC_DEFINE([HAVE_POSIX_TIMERS],[1],[Set to 1 if clock_gettime and POSIX timers are available.])])
 AC_SEARCH_LIBS([cap_get_proc], [cap], 
                [AC_DEFINE([HAVE_PROC_CAPABILITIES],[1],[Set to 1 if cap_get_proc and the processor capability API are available.])])
 
+AC_SEARCH_LIBS([clock_gettime], [rt], 
+               [AC_DEFINE([HAVE_POSIX_TIMERS],[1],[Set to 1 if clock_gettime and POSIX timers are available.])])
+
 AC_LANG_POP([C])
 
-# FIXME: mctx selection
 
 AC_OUTPUT([Makefile
            tests/Makefile

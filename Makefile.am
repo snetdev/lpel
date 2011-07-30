@@ -8,7 +8,6 @@ liblpel_la_SOURCES = \
 	arch/atomic-x86.h \
 	arch/atomic.h \
 	arch/sysdep.h \
-	arch/timing.h \
 	arch/mctx.h \
 	arch/mctx-pcl.h \
 	arch/mctx-setjmp.h \
@@ -28,6 +27,8 @@ liblpel_la_SOURCES = \
 	task.h \
 	taskqueue.c \
 	taskqueue.h \
+	timing.c \
+	timing.h \
 	lpel_main.c \
 	lpel_main.h \
 	lpel.h \

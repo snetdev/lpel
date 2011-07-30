@@ -5,10 +5,10 @@
 
 #include <pthread.h>
 
+#include "lpel.h"
 #include "pthr_streams.h"
 
 
-#include "arch/timing.h"
 
 #ifndef PIPE_DEPTH
 #define PIPE_DEPTH 100 /* min 3*/
@@ -34,7 +34,7 @@ typedef struct {
   int id;
 } task_arg_t;
 
-static timing_t ts;
+static lpel_timing_t ts;
 
 
 void error(int exitcode, int val, const char *msg);
@@ -49,7 +49,7 @@ void *Source(void *inarg)
   printf("Starting message transfer, pipe length %d msgs %lu\n",
       PIPE_DEPTH, NUM_MSGS);
 #endif
-  TimingStart( &ts);
+  LpelTimingStart( &ts);
 
   out = PthrStreamOpen( (pthr_stream_t *)inarg, 'w');
 
@@ -88,14 +88,14 @@ void *Sink(void *inarg)
 
   PthrStreamClose( in, 1);
 
-  TimingEnd( &ts);
+  LpelTimingEnd( &ts);
 
 #ifndef BENCHMARK
   printf("End of message stream, cnt %lu duration %.2f ms\n",
-      cnt, TimingToMSec(&ts));
+      cnt, LpelTimingToMSec(&ts));
 #else
   bench_stats.msg_cnt = cnt;
-  bench_stats.msg_time = TimingToNSec(&ts);
+  bench_stats.msg_time = LpelTimingToNSec(&ts);
 #endif
 
   pthread_exit(NULL);

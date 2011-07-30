@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "lpel.h"
-#include "arch/timing.h"
 
 
 #ifndef RING_SIZE
@@ -52,7 +51,7 @@ void *Process(void *arg)
   lpel_stream_desc_t *in, *out;
   msg_t *msg;
   int term = 0;
-  timing_t ts;
+  lpel_timing_t ts;
 
   out = LpelStreamOpen(streams[id], 'w');
 
@@ -68,7 +67,7 @@ void *Process(void *arg)
     msg->term = 0;
     msg->hopcnt = 0;
 
-    TimingStart( &ts);
+    LpelTimingStart( &ts);
     LpelStreamWrite( out, msg);
   } else {
     in = LpelStreamOpen(streams[id-1], 'r');
@@ -93,14 +92,14 @@ void *Process(void *arg)
   /* read the msg a last time, free it */
   if (id==0) {
     msg = LpelStreamRead( in);
-    TimingEnd( &ts);
+    LpelTimingEnd( &ts);
     msg->hopcnt++;
     PrintEOR(msg);
 #ifndef BENCHMARK
-    printf("Time to pass the message %u times: %.2f ms\n", msg->hopcnt, TimingToMSec( &ts));
+    printf("Time to pass the message %u times: %.2f ms\n", msg->hopcnt, LpelTimingToMSec( &ts));
 #else
     bench_stats.msg_cnt = msg->hopcnt;
-    bench_stats.msg_time = TimingToNSec(&ts);
+    bench_stats.msg_time = LpelTimingToNSec(&ts);
 #endif
     free(msg);
   }
@@ -119,7 +118,7 @@ static void CreateTask(int id)
   int i;
 
   i = 0;
-  i = id % 2;
+  // i = id % 2;
   // i = (id < RING_SIZE/2) ? 0 : 1;
 
   t = LpelTaskCreate( i, Process, &ids[id], STACK_SIZE);
@@ -130,23 +129,23 @@ static void CreateTask(int id)
 static void CreateRing(void)
 {
   int i;
-  timing_t ts;
+  lpel_timing_t ts;
 
   for (i=0; i<RING_SIZE; i++) {
     ids[i] = i;
     streams[i] = LpelStreamCreate(0);
   }
 
-  TimingStart( &ts );
+  LpelTimingStart( &ts );
   for (i=RING_SIZE-1; i>=0; i--) {
     CreateTask(i);
   }
-  TimingEnd( &ts) ;
+  LpelTimingEnd( &ts) ;
 #ifndef BENCHMARK
-  printf("Time to create %d tasks: %.2f ms\n", RING_SIZE, TimingToMSec( &ts));
+  printf("Time to create %d tasks: %.2f ms\n", RING_SIZE, LpelTimingToMSec( &ts));
 #else
     bench_stats.task_cnt = RING_SIZE;
-    bench_stats.task_time = TimingToNSec(&ts);
+    bench_stats.task_time = LpelTimingToNSec(&ts);
 #endif
 }
 

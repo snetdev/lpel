@@ -1,17 +1,7 @@
-#ifndef _TIMING_H_
-#define _TIMING_H_
 
+#include "timing.h"
 
-/*
- * Link with librt:
- *   -lrt
- */
-#include <time.h>
 #include <unistd.h>
-
-typedef struct timespec timing_t;
-
-
 
 #if defined(HAVE_POSIX_TIMERS) && _POSIX_TIMERS > 0
 
@@ -25,20 +15,20 @@ typedef struct timespec timing_t;
 
 /**
  * Current timestamp
- * @param t   pointer to timing_t
+ * @param t   pointer to lpel_timing_t
  */
 #define TIMESTAMP(t) do { \
   (void) clock_gettime(TIMING_CLOCK, (t)); \
 } while (0)
 
-#else  /* _POSIX_TIMERS > 0 */
+#else  /* defined(HAVE_POSIX_TIMERS) && _POSIX_TIMERS > 0 */
 
 
 #include <sys/time.h>
 
 /**
  * Current timestamp
- * @param t   pointer to timing_t
+ * @param t   pointer to lpel_timing_t
  */
 #define TIMESTAMP(t) do { \
   struct timeval tv; \
@@ -47,18 +37,28 @@ typedef struct timespec timing_t;
   (t)->tv_nsec = tv.tv_usec*1000; \
 } while (0)
 
-#endif /* _POSIX_TIMERS > 0 */
+#endif /* defined(HAVE_POSIX_TIMERS) && _POSIX_TIMERS > 0 */
 
 
 #define TIMING_BILLION 1000000000L
-#define TIMING_INITIALIZER  {0,0}
+
+
+/**
+ * Current timestamp
+ *
+ * Gets current timestamp and stores it in t
+ */
+void LpelTimingNow(lpel_timing_t *t)
+{
+  TIMESTAMP( t);
+}
 
 /**
  * Start timing
  *
  * Gets current timestamp and stores it in t
  */
-static inline void TimingStart(timing_t *t)
+void LpelTimingStart(lpel_timing_t *t)
 {
   TIMESTAMP( t);
 }
@@ -66,11 +66,11 @@ static inline void TimingStart(timing_t *t)
 /**
  * End timing, store the elapsed time in t
  *
- * @pre   TimingStart() was called on t
+ * @pre   LpelTimingStart() was called on t
  */
-static inline void TimingEnd(timing_t *t)
+void LpelTimingEnd(lpel_timing_t *t)
 {
-  timing_t start, end;
+  lpel_timing_t start, end;
 
   /* get end time  */
   TIMESTAMP( &end);
@@ -93,7 +93,7 @@ static inline void TimingEnd(timing_t *t)
  *
  * Adds val to t, val is not modified
  */
-static inline void TimingAdd(timing_t *t, const timing_t *val)
+void LpelTimingAdd(lpel_timing_t *t, const lpel_timing_t *val)
 {
   t->tv_sec  += val->tv_sec;
   t->tv_nsec += val->tv_nsec;
@@ -104,7 +104,8 @@ static inline void TimingAdd(timing_t *t, const timing_t *val)
   }
 }
 
-static inline void TimingDiff( timing_t *res, const timing_t *start, const timing_t *end)
+void LpelTimingDiff( lpel_timing_t *res, const lpel_timing_t *start,
+    const lpel_timing_t *end)
 {
   /* calculate elapsed time to t,
    * assuming end > start and *.tv_nsec < TIMING_BILLION
@@ -121,7 +122,7 @@ static inline void TimingDiff( timing_t *res, const timing_t *start, const timin
 /**
  * Set a time
  */
-static inline void TimingSet(timing_t *t, const timing_t *val)
+void LpelTimingSet(lpel_timing_t *t, const lpel_timing_t *val)
 {
   t->tv_sec  = val->tv_sec;
   t->tv_nsec = val->tv_nsec;
@@ -130,13 +131,13 @@ static inline void TimingSet(timing_t *t, const timing_t *val)
 /**
  * Clear a time to 0
  */
-static inline void TimingZero(timing_t *t)
+void LpelTimingZero(lpel_timing_t *t)
 {
   t->tv_sec  = 0;
   t->tv_nsec = 0;
 }
 
-static inline int TimingEquals(const timing_t *t1, const timing_t *t2)
+int LpelTimingEquals(const lpel_timing_t *t1, const lpel_timing_t *t2)
 {
   return ( (t1->tv_sec  == t2->tv_sec) &&
            (t1->tv_nsec == t2->tv_nsec) );
@@ -146,7 +147,7 @@ static inline int TimingEquals(const timing_t *t1, const timing_t *t2)
 /**
  * Get nanoseconds as double type from timing
  */
-static inline double TimingToNSec(const timing_t *t)
+double LpelTimingToNSec(const lpel_timing_t *t)
 {
   return ((double)t->tv_sec)*1000000000.0 + (double)t->tv_nsec;
 }
@@ -155,7 +156,7 @@ static inline double TimingToNSec(const timing_t *t)
 /**
  * Get milliseconds as double type from timing
  */
-static inline double TimingToMSec(const timing_t *t)
+double LpelTimingToMSec(const lpel_timing_t *t)
 {
   return (((double)t->tv_sec) * 1000.0f) + (((double)t->tv_nsec) / 1000000.0f);
 }
@@ -168,13 +169,13 @@ static inline double TimingToMSec(const timing_t *t)
  *
  * Precond: alpha in [0,1]
  */
-static inline void TimingExpAvg(timing_t *t,
-  const timing_t *last, const float alpha)
+void LpelTimingExpAvg(lpel_timing_t *t, const lpel_timing_t *last,
+    const float alpha)
 {
   double dlast, dhist, dnew;
 
-  dlast = TimingToNSec(last);
-  dhist = TimingToNSec(t);
+  dlast = LpelTimingToNSec(last);
+  dhist = LpelTimingToNSec(t);
 
   dnew = dlast*alpha + dhist*(1-alpha);
 
@@ -184,4 +185,5 @@ static inline void TimingExpAvg(timing_t *t,
 
 
 
-#endif /* _TIMING_H_ */
+
+
