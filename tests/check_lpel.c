@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
-#include "../lpel.h"
+#include "lpel.h"
 #include "../modimpl/monitoring.h"
 
 

@@ -1,45 +1,45 @@
 SUBDIRS = . tests
-include_HEADERS = lpel.h
+include_HEADERS = include/lpel.h
 lib_LTLIBRARIES = liblpel.la liblpel_mon.la
 
 liblpel_la_SOURCES = \
-	arch/atomic-pthread.h \
-	arch/atomic-builtin.h \
-	arch/atomic-x86.h \
-	arch/atomic.h \
-	arch/sysdep.h \
-	arch/mctx.h \
-	arch/mctx-pcl.h \
-	arch/mctx-setjmp.h \
-	arch/mctx-x86.h \
-	arch/mctx-ucontext.h \
-	mailbox.c \
-	mailbox.h \
-	buffer.c \
-	buffer.h \
-	scheduler.c \
-	scheduler.h \
-	stream.c \
-	stream.h \
-	streamset.c \
-	streamset.h \
-	task.c \
-	task.h \
-	taskqueue.c \
-	taskqueue.h \
-	timing.c \
-	timing.h \
-	lpel_main.c \
-	lpel_main.h \
-	lpel.h \
-	worker.c \
-	worker.h \
-	workerctx.h \
-	workermsg.h
+	src/arch/atomic-pthread.h \
+	src/arch/atomic-builtin.h \
+	src/arch/atomic-x86.h \
+	src/arch/atomic.h \
+	src/arch/sysdep.h \
+	src/arch/mctx.h \
+	src/arch/mctx-pcl.h \
+	src/arch/mctx-setjmp.h \
+	src/arch/mctx-x86.h \
+	src/arch/mctx-ucontext.h \
+	src/mailbox.c \
+	src/mailbox.h \
+	src/buffer.c \
+	src/buffer.h \
+	src/scheduler.c \
+	src/scheduler.h \
+	src/stream.c \
+	src/stream.h \
+	src/streamset.c \
+	src/streamset.h \
+	src/task.c \
+	src/task.h \
+	src/taskqueue.c \
+	src/taskqueue.h \
+	src/timing.c \
+	src/timing.h \
+	src/lpel_main.c \
+	src/lpel_main.h \
+	src/worker.c \
+	src/worker.h \
+	src/workerctx.h \
+	src/workermsg.h
 
 liblpel_mon_la_SOURCES = \
 	modimpl/monitoring.c \
 	modimpl/monitoring.h
+liblpel_mon_la_CPPFLAGS = -I$(top_srcdir)/include
 
 if USE_MCTX_PCL
 liblpel_la_LIBADD = $(LIBPCL_LA)

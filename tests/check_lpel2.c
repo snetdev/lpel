@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
-#include "../lpel.h"
+#include "lpel.h"
 
 #define NUM_COLL    (4*10+1)
 lpel_stream_t *sinp;
