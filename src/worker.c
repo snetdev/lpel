@@ -422,7 +422,11 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 {
   lpel_task_t *t;
 
-  //FIXME LpelMonitoringDebug( wc->mon, "worker %d processing msg %d\n", wc->wid, msg->type);
+#ifdef LPEL_DEBUG_WORKER
+  if (wc->mon && MON_CB(worker_debug)) {
+    MON_CB(worker_debug)( wc->mon, "worker %d processing msg %d\n", wc->wid, msg->type);
+  }
+#endif
 
   switch( msg->type) {
     case WORKER_MSG_WAKEUP:
@@ -432,7 +436,11 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       t = msg->body.task;
       assert(t->state != TASK_READY);
       t->state = TASK_READY;
-      //FIXME LpelMonitoringDebug( wc->mon, "Received wakeup for %d.\n", t->uid);
+#ifdef LPEL_DEBUG_WORKER
+      if (wc->mon && MON_CB(worker_debug)) {
+        MON_CB(worker_debug)( wc->mon, "Received wakeup for %d.\n", t->uid);
+      }
+#endif
       if (wc->wid < 0) {
         wc->wraptask = t;
       } else {
@@ -451,8 +459,11 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       t->state = TASK_READY;
 
       wc->num_tasks++;
-      //FIXME LpelMonitoringDebug( wc->mon, "Assigned task %d.\n", t->uid);
-
+#ifdef LPEL_DEBUG_WORKER
+      if (wc->mon && MON_CB(worker_debug)) {
+        MON_CB(worker_debug)( wc->mon, "Assigned task %d.\n", t->uid);
+      }
+#endif
       if (wc->wid < 0) {
         wc->wraptask = t;
         /* create monitoring context if necessary */
@@ -524,7 +535,11 @@ static void WorkerLoop( workerctx_t *wc)
       /* execute task */
       wc->current_task = t;
       mctx_switch(&wc->mctx, &t->mctx);
-      //FIXME LpelMonitoringDebug( wc->mon, "Back on worker %d context.\n", wc->wid);
+#ifdef LPEL_DEBUG_WORKER
+      if (wc->mon && MON_CB(worker_debug)) {
+        MON_CB(worker_debug)( wc->mon, "Back on worker %d context.\n", wc->wid);
+      }
+#endif
       /* cleanup task context marked for deletion */
       CleanupTaskContext(wc, NULL);
     } else {

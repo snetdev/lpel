@@ -45,6 +45,7 @@ typedef struct {
   void (*worker_destroy)(mon_worker_t*);
   void (*worker_waitstart)(mon_worker_t*);
   void (*worker_waitstop)(mon_worker_t*);
+  void (*worker_debug)(mon_worker_t*, const char *fmt, ...);
   /* task callbacks */
   /* note: no callback for task creation
    * - manual attachment required
@@ -63,8 +64,6 @@ typedef struct {
   void (*stream_writefinish)(mon_stream_t*);
   void (*stream_blockon)(mon_stream_t*);
   void (*stream_wakeup)(mon_stream_t*);
-  /* general purpose debug */
-  void (*debug)(mon_worker_t*, const char *fmt, ...);
 } lpel_monitoring_cb_t;
 
 /**
@@ -85,7 +84,6 @@ typedef struct {
   int proc_workers;
   int proc_others;
   int flags;
-  int worker_dbg;
   lpel_monitoring_cb_t mon;
 } lpel_config_t;
 

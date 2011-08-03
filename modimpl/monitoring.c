@@ -670,6 +670,7 @@ void LpelMonInit(lpel_monitoring_cb_t *cb)
   cb->worker_destroy        = MonCbWorkerDestroy;
   cb->worker_waitstart      = MonCbWorkerWaitStart;
   cb->worker_waitstop       = MonCbWorkerWaitStop;
+  cb->worker_debug          = MonCbDebug;
   cb->task_destroy = MonCbTaskDestroy;
   cb->task_assign  = MonCbTaskAssign;
   cb->task_start   = MonCbTaskStart;
@@ -683,7 +684,6 @@ void LpelMonInit(lpel_monitoring_cb_t *cb)
   cb->stream_writefinish  = MonCbStreamWriteFinish;
   cb->stream_blockon      = MonCbStreamBlockon;
   cb->stream_wakeup       = MonCbStreamWakeup;
-  cb->debug = MonCbDebug;
 
 
 
