@@ -1016,6 +1016,7 @@ AC_SUBST([am__untar])
 ]) # _AM_PROG_TAR
 
 m4_include([build-aux/ax_pthread.m4])
+m4_include([build-aux/ax_tls.m4])
 m4_include([build-aux/libtool.m4])
 m4_include([build-aux/ltoptions.m4])
 m4_include([build-aux/ltsugar.m4])

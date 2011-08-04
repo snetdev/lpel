@@ -25,12 +25,6 @@
 #include "mailbox.h"
 
 
-/**
- * FIXME define in configure/make system!
- */
-#ifdef __linux__
-#define WORKER_USE_TLSSPEC
-#endif
 
 #define WORKER_PTR(i) (workers[(i)])
 
@@ -39,11 +33,11 @@ static workerctx_t **workers;
 
 
 
-#ifdef WORKER_USE_TLSSPEC
+#ifdef HAVE___THREAD
 static __thread workerctx_t *workerctx_cur;
-#else
+#else /* HAVE___THREAD */
 static pthread_key_t workerctx_key;
-#endif /* WORKER_USE_TLSSPEC */
+#endif /* HAVE___THREAD */
 
 
 /* worker thread function declaration */
@@ -91,11 +85,11 @@ static inline void SendWakeup( workerctx_t *target, lpel_task_t *t)
  ******************************************************************************/
 static inline workerctx_t *GetCurrentWorker(void)
 {
-#ifdef WORKER_USE_TLSSPEC
+#ifdef HAVE___THREAD
   return workerctx_cur;
-#else
+#else /* HAVE___THREAD */
   return (workerctx_t *) pthread_getspecific(workerctx_key);
-#endif /* WORKER_USE_TLSSPEC */
+#endif /* HAVE___THREAD */
 }
 
 
@@ -117,10 +111,10 @@ void LpelWorkerInit(int size)
   num_workers = size;
 
 
-#ifndef WORKER_USE_TLSSPEC
+#ifndef HAVE___THREAD
   /* init key for thread specific data */
   pthread_key_create(&workerctx_key, NULL);
-#endif /* WORKER_USE_TLSSPEC */
+#endif /* HAVE___THREAD */
 
   /* allocate worker context table */
   workers = (workerctx_t **) malloc( num_workers * sizeof(workerctx_t*) );
@@ -182,9 +176,9 @@ void LpelWorkerCleanup(void)
   /* free workers table */
   free( workers);
 
-#ifndef WORKER_USE_TLSSPEC
+#ifndef HAVE___THREAD
   pthread_key_delete(workerctx_key);
-#endif /* WORKER_USE_TLSSPEC */
+#endif /* HAVE___THREAD */
 }
 
 
@@ -586,12 +580,12 @@ static void *WorkerThread( void *arg)
 {
   workerctx_t *wc = (workerctx_t *)arg;
 
-#ifdef WORKER_USE_TLSSPEC
+#ifdef HAVE___THREAD
   workerctx_cur = wc;
-#else
+#else /* HAVE___THREAD */
   /* set pointer to worker context as TSD */
   pthread_setspecific(workerctx_key, wc);
-#endif /* WORKER_USE_TLSSPEC */
+#endif /* HAVE___THREAD */
 
 
 //FIXME

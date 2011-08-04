@@ -46,6 +46,7 @@ DIST_COMMON = README $(am__configure_deps) $(include_HEADERS) \
 	build-aux/ltmain.sh build-aux/missing
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/build-aux/ax_pthread.m4 \
+	$(top_srcdir)/build-aux/ax_tls.m4 \
 	$(top_srcdir)/build-aux/libtool.m4 \
 	$(top_srcdir)/build-aux/ltoptions.m4 \
 	$(top_srcdir)/build-aux/ltsugar.m4 \
