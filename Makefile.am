@@ -46,13 +46,13 @@ liblpel_la_LIBADD = $(LIBPCL_LA)
 liblpel_la_CPPFLAGS = -DUSE_MTX_PCL
 endif
 if USE_MCTX_X86
-liblpel_la_SOURCES += ctx/ctx_i386.S
+liblpel_la_SOURCES += src/ctx/ctx_i386.S
 endif
 if USE_MCTX_X86_64
-liblpel_la_SOURCES += ctx/ctx_amd64.S
+liblpel_la_SOURCES += src/ctx/ctx_amd64.S
 endif
 if USE_MCTX_X86_64_MEM
-liblpel_la_SOURCES += ctx/ctx_amd64-mem.S
+liblpel_la_SOURCES += src/ctx/ctx_amd64-mem.S
 endif
 
 ACLOCAL_AMFLAGS = -I build-aux
