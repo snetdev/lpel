@@ -93,21 +93,18 @@ dnl atomic memory access (__sync_fetch_and_add/dec)
 dnl !!! we need to try to link the program, on platforms on which
 dnl !!! these functions are not available, they are undefined references
 AC_MSG_CHECKING([availability of compiler builtins for atomic memory access])
-AC_TRY_RUN( [
-  int main(void) {
+have_compiler_atomics=no
+AC_TRY_LINK([], [
     int a = 0;
     (void) __sync_fetch_and_add(&a, 1);
     (void) __sync_fetch_and_sub(&a, 1);
     (void) __sync_lock_test_and_set(&a, 42);
-    return 0;
-  }
   ],
-  [
-    AC_DEFINE([HAVE_SYNC_ATOMIC_BUILTINS], [1], [Define to 1 if compiler builtins for atomic memory access are available.])
-    AC_MSG_RESULT([yes])
-  ],
-    AC_MSG_RESULT([no])
-)
+  [have_compiler_atomics=yes])
+AC_MSG_RESULT([$have_compiler_atomics])
+if test $have_compiler_atomics = yes; then
+  AC_DEFINE([HAVE_SYNC_ATOMIC_BUILTINS], [1], [Define to 1 if compiler builtins for atomic memory access are available.])
+fi
 
 
 
