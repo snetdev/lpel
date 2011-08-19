@@ -1,6 +1,9 @@
-/**
- * MAIN LPEL INTERFACE
- */
+/******************************************************************************
+ * LPEL LIBRARY INTERFACE
+ *
+ * Author: Daniel Prokesch <dlp@snet-home.org>
+ *
+ *****************************************************************************/
 #ifndef _LPEL_H_
 #define _LPEL_H_
 
@@ -22,7 +25,6 @@
 /*  GENERAL CONFIGURATION AND SETUP                                           */
 /******************************************************************************/
 
-
 enum lpel_taskstate_t {
   TASK_CREATED = 'C',
   TASK_RUNNING = 'U',
@@ -38,7 +40,7 @@ typedef struct mon_task_t   mon_task_t;
 typedef struct mon_stream_t mon_stream_t;
 typedef enum lpel_taskstate_t lpel_taskstate_t;
 
-typedef struct {
+typedef struct lpel_monitoring_cb_t {
   /* worker callbacks*/
   mon_worker_t *(*worker_create)(int);
   mon_worker_t *(*worker_create_wrapper)(mon_task_t *);
@@ -66,6 +68,7 @@ typedef struct {
   void (*stream_wakeup)(mon_stream_t*);
 } lpel_monitoring_cb_t;
 
+
 /**
  * Specification for configuration:
  *
@@ -84,8 +87,13 @@ typedef struct {
   int proc_workers;
   int proc_others;
   int flags;
-  lpel_monitoring_cb_t mon;
+  struct lpel_monitoring_cb_t mon;
 } lpel_config_t;
+
+
+
+
+
 
 
 #define LPEL_FLAG_NONE           (0)
@@ -108,7 +116,6 @@ int LpelCanSetExclusive( int *result);
 /*  DATATYPES                                                                 */
 /******************************************************************************/
 
-/* task types */
 
 /* a task */
 typedef struct lpel_task_t lpel_task_t;
@@ -117,20 +124,22 @@ typedef struct lpel_task_t lpel_task_t;
 typedef void *(*lpel_taskfunc_t)(void *inarg);
 
 
-
-
-
-/* stream types */
-
+/* stream type */
 typedef struct lpel_stream_t         lpel_stream_t;
 
+/**
+ * A stream descriptor
+ *
+ * A producer/consumer must open a stream before using it, and by opening
+ * a stream, a stream descriptor is created and returned.
+ */
 typedef struct lpel_stream_desc_t    lpel_stream_desc_t;
 
+/** stream set */
 typedef lpel_stream_desc_t          *lpel_streamset_t;
 
+/** iterator for streamset */
 typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
-
-
 
 
 /******************************************************************************/
@@ -182,6 +191,10 @@ int   LpelStreamTryWrite( lpel_stream_desc_t *sd, void *item);
 
 lpel_stream_t *LpelStreamGet(lpel_stream_desc_t *sd);
 
+
+
+/** stream set functions*/
+
 lpel_stream_desc_t *LpelStreamPoll(    lpel_streamset_t *set);
 
 
@@ -190,6 +203,8 @@ void LpelStreamsetPut(  lpel_streamset_t *set, lpel_stream_desc_t *node);
 int  LpelStreamsetRemove( lpel_streamset_t *set, lpel_stream_desc_t *node);
 int  LpelStreamsetIsEmpty( lpel_streamset_t *set);
 
+
+/** stream iterator functions */
 
 
 lpel_stream_iter_t *LpelStreamIterCreate( lpel_streamset_t *set);
@@ -200,31 +215,6 @@ int  LpelStreamIterHasNext( lpel_stream_iter_t *iter);
 lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter);
 void LpelStreamIterAppend(  lpel_stream_iter_t *iter, lpel_stream_desc_t *node);
 void LpelStreamIterRemove(  lpel_stream_iter_t *iter);
-
-
-/******************************************************************************/
-/*  TIMING FUNCTIONS                                                          */
-/******************************************************************************/
-
-#include <time.h>
-
-typedef struct timespec lpel_timing_t;
-
-#define LPEL_TIMING_INITIALIZER  {0,0}
-
-void LpelTimingNow(lpel_timing_t *t);
-void LpelTimingStart(lpel_timing_t *t);
-void LpelTimingEnd(lpel_timing_t *t);
-void LpelTimingAdd(lpel_timing_t *t, const lpel_timing_t *val);
-void LpelTimingDiff( lpel_timing_t *res, const lpel_timing_t *start,
-    const lpel_timing_t *end);
-void LpelTimingSet(lpel_timing_t *t, const lpel_timing_t *val);
-void LpelTimingZero(lpel_timing_t *t);
-int LpelTimingEquals(const lpel_timing_t *t1, const lpel_timing_t *t2);
-double LpelTimingToNSec(const lpel_timing_t *t);
-double LpelTimingToMSec(const lpel_timing_t *t);
-void LpelTimingExpAvg(lpel_timing_t *t, const lpel_timing_t *last,
-    const float alpha);
 
 
 

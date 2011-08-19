@@ -7,6 +7,7 @@
 #include <string.h>
 #include <assert.h>
 
+#include <lpel/timing.h>
 
 #include "monitoring.h"
 

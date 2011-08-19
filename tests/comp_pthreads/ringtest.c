@@ -2,7 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "lpel.h"
+#include <lpel.h>
+#include <lpel/timing.h>
 
 
 #ifndef RING_SIZE

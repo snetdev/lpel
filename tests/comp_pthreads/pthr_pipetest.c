@@ -1,11 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-
 #include <pthread.h>
 
-#include "lpel.h"
+#include <lpel.h>
+#include <lpel/timing.h>
+
 #include "pthr_streams.h"
 
 

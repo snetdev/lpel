@@ -1,7 +1,11 @@
 
-#include "timing.h"
 
 #include <unistd.h>
+
+
+#include <lpel/timing.h>
+
+
 
 #if defined(HAVE_POSIX_TIMERS) && _POSIX_TIMERS > 0
 

@@ -3,7 +3,8 @@
 #include <string.h>
 #include <assert.h>
 
-#include "lpel.h"
+#include <lpel.h>
+#include <lpel/timing.h>
 
 #ifndef PIPE_DEPTH
 #define PIPE_DEPTH 100 /* min 3*/

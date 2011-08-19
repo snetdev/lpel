@@ -1,5 +1,9 @@
 SUBDIRS = . tests
-include_HEADERS = include/lpel.h
+
+nobase_include_HEADERS = \
+        include/lpel.h \
+        include/lpel/timing.h
+
 lib_LTLIBRARIES = liblpel.la liblpel_mon.la
 
 liblpel_la_SOURCES = \
@@ -22,19 +26,18 @@ liblpel_la_SOURCES = \
 	src/stream.c \
 	src/stream.h \
 	src/streamset.c \
-	src/streamset.h \
 	src/task.c \
 	src/task.h \
 	src/taskqueue.c \
 	src/taskqueue.h \
 	src/timing.c \
-	src/timing.h \
 	src/lpel_main.c \
 	src/lpel_main.h \
 	src/worker.c \
 	src/worker.h \
 	src/workerctx.h \
 	src/workermsg.h
+liblpel_la_CPPFLAGS = -I$(top_srcdir)/include
 
 liblpel_mon_la_SOURCES = \
 	modimpl/monitoring.c \
@@ -43,7 +46,7 @@ liblpel_mon_la_CPPFLAGS = -I$(top_srcdir)/include
 
 if USE_MCTX_PCL
 liblpel_la_LIBADD = $(LIBPCL_LA)
-liblpel_la_CPPFLAGS = -DUSE_MTX_PCL
+liblpel_la_CPPFLAGS += -DUSE_MTX_PCL
 endif
 if USE_MCTX_X86
 liblpel_la_SOURCES += src/ctx/ctx_i386.S

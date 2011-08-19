@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include <lpel.h>
 #include "arch/atomic.h"
 
 #include "task.h"
@@ -10,7 +11,6 @@
 #include "workerctx.h"
 #include "stream.h"
 
-#include "lpel_main.h"
 
 
 
@@ -25,7 +25,6 @@ static void TaskStartup( void *arg);
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
 
-typedef enum lpel_taskstate_t lpel_taskstate_t;
 
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096

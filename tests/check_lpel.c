@@ -110,8 +110,7 @@ static void *Inputter(void *arg)
 
   printf("Inputter START\n");
   do {
-    buf = (char *) malloc( 120 * sizeof(char) );
-    (void) fgets( buf, 119, stdin  );
+    buf = fgets( malloc( 120 * sizeof(char) ), 119, stdin  );
     LpelStreamWrite( out, buf);
   } while ( 0 != strcmp(buf, "T\n") );
 

@@ -41,15 +41,15 @@
 #include <assert.h>
 #include <pthread.h>
 
+#include <lpel.h>
+
 #include "arch/atomic.h"
 #include "buffer.h"
 
 #include "task.h"
 
 #include "stream.h"
-#include "streamset.h"
 
-#include "lpel_main.h"
 
 /** Macros for lock handling */
 
