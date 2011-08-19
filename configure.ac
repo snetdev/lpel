@@ -1,6 +1,6 @@
 AC_INIT([lpel], [1.x], [daniel.prokesch@gmail.com])
 AC_CONFIG_AUX_DIR([build-aux])
-AC_CONFIG_MACRO_DIR([build-aux])
+AC_CONFIG_MACRO_DIR([m4])
 
 AM_INIT_AUTOMAKE([1.11 tar-ustar no-define foreign dist-bzip2 subdir-objects silent-rules])
 AM_SILENT_RULES([yes])

@@ -58,4 +58,4 @@ if USE_MCTX_X86_64_MEM
 liblpel_la_SOURCES += src/ctx/ctx_amd64-mem.S
 endif
 
-ACLOCAL_AMFLAGS = -I build-aux
+ACLOCAL_AMFLAGS = -I m4
