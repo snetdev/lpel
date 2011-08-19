@@ -9,7 +9,7 @@ AC_PROG_CC_C99
 AC_USE_SYSTEM_EXTENSIONS
 AM_PROG_AS
 
-LT_PREREQ([2.2])
+LT_PREREQ([2.4])
 LT_INIT
 
 AC_ARG_WITH([pcl], [AC_HELP_STRING([--with-pcl=DIR], [look up PCL sources in DIR])], [], [with_pcl=no])
@@ -107,9 +107,11 @@ if test $have_compiler_atomics = yes; then
 fi
 
 
-
-AX_TLS([ AC_DEFINE([HAVE___THREAD], [1], [Define to 1 if compiler supports the __thread storage class.]) ])
-
+have___thread=no
+AX_TLS([have___thread=yes])
+if test $have___thread = yes; then
+  AC_DEFINE([HAVE___THREAD], [1], [Define to 1 if compiler supports the __thread storage class.])
+fi
 
 AC_LANG_POP([C])
 
