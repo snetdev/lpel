@@ -12,32 +12,52 @@ AM_PROG_AS
 LT_PREREQ([2.4])
 LT_INIT
 
-AC_ARG_WITH([pcl], [AC_HELP_STRING([--with-pcl=DIR], [look up PCL sources in DIR])], [], [with_pcl=no])
-AC_MSG_CHECKING([for pcl in $with_pcl])
+
+
+
+AC_ARG_WITH([pcl], [AS_HELP_STRING([--with-pcl=DIR], [look up PCL sources in DIR])], [], [with_pcl=check])
+
 LIBPCL_LA=
-if test x"$with_pcl" != xno; then
-   if test -r "$with_pcl/lib/libpcl.la"; then
-     LIBPCL_LA=$with_pcl/lib/libpcl.la
-   elif test -r "$with_pcl/pcl/libpcl.la"; then
-     LIBPCL_LA=$with_pcl/pcl/libpcl.la
-   else
-     AC_MSG_WARN([Cannot find libpcl.la, cannot use PCL])
-     with_pcl=no
-   fi
-fi
-if test x"$with_pcl" != xno; then
-  AC_MSG_RESULT([yes])
-  CPPFLAGS="$CPPFLAGS -I$with_pcl/include"
-  AC_SUBST([LIBPCL_LA])
-  AC_DEFINE([HAVE_PCL], [1], [Define to 1 if PCL is available.])
+LIBPCL_INC=
+if test "x$with_pcl" != xcheck; then
+    AC_MSG_CHECKING([for pcl in $with_pcl])
+    # header
+    if test -r "$with_pcl/include/pcl.h"; then
+      LIBPCL_INC=-I$with_pcl/include
+    else
+      with_pcl=no
+    fi
+    # library
+    if test -r "$with_pcl/lib/libpcl.la"; then
+      LIBPCL_LA=$with_pcl/lib/libpcl.la
+    elif test -r "$with_pcl/pcl/libpcl.la"; then
+      LIBPCL_LA=$with_pcl/pcl/libpcl.la
+    else
+      with_pcl=no
+    fi
+    if test x"$with_pcl" != xno; then
+      AC_MSG_RESULT([yes])
+    else
+      AC_MSG_RESULT([no])
+      AC_MSG_WARN([Cannot find libpcl.la, cannot use PCL])
+    fi
 else
-  AC_MSG_RESULT([no])
+  # check if generally available
+  AC_CHECK_LIB([pcl], [co_create], [LIBPCL_LA=-lpcl], [with_pcl=no],)
+  AC_CHECK_HEADER([pcl.h],, [with_pcl=no],)
 fi
 
-AC_ARG_WITH([mctx], [AC_HELP_STRING([--with-mctx=TYPE], [use context handling TYPE (can be pcl,i386-linux,x86_64-linux,x86_64-linux-mem,ucontext)])],
-            [], [with_mctx=pcl])
+if test x"$with_pcl" != xno; then
+  AC_SUBST([LIBPCL_LA])
+  CPPFLAGS="$CPPFLAGS $LIBPCL_INC"
+  AC_DEFINE([HAVE_PCL], [1], [Define to 1 if PCL is available.])
+fi
+
+AC_ARG_WITH([mctx], [AS_HELP_STRING([--with-mctx=TYPE],
+      [use context handling TYPE (can be pcl,i386-linux,x86_64-linux,x86_64-linux-mem,ucontext) @<:@default=pcl@:>@])],
+      [], [with_mctx=pcl])
 case $with_mctx in
-   pcl) 
+   pcl)
       if test x"$with_pcl" = xno; then
          AC_MSG_ERROR([Context type "pcl" was specified but PCL is not found. Use --with-pcl or select another type with --with-mctx.])
       fi
@@ -55,15 +75,15 @@ case $with_mctx in
    ucontext)
       AC_DEFINE([USE_MCTX_UCONTEXT], [1], [Define to 1 to use the ucontext/swapcontext back-end.])
       ;;
+    *)
+      AC_MSG_ERROR([Invalid context type specified (see ./configure -h for more information on --with-mctx.])
+      ;;
 esac
 
 AM_CONDITIONAL([USE_MCTX_PCL], [test x"$with_pcl" != xno -a $with_mctx = pcl])
 AM_CONDITIONAL([USE_MCTX_X86], [test $with_mctx = i386-linux])
 AM_CONDITIONAL([USE_MCTX_X86_64], [test $with_mctx = x86_64-linux])
 AM_CONDITIONAL([USE_MCTX_X86_64_MEM], [test $with_mctx = x86_64-linux-mem])
-
-
-
 
 
 AC_LANG_PUSH([C])
