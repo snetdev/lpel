@@ -36,7 +36,9 @@ liblpel_la_SOURCES = \
 	src/worker.c \
 	src/worker.h \
 	src/workerctx.h \
-	src/workermsg.h
+	src/workermsg.h \
+        src/worlds.c \
+        src/worlds.h
 liblpel_la_CPPFLAGS = -I$(top_srcdir)/include
 
 liblpel_mon_la_SOURCES = \

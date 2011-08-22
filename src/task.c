@@ -9,6 +9,7 @@
 
 #include "worker.h"
 #include "workerctx.h"
+#include "worlds.h"
 #include "stream.h"
 
 
@@ -225,6 +226,30 @@ void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
 
   LpelWorkerTaskWakeup( ct, blocked);
 }
+
+
+
+
+
+/**
+ * Task issues an enter world request
+ */
+void LpelTaskEnterWorld( lpel_worldfunc_t fun, void *arg)
+{
+  lpel_task_t *ct = LpelTaskSelf();
+  assert( ct->state == TASK_RUNNING );
+
+//FIXME conditional for availability?
+
+  /* world request */
+  LpelWorldsRequest(ct->worker_context->wid, fun, arg, ct);
+
+  ct->state = TASK_BLOCKED;
+  /* TODO block on what? */
+  LpelTaskBlock( ct );
+}
+
+
 
 
 /******************************************************************************/

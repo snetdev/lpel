@@ -1,5 +1,6 @@
 
 
+#include <stdlib.h>
 #include <assert.h>
 #include <pcl.h>
 

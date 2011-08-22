@@ -15,9 +15,9 @@
 #include "arch/atomic.h"
 
 #include "worker.h"
-
 #include "workerctx.h"
 #include "workermsg.h"
+#include "worlds.h"
 
 #include "task.h"
 #include "lpel_main.h"
@@ -105,7 +105,7 @@ static inline workerctx_t *GetCurrentWorker(void)
  */
 void LpelWorkerInit(int size)
 {
-  int i;
+  int i, res;
 
   assert(0 <= size);
   num_workers = size;
@@ -145,6 +145,10 @@ void LpelWorkerInit(int size)
     /* taskqueue of free tasks */
     //LpelTaskqueueInit( &wc->free_tasks);
   }
+
+  /* initialize world module */
+  res = LpelWorldsInit(num_workers);
+  assert(res==0);
 }
 
 
@@ -175,6 +179,9 @@ void LpelWorkerCleanup(void)
 
   /* free workers table */
   free( workers);
+
+  /* cleanup world module */
+  LpelWorldsCleanup();
 
 #ifndef HAVE___THREAD
   pthread_key_delete(workerctx_key);
@@ -302,27 +309,36 @@ void LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
   }
 }
 
+void LpelWorkerTaskWakeupLocal( workerctx_t *wc, lpel_task_t *task)
+{
+  assert(task->state != TASK_READY);
+  task->state = TASK_READY;
+  LpelSchedMakeReady( wc->sched, task);
+}
 
+
+void LpelWorkerBroadcast(workermsg_t *msg)
+{
+  int i;
+  workerctx_t *wc;
+
+  for( i=0; i<num_workers; i++) {
+    wc = WORKER_PTR(i);
+    /* send */
+    LpelMailboxSend(wc->mailbox, msg);
+  }
+}
 
 /**
  * Broadcast a termination message
  */
 void LpelWorkerTerminate(void)
 {
-  int i;
-  workerctx_t *wc;
   workermsg_t msg;
 
   /* compose a task term message */
   msg.type = WORKER_MSG_TERMINATE;
-
-  /* broadcast a terminate message */
-  for( i=0; i<num_workers; i++) {
-    wc = WORKER_PTR(i);
-
-    /* send */
-    LpelMailboxSend(wc->mailbox, &msg);
-  }
+  LpelWorkerBroadcast(&msg);
 }
 
 
@@ -483,6 +499,17 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
         MON_CB(task_assign)(t->mon, wc->mon);
       }
       break;
+
+    case WORKER_MSG_WORLDREQ:
+#ifdef LPEL_DEBUG_WORKER
+      if (wc->mon && MON_CB(worker_debug)) {
+        MON_CB(worker_debug)( wc->mon, "Received world request notification"
+            " from worker %d!\n", msg->body.from_worker);
+      }
+#endif
+      LpelWorldsHandleRequest(wc->wid);
+      break;
+
     default: assert(0);
   }
 }
