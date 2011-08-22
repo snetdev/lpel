@@ -32,6 +32,9 @@ typedef struct {
 
 /****************************************************************************/
 
+/* internal data and variables */
+
+
 static int num_workers = -1;
 
 /** worker specific data */
@@ -166,6 +169,7 @@ void LpelWorldsRequest(int worker_id, lpel_worldfunc_t fun, void *arg,
 {
   int tail;
   worldreq_t *req;
+  workermsg_t msg;
   assert(worker_id >= 0);
 
   /* append */
@@ -177,6 +181,8 @@ void LpelWorldsRequest(int worker_id, lpel_worldfunc_t fun, void *arg,
   req->task      = task;
 
   /* broadcast message */
-
+  msg.type = WORKER_MSG_WORLDREQ;
+  msg.body.from_worker = worker_id;
+  LpelWorkerBroadcast(&msg);
 }
 
