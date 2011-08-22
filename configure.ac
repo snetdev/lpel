@@ -13,21 +13,22 @@ LT_PREREQ([2.4])
 LT_INIT
 
 
-
-
+dnl Procedure for availability of PCL:
+dnl if --with-pcl is specified, try to find headers and library there,
+dnl otherwise check for a system wide install
 AC_ARG_WITH([pcl], [AS_HELP_STRING([--with-pcl=DIR], [look up PCL sources in DIR])], [], [with_pcl=check])
 
 LIBPCL_LA=
 LIBPCL_INC=
 if test "x$with_pcl" != xcheck; then
     AC_MSG_CHECKING([for pcl in $with_pcl])
-    # header
+    dnl header
     if test -r "$with_pcl/include/pcl.h"; then
       LIBPCL_INC=-I$with_pcl/include
     else
       with_pcl=no
     fi
-    # library
+    dnl library
     if test -r "$with_pcl/lib/libpcl.la"; then
       LIBPCL_LA=$with_pcl/lib/libpcl.la
     elif test -r "$with_pcl/pcl/libpcl.la"; then
@@ -42,7 +43,7 @@ if test "x$with_pcl" != xcheck; then
       AC_MSG_WARN([Cannot find libpcl.la, cannot use PCL])
     fi
 else
-  # check if generally available
+  dnl check if generally available on system
   AC_CHECK_LIB([pcl], [co_create], [LIBPCL_LA=-lpcl], [with_pcl=no],)
   AC_CHECK_HEADER([pcl.h],, [with_pcl=no],)
 fi
