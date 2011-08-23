@@ -1,4 +1,17 @@
 
+Bootstrap
+=========
+
+To generate the configure script and related build-tools, run
+
+  ./build-aux/bootstrap
+
+You are required to have fairly recent versions of the GNU buildtools
+(autoconf, automake, libtool) installed.
+
+
+
+
 Building
 ========
 
@@ -12,6 +25,10 @@ available at
 http://www.xmailserver.org/libpcl.html
 
 
+If you cannot do a system-wide install, you need to specify the
+installation directory of pcl for the configure script.
+
+
 Run configure with following parameters:
 
 ./configure --with-pcl=<pcl_install_dir> --prefix=<your_lpel_install_dir>
@@ -22,25 +39,24 @@ make
 make install
 
 In order to build the LPEL backend for the S-Net runtime system,
-you'll need to set the environment variable LPELROOT:
+you'll need to specify the directories where to find the LPEL library and
+includes.
 
-export LPELROOT=<your_lpel_install_dir>
+./configure --with-lpel-includes=<lpel_include_dir> \
+            --with-lpel-libs=<lpel_lib_dir>
 
-
-Don't forget to (re-)run ./configure in your $SNETBASE directory.
 
 
 
 Example
 -------
 
-I have installed pcl in the default system-wide installation dir.
+I have installed pcl in the local subdirectory of my home directory.
 To build LPEL, I use
 
-./configure --with-pcl=/usr/local/ --prefix=/home/daniel/local/
+./configure --with-pcl=$HOME/local/ --prefix=$HOME/local/
 make
 make install
-export LPELROOT=/home/daniel/local
 
 
 
