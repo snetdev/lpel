@@ -1,8 +1,4 @@
-SUBDIRS = . tests
-
-nobase_include_HEADERS = \
-        include/lpel.h \
-        include/lpel/timing.h
+SUBDIRS = include . tests
 
 lib_LTLIBRARIES = liblpel.la liblpel_mon.la
 

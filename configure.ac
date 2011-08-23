@@ -138,6 +138,7 @@ AC_LANG_POP([C])
 
 
 AC_OUTPUT([Makefile
+           include/Makefile
            tests/Makefile
            tests/comp_pthreads/Makefile])
 
