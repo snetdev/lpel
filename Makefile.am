@@ -27,11 +27,12 @@ liblpel_la_SOURCES = \
 	src/taskqueue.c \
 	src/taskqueue.h \
 	src/timing.c \
+	src/lpelcfg.c \
+	src/lpelcfg.h \
 	src/lpel_main.c \
 	src/lpel_main.h \
 	src/worker.c \
 	src/worker.h \
-	src/workerctx.h \
 	src/workermsg.h \
         src/worlds.c \
         src/worlds.h

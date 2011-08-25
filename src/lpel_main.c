@@ -13,9 +13,11 @@
 #include <unistd.h>  /* sysconf() */
 #include <pthread.h> /* worker threads are OS threads */
 
-#include "arch/mctx.h"
+#include <lpel.h>
 
-#include "lpel_main.h"
+#include "arch/mctx.h"
+//#include "lpel_main.h"
+#include "lpelcfg.h"
 #include "worker.h"
 
 
@@ -24,9 +26,6 @@
 #endif
 
 
-
-/* Keep copy of the (checked) configuration provided at LpelInit() */
-lpel_config_t    _lpel_global_config;
 
 /* test if flags are set in lpel config */
 #define LPEL_ICFG(f)   ( (_lpel_global_config.flags & (f)) == (f) )

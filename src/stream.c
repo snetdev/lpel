@@ -44,8 +44,8 @@
 #include <lpel.h>
 
 #include "arch/atomic.h"
+#include "lpelcfg.h"
 #include "buffer.h"
-
 #include "task.h"
 
 #include "stream.h"

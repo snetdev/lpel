@@ -2,13 +2,12 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include <lpel.h>
 #include "arch/atomic.h"
 
 #include "task.h"
 
+#include "lpelcfg.h"
 #include "worker.h"
-#include "workerctx.h"
 #include "worlds.h"
 #include "stream.h"
 
@@ -242,7 +241,7 @@ void LpelTaskEnterWorld( lpel_worldfunc_t fun, void *arg)
 //FIXME conditional for availability?
 
   /* world request */
-  LpelWorldsRequest(ct->worker_context->wid, fun, arg, ct);
+  LpelWorldsRequest(ct, fun, arg);
 
   ct->state = TASK_BLOCKED;
   /* TODO block on what? */

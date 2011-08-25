@@ -15,18 +15,22 @@
 #include "arch/atomic.h"
 
 #include "worker.h"
-#include "workerctx.h"
-#include "workermsg.h"
 #include "worlds.h"
 
 #include "task.h"
 #include "lpel_main.h"
+#include "lpelcfg.h"
 
 #include "mailbox.h"
 
 
-
 #define WORKER_PTR(i) (workers[(i)])
+
+
+
+
+/******************************************************************************/
+
 
 static int num_workers = -1;
 static workerctx_t **workers;
@@ -80,9 +84,9 @@ static inline void SendWakeup( workerctx_t *target, lpel_task_t *t)
 
 
 
-/*******************************************************************************
- *  Get current worker context
- ******************************************************************************/
+/**
+ * Get current worker context
+ */
 static inline workerctx_t *GetCurrentWorker(void)
 {
 #ifdef HAVE___THREAD
@@ -93,9 +97,7 @@ static inline workerctx_t *GetCurrentWorker(void)
 }
 
 
-/*******************************************************************************
- *  PUBLIC FUNCTIONS
- ******************************************************************************/
+/******************************************************************************/
 
 /**
  * Initialise worker globally
@@ -190,6 +192,8 @@ void LpelWorkerCleanup(void)
 
 
 
+
+
 /**
  * Assign a task to the worker by sending an assign message to that worker
  */
@@ -201,11 +205,10 @@ void LpelWorkerRunTask( lpel_task_t *t)
 
 
 
-
-
-/*******************************************************************************
- *  PROTECTED FUNCTIONS
- ******************************************************************************/
+workerctx_t *LpelWorkerSelf(void)
+{
+  return GetCurrentWorker();
+}
 
 
 lpel_task_t *LpelWorkerCurrentTask(void)
@@ -312,6 +315,7 @@ void LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
 void LpelWorkerTaskWakeupLocal( workerctx_t *wc, lpel_task_t *task)
 {
   assert(task->state != TASK_READY);
+  assert(task->worker_context == wc);
   task->state = TASK_READY;
   LpelSchedMakeReady( wc->sched, task);
 }
@@ -432,11 +436,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 {
   lpel_task_t *t;
 
-#ifdef LPEL_DEBUG_WORKER
-  if (wc->mon && MON_CB(worker_debug)) {
-    MON_CB(worker_debug)( wc->mon, "worker %d processing msg %d\n", wc->wid, msg->type);
-  }
-#endif
+  //WORKER_DBGMSG(wc, "worker %d processing msg %d\n", wc->wid, msg->type);
 
   switch( msg->type) {
     case WORKER_MSG_WAKEUP:
@@ -446,11 +446,9 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       t = msg->body.task;
       assert(t->state != TASK_READY);
       t->state = TASK_READY;
-#ifdef LPEL_DEBUG_WORKER
-      if (wc->mon && MON_CB(worker_debug)) {
-        MON_CB(worker_debug)( wc->mon, "Received wakeup for %d.\n", t->uid);
-      }
-#endif
+
+      WORKER_DBGMSG(wc, "Received wakeup for %d.\n", t->uid);
+
       if (wc->wid < 0) {
         wc->wraptask = t;
       } else {
@@ -469,11 +467,8 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       t->state = TASK_READY;
 
       wc->num_tasks++;
-#ifdef LPEL_DEBUG_WORKER
-      if (wc->mon && MON_CB(worker_debug)) {
-        MON_CB(worker_debug)( wc->mon, "Assigned task %d.\n", t->uid);
-      }
-#endif
+      WORKER_DBGMSG(wc, "Assigned task %d.\n", t->uid);
+
       if (wc->wid < 0) {
         wc->wraptask = t;
         /* create monitoring context if necessary */
@@ -501,12 +496,8 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       break;
 
     case WORKER_MSG_WORLDREQ:
-#ifdef LPEL_DEBUG_WORKER
-      if (wc->mon && MON_CB(worker_debug)) {
-        MON_CB(worker_debug)( wc->mon, "Received world request notification"
+      WORKER_DBGMSG(wc, "Received world request notification"
             " from worker %d!\n", msg->body.from_worker);
-      }
-#endif
       LpelWorldsHandleRequest(wc->wid);
       break;
 
@@ -556,11 +547,9 @@ static void WorkerLoop( workerctx_t *wc)
       /* execute task */
       wc->current_task = t;
       mctx_switch(&wc->mctx, &t->mctx);
-#ifdef LPEL_DEBUG_WORKER
-      if (wc->mon && MON_CB(worker_debug)) {
-        MON_CB(worker_debug)( wc->mon, "Back on worker %d context.\n", wc->wid);
-      }
-#endif
+
+      WORKER_DBGMSG(wc, "Back on worker %d context.\n", wc->wid);
+
       /* cleanup task context marked for deletion */
       CleanupTaskContext(wc, NULL);
     } else {

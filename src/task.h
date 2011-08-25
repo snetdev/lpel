@@ -9,7 +9,6 @@
 
 #include "arch/atomic.h"
 
-#include "lpel_main.h"
 #include "scheduler.h"
 
 

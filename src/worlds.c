@@ -4,9 +4,10 @@
 //FIXME check availability
 #include <semaphore.h>
 
-#include <lpel.h>
 
 #include "worlds.h"
+
+#include "lpelcfg.h"
 #include "arch/atomic.h"
 #include "worker.h"
 
@@ -22,7 +23,7 @@ typedef struct {
 
 
 typedef struct {
-  int worker_id;     /* requesting worker */
+  workerctx_t *wctx;     /* requesting worker */
   lpel_worldfunc_t func;
   void *arg;
   lpel_task_t *task; /* requesting task */
@@ -62,7 +63,7 @@ int LpelWorldsInit(int numworkers)
 
   req_queue = malloc(num_workers * sizeof(worldreq_t));
   for (i=0; i<num_workers; i++) {
-    req_queue[i].worker_id = -1; /* initialize to invalid worker id */
+    req_queue[i].wctx = NULL; /* initialize to invalid worker id */
   }
 
 
@@ -90,22 +91,25 @@ void LpelWorldsHandleRequest(int worker_id)
 {
   worldreq_t curreq;
   world_worker_t *master_data, *self_data;
-  int i, head;
+  int i, head, cur_worker_id;
 
-  assert(worker_id >= 0);
+  assert(worker_id >= 0 && worker_id < num_workers);
 
   head = atomic_read(&qhead);
   /* local copy of current request */
   curreq = req_queue[head];
-  assert(curreq.worker_id != -1);
+  assert(curreq.wctx != NULL);
 
-  master_data = &worker_data[curreq.worker_id];
+  cur_worker_id = curreq.wctx->wid;
+  assert(cur_worker_id != -1);
+
+  master_data = &worker_data[cur_worker_id];
   self_data   = &worker_data[worker_id];
 
   /*
    * "Start-Barrier"
    */
-  if (curreq.worker_id == worker_id) {
+  if (cur_worker_id == worker_id) {
     /* we are the "master" thread */
 
     /* wait until other threads have entered the world */
@@ -117,7 +121,7 @@ void LpelWorldsHandleRequest(int worker_id)
     { /* CRITICAL SECTION */
       int tail;
       /* invalidate the head (current) in req_queue */
-      req_queue[head].worker_id = -1;
+      req_queue[head].wctx = NULL;
       /* move head */
       head = (head+1) % num_workers;
       atomic_set(&qhead, head);
@@ -141,13 +145,19 @@ void LpelWorldsHandleRequest(int worker_id)
 
   /**********************************/
   /* EXECUTE THE REQUESTED FUNCTION */
-  curreq.func(curreq.arg);
+  {
+    workerctx_t *wc = LpelWorkerGetContext(worker_id);
+    WORKER_DBGMSG(wc, "Enter world req'd by task %u on worker %d.\n",
+        curreq.task->uid, cur_worker_id);
+    curreq.func(curreq.arg);
+    WORKER_DBGMSG(wc, "Left world.\n");
+  }
   /**********************************/
 
   /*
    * "Stop-Barrier"
    */
-  if (curreq.worker_id == worker_id) {
+  if (cur_worker_id == worker_id) {
     /* we are the "master" thread */
     /* wait until other threads have left the world */
     for (i=0; i<num_workers-1; i++) {
@@ -164,25 +174,25 @@ void LpelWorldsHandleRequest(int worker_id)
 }
 
 
-void LpelWorldsRequest(int worker_id, lpel_worldfunc_t fun, void *arg,
-    lpel_task_t *task)
+void LpelWorldsRequest(lpel_task_t *task, lpel_worldfunc_t fun, void *arg)
 {
   int tail;
   worldreq_t *req;
   workermsg_t msg;
-  assert(worker_id >= 0);
+  workerctx_t *wc = task->worker_context;
+  assert(wc != NULL && wc->wid >= 0 && wc->wid < num_workers);
 
   /* append */
   tail = fetch_and_inc(&qtail) % num_workers;
   req = &req_queue[tail];
-  req->worker_id = worker_id;
-  req->func      = fun;
-  req->arg       = arg;
-  req->task      = task;
+  req->wctx = wc;
+  req->func = fun;
+  req->arg  = arg;
+  req->task = task;
 
   /* broadcast message */
   msg.type = WORKER_MSG_WORLDREQ;
-  msg.body.from_worker = worker_id;
+  msg.body.from_worker = wc->wid;
   LpelWorkerBroadcast(&msg);
 }
 
