@@ -9,7 +9,7 @@
 int  LpelWorldsInit(int num_workers);
 void LpelWorldsCleanup(void);
 
-void LpelWorldsHandleRequest(int worker_id);
+void LpelWorldsHandleRequests(int worker_id);
 void LpelWorldsRequest(lpel_task_t *task, lpel_worldfunc_t, void *arg);
 
 

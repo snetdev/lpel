@@ -118,6 +118,9 @@ void LpelWorkerInit(int size)
   pthread_key_create(&workerctx_key, NULL);
 #endif /* HAVE___THREAD */
 
+  /* initialize world module */
+  res = LpelWorldsInit(num_workers);
+
   /* allocate worker context table */
   workers = (workerctx_t **) malloc( num_workers * sizeof(workerctx_t*) );
   /* allocate worker contexts */
@@ -148,8 +151,6 @@ void LpelWorkerInit(int size)
     //LpelTaskqueueInit( &wc->free_tasks);
   }
 
-  /* initialize world module */
-  res = LpelWorldsInit(num_workers);
   assert(res==0);
 }
 
@@ -243,6 +244,9 @@ void LpelWorkerDispatcher( lpel_task_t *t)
      * also newly arrived READY tasks
      */
     FetchAllMessages( wc);
+
+    /* before executing a task, handle all pending requests! */
+    LpelWorldsHandleRequests(wc->wid);
 
     next = LpelSchedFetchReady( wc->sched);
     if (next != NULL) {
@@ -496,9 +500,14 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       break;
 
     case WORKER_MSG_WORLDREQ:
+      assert(wc->wid >= 0);
+      /* This message serves the sole purpose to wake up any sleeping workers,
+       * as handling of requests is done before execution of a task.
+       */
+      /*
       WORKER_DBGMSG(wc, "Received world request notification"
             " from worker %d!\n", msg->body.from_worker);
-      LpelWorldsHandleRequest(wc->wid);
+      */
       break;
 
     default: assert(0);
@@ -542,6 +551,9 @@ static void WorkerLoop( workerctx_t *wc)
   lpel_task_t *t = NULL;
 
   do {
+    /* before executing a task, handle all pending requests! */
+    LpelWorldsHandleRequests(wc->wid);
+
     t = LpelSchedFetchReady( wc->sched);
     if (t != NULL) {
       /* execute task */

@@ -19,6 +19,8 @@
 
 typedef struct {
   sem_t sema;
+  int pending;
+  int padding[7];
 } world_worker_t;
 
 
@@ -39,7 +41,7 @@ typedef struct {
 static int num_workers = -1;
 
 /** worker specific data */
-static world_worker_t *worker_data;
+static world_worker_t *worker_data = NULL;
 
 
 /**
@@ -71,6 +73,7 @@ int LpelWorldsInit(int numworkers)
   for (i=0; i<num_workers; i++) {
     world_worker_t *wd = &worker_data[i];
     sem_init(&wd->sema, 0, 0);
+    wd->pending = 0;
   }
 
   return 0;
@@ -87,7 +90,7 @@ void LpelWorldsCleanup(void)
   free(worker_data);
 }
 
-void LpelWorldsHandleRequest(int worker_id)
+void LpelWorldsHandleRequests(int worker_id)
 {
   worldreq_t curreq;
   world_worker_t *master_data, *self_data;
@@ -95,82 +98,92 @@ void LpelWorldsHandleRequest(int worker_id)
 
   assert(worker_id >= 0 && worker_id < num_workers);
 
-  head = atomic_read(&qhead);
-  /* local copy of current request */
-  curreq = req_queue[head];
-  assert(curreq.wctx != NULL);
+  while (1) {
+    head = atomic_read(&qhead);
+    /* local copy of current request */
+    curreq = req_queue[head];
 
-  cur_worker_id = curreq.wctx->wid;
-  assert(cur_worker_id != -1);
+    if (curreq.wctx == NULL) {
+      /* all requests handled */
+      break;
+    };
 
-  master_data = &worker_data[cur_worker_id];
-  self_data   = &worker_data[worker_id];
+    cur_worker_id = curreq.wctx->wid;
+    assert(cur_worker_id != -1);
 
-  /*
-   * "Start-Barrier"
-   */
-  if (cur_worker_id == worker_id) {
-    /* we are the "master" thread */
+    master_data = &worker_data[cur_worker_id];
+    self_data   = &worker_data[worker_id];
 
-    /* wait until other threads have entered the world */
-    for (i=0; i<num_workers-1; i++) {
-      sem_wait(&master_data->sema);
-    }
+    /*
+     * "Start-Barrier"
+     */
+    if (cur_worker_id == worker_id) {
+      /* we are the "master" thread */
 
-    /* now master is the sole thread operating on the queue */
-    { /* CRITICAL SECTION */
-      int tail;
-      /* invalidate the head (current) in req_queue */
-      req_queue[head].wctx = NULL;
-      /* move head */
-      head = (head+1) % num_workers;
-      atomic_set(&qhead, head);
-      /* correct tail */
-      tail = atomic_read(&qtail);
-      if (tail >= num_workers) tail %= num_workers;
-      atomic_set(&qtail, tail);
-    } /* CRITICAL SECTION */
-
-    /* signal the other threads */
-    for (i=0; i<num_workers; i++) {
-      if (i != worker_id) {
-        sem_post(&worker_data[i].sema);
+      /* wait until other threads have entered the world */
+      for (i=0; i<num_workers-1; i++) {
+        sem_wait(&master_data->sema);
       }
+
+      /* now master is the sole thread operating on the queue */
+      { /* CRITICAL SECTION */
+        int tail;
+        /* invalidate the head (current) in req_queue */
+        req_queue[head].wctx = NULL;
+        /* move head */
+        head = (head+1) % num_workers;
+        atomic_set(&qhead, head);
+        /* correct tail */
+        tail = atomic_read(&qtail);
+        if (tail >= num_workers) tail %= num_workers;
+        atomic_set(&qtail, tail);
+
+        /* clear pending flag */
+        assert( 1 == master_data->pending );
+        master_data->pending = 0;
+      } /* CRITICAL SECTION */
+
+      /* signal the other threads */
+      for (i=0; i<num_workers; i++) {
+        if (i != worker_id) {
+          sem_post(&worker_data[i].sema);
+        }
+      }
+    } else {
+      /* we are NOT master, signal master, then wait */
+      sem_post(&master_data->sema);
+      sem_wait(&self_data->sema);
+    } /* End "Start-Barrier" */
+
+    /**********************************/
+    /* EXECUTE THE REQUESTED FUNCTION */
+    {
+      workerctx_t *wc = LpelWorkerGetContext(worker_id);
+      WORKER_DBGMSG(wc, "Enter world req'd by task %u on worker %d.\n",
+          curreq.task->uid, cur_worker_id);
+      curreq.func(curreq.arg);
+      WORKER_DBGMSG(wc, "Left world.\n");
     }
-  } else {
-    /* we are NOT master, signal master, then wait */
-    sem_post(&master_data->sema);
-    sem_wait(&self_data->sema);
-  }
+    /**********************************/
 
-  /**********************************/
-  /* EXECUTE THE REQUESTED FUNCTION */
-  {
-    workerctx_t *wc = LpelWorkerGetContext(worker_id);
-    WORKER_DBGMSG(wc, "Enter world req'd by task %u on worker %d.\n",
-        curreq.task->uid, cur_worker_id);
-    curreq.func(curreq.arg);
-    WORKER_DBGMSG(wc, "Left world.\n");
-  }
-  /**********************************/
+    /*
+     * "Stop-Barrier"
+     */
+    if (cur_worker_id == worker_id) {
+      /* we are the "master" thread */
+      /* wait until other threads have left the world */
+      for (i=0; i<num_workers-1; i++) {
+        sem_wait(&master_data->sema);
+      }
 
-  /*
-   * "Stop-Barrier"
-   */
-  if (cur_worker_id == worker_id) {
-    /* we are the "master" thread */
-    /* wait until other threads have left the world */
-    for (i=0; i<num_workers-1; i++) {
-      sem_wait(&master_data->sema);
-    }
+      /* now we can wakeup the task */
+      LpelWorkerTaskWakeupLocal( curreq.task->worker_context, curreq.task);
+    } else {
+      /* we are NOT master, signal master before continuing */
+      sem_post(&master_data->sema);
+    } /* End "Stop-Barrier" */
 
-    /* now we can wakeup the task */
-    LpelWorkerTaskWakeupLocal( curreq.task->worker_context, curreq.task);
-  } else {
-    /* we are NOT master, signal master before continuing */
-    sem_post(&master_data->sema);
-  }
-
+  } /* END WHILE(1) */
 }
 
 
@@ -181,6 +194,10 @@ void LpelWorldsRequest(lpel_task_t *task, lpel_worldfunc_t fun, void *arg)
   workermsg_t msg;
   workerctx_t *wc = task->worker_context;
   assert(wc != NULL && wc->wid >= 0 && wc->wid < num_workers);
+
+  /* set pending flag */
+  assert( 0 == worker_data[wc->wid].pending);
+  worker_data[wc->wid].pending = 1;
 
   /* append */
   tail = fetch_and_inc(&qtail) % num_workers;
