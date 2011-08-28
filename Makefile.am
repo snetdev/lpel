@@ -19,6 +19,8 @@ liblpel_la_SOURCES = \
 	src/buffer.h \
 	src/scheduler.c \
 	src/scheduler.h \
+        src/spmdext.c \
+        src/spmdext.h \
 	src/stream.c \
 	src/stream.h \
 	src/streamset.c \
@@ -33,15 +35,14 @@ liblpel_la_SOURCES = \
 	src/lpel_main.h \
 	src/worker.c \
 	src/worker.h \
-	src/workermsg.h \
-        src/worlds.c \
-        src/worlds.h
+	src/workermsg.h
 liblpel_la_CPPFLAGS = -I$(top_srcdir)/include
 
 liblpel_mon_la_SOURCES = \
 	modimpl/monitoring.c \
 	modimpl/monitoring.h
 liblpel_mon_la_CPPFLAGS = -I$(top_srcdir)/include
+
 
 if USE_MCTX_PCL
 liblpel_la_LIBADD = $(LIBPCL_LA)

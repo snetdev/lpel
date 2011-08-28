@@ -8,7 +8,7 @@
 
 #include "lpelcfg.h"
 #include "worker.h"
-#include "worlds.h"
+#include "spmdext.h"
 #include "stream.h"
 
 
@@ -233,15 +233,21 @@ void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
 /**
  * Task issues an enter world request
  */
-void LpelTaskEnterWorld( lpel_worldfunc_t fun, void *arg)
+void LpelTaskEnterSPMD( lpel_spmdfunc_t fun, void *arg)
 {
   lpel_task_t *ct = LpelTaskSelf();
+  workermsg_t msg;
   assert( ct->state == TASK_RUNNING );
 
 //FIXME conditional for availability?
 
   /* world request */
-  LpelWorldsRequest(ct, fun, arg);
+  LpelSpmdRequest(ct, fun, arg);
+
+  /* broadcast message */
+  msg.type = WORKER_MSG_SPMDREQ;
+  msg.body.from_worker = ct->worker_context->wid;
+  LpelWorkerBroadcast(&msg);
 
   ct->state = TASK_BLOCKED;
   /* TODO block on what? */

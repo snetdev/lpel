@@ -15,7 +15,7 @@
 #include "arch/atomic.h"
 
 #include "worker.h"
-#include "worlds.h"
+#include "spmdext.h"
 
 #include "task.h"
 #include "lpel_main.h"
@@ -118,8 +118,8 @@ void LpelWorkerInit(int size)
   pthread_key_create(&workerctx_key, NULL);
 #endif /* HAVE___THREAD */
 
-  /* initialize world module */
-  res = LpelWorldsInit(num_workers);
+  /* initialize spmdext module */
+  res = LpelSpmdInit(num_workers);
 
   /* allocate worker context table */
   workers = (workerctx_t **) malloc( num_workers * sizeof(workerctx_t*) );
@@ -183,8 +183,8 @@ void LpelWorkerCleanup(void)
   /* free workers table */
   free( workers);
 
-  /* cleanup world module */
-  LpelWorldsCleanup();
+  /* cleanup spmdext module */
+  LpelSpmdCleanup();
 
 #ifndef HAVE___THREAD
   pthread_key_delete(workerctx_key);
@@ -246,7 +246,7 @@ void LpelWorkerDispatcher( lpel_task_t *t)
     FetchAllMessages( wc);
 
     /* before executing a task, handle all pending requests! */
-    LpelWorldsHandleRequests(wc->wid);
+    LpelSpmdHandleRequests(wc->wid);
 
     next = LpelSchedFetchReady( wc->sched);
     if (next != NULL) {
@@ -499,13 +499,13 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       }
       break;
 
-    case WORKER_MSG_WORLDREQ:
+    case WORKER_MSG_SPMDREQ:
       assert(wc->wid >= 0);
       /* This message serves the sole purpose to wake up any sleeping workers,
        * as handling of requests is done before execution of a task.
        */
       /*
-      WORKER_DBGMSG(wc, "Received world request notification"
+      WORKER_DBGMSG(wc, "Received spmd request notification"
             " from worker %d!\n", msg->body.from_worker);
       */
       break;
@@ -552,7 +552,7 @@ static void WorkerLoop( workerctx_t *wc)
 
   do {
     /* before executing a task, handle all pending requests! */
-    LpelWorldsHandleRequests(wc->wid);
+    LpelSpmdHandleRequests(wc->wid);
 
     t = LpelSchedFetchReady( wc->sched);
     if (t != NULL) {

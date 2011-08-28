@@ -112,6 +112,7 @@ int LpelGetNumCores( int *result);
 int LpelCanSetExclusive( int *result);
 
 
+
 /******************************************************************************/
 /*  DATATYPES                                                                 */
 /******************************************************************************/
@@ -142,8 +143,17 @@ typedef lpel_stream_desc_t          *lpel_streamset_t;
 typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 
 
-/** world function */
-typedef void (*lpel_worldfunc_t)(void *);
+/** spmd function */
+typedef void (*lpel_spmdfunc_t)(void *);
+
+
+
+/******************************************************************************/
+/*  SPMD FUNCTIONS                                                            */
+/******************************************************************************/
+
+int LpelSpmdVId(void);
+
 
 /******************************************************************************/
 /*  TASK FUNCTIONS                                                            */
@@ -169,8 +179,8 @@ lpel_task_t *LpelTaskSelf(void);
 void LpelTaskExit(void *outarg);
 void LpelTaskYield(void);
 
-/** enter world request */
-void LpelTaskEnterWorld(lpel_worldfunc_t, void *);
+/** enter SPMD request */
+void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
 
 /******************************************************************************/
