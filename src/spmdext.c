@@ -1,5 +1,6 @@
 
 #include <stdlib.h>
+#include <assert.h>
 
 //FIXME check availability
 #include <semaphore.h>
