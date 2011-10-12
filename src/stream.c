@@ -49,7 +49,7 @@
 #include "task.h"
 
 #include "stream.h"
-
+#include "monitor.h"
 
 /** Macros for lock handling */
 
@@ -184,6 +184,7 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   sd->mode = mode;
   sd->next  = NULL;
 
+#ifdef USE_TASK_EVENT_LOGGING
   /* create monitoring object, or NULL if stream
    * is not going to be monitored (depends on ct->mon)
    */
@@ -192,6 +193,9 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   } else {
     sd->mon = NULL;
   }
+#else
+  sd->mon = NULL;
+#endif
 
   switch(mode) {
     case 'r': s->cons_sd = sd; break;
@@ -210,9 +214,11 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
 void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
 {
   /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
   if (sd->mon && MON_CB(stream_close)) {
     MON_CB(stream_close)(sd->mon);
   }
+#endif
 
   if (destroy_s) {
     LpelStreamDestroy( sd->stream);
@@ -239,10 +245,14 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
   /* new consumer sd of stream */
   sd->stream->cons_sd = sd;
 
+
   /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
   if (sd->mon && MON_CB(stream_replace)) {
     MON_CB(stream_replace)(sd->mon, snew->uid);
   }
+#endif
+
 }
 
 
@@ -290,16 +300,22 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
   assert( sd->mode == 'r');
 
   /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
   if (sd->mon && MON_CB(stream_readprepare)) {
     MON_CB(stream_readprepare)(sd->mon);
   }
+#endif
 
   /* quasi P(n_sem) */
   if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
+
+#ifdef USE_TASK_EVENT_LOGGING
     /* MONITORING CALLBACK */
     if (sd->mon && MON_CB(stream_blockon)) {
       MON_CB(stream_blockon)(sd->mon);
     }
+#endif
+
     /* wait on stream: */
     LpelTaskBlockStream( self);
   }
@@ -318,17 +334,22 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
     lpel_task_t *prod = sd->stream->prod_sd->task;
     /* wakeup producer: make ready */
     LpelTaskUnblock( self, prod);
+
     /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
     if (sd->mon && MON_CB(stream_wakeup)) {
       MON_CB(stream_wakeup)(sd->mon);
     }
+#endif
+
   }
 
   /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
   if (sd->mon && MON_CB(stream_readfinish)) {
     MON_CB(stream_readfinish)(sd->mon, item);
   }
-
+#endif
   return item;
 }
 
@@ -355,16 +376,22 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   assert( item != NULL );
 
   /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
   if (sd->mon && MON_CB(stream_writeprepare)) {
     MON_CB(stream_writeprepare)(sd->mon, item);
   }
+#endif
 
   /* quasi P(e_sem) */
   if ( fetch_and_dec( &sd->stream->e_sem)== 0) {
-    /* MONITORING CALLBACK */
+
+	/* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
     if (sd->mon && MON_CB(stream_blockon)) {
       MON_CB(stream_blockon)(sd->mon);
     }
+#endif
+
     /* wait on stream: */
     LpelTaskBlockStream( self);
   }
@@ -393,10 +420,13 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     lpel_task_t *cons = sd->stream->cons_sd->task;
     /* wakeup consumer: make ready */
     LpelTaskUnblock( self, cons);
+
     /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
     if (sd->mon && MON_CB(stream_wakeup)) {
       MON_CB(stream_wakeup)(sd->mon);
     }
+#endif
   } else {
     /* we are the sole producer task waking the polling consumer up */
     if (poll_wakeup) {
@@ -404,17 +434,23 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
       cons->wakeup_sd = sd->stream->cons_sd;
 
       LpelTaskUnblock( self, cons);
+
       /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
       if (sd->mon && MON_CB(stream_wakeup)) {
         MON_CB(stream_wakeup)(sd->mon);
       }
+#endif
     }
   }
 
   /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
   if (sd->mon && MON_CB(stream_writefinish)) {
     MON_CB(stream_writefinish)(sd->mon);
   }
+#endif
+
 }
 
 

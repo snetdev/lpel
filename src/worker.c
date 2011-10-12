@@ -22,7 +22,7 @@
 #include "lpelcfg.h"
 
 #include "mailbox.h"
-
+#include "monitor.h"
 
 #define WORKER_PTR(i) (workers[(i)])
 
@@ -138,12 +138,17 @@ void LpelWorkerInit(int size)
     wc->sched = LpelSchedCreate( i);
     wc->wraptask = NULL;
 
-    //FIXME wc->mon = LpelMonContextCreate( wc->wid, wname, _lpel_global_config.worker_dbg);
+#ifdef USE_LOGGING
+
     if (MON_CB(worker_create)) {
       wc->mon = MON_CB(worker_create)(wc->wid);
     } else {
       wc->mon = NULL;
     }
+#else
+    wc->mon = NULL;
+#endif
+
     /* mailbox */
     wc->mailbox = LpelMailboxCreate();
 
@@ -153,8 +158,6 @@ void LpelWorkerInit(int size)
 
   assert(res==0);
 }
-
-
 
 
 /**
@@ -476,11 +479,8 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       if (wc->wid < 0) {
         wc->wraptask = t;
         /* create monitoring context if necessary */
+#ifdef USE_LOGGING
         if (t->mon) {
-          /* MONITORING */
-          //FIXME wc->mon = LpelMonContextCreate(-1,
-          //    LpelMonTaskGetName(t->mon),
-          //    _lpel_global_config.worker_dbg);
           if (MON_CB(worker_create_wrapper)) {
             wc->mon = MON_CB(worker_create_wrapper)(t->mon);
           } else {
@@ -490,13 +490,17 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
             MON_CB(worker_waitstart)(wc->mon);
           }
         }
+#endif
       } else {
         LpelSchedMakeReady( wc->sched, t);
       }
+
+#ifdef USE_LOGGING
       /* assign monitoring context to taskmon */
       if (t->mon && MON_CB(task_assign)) {
         MON_CB(task_assign)(t->mon, wc->mon);
       }
+#endif
       break;
 
     case WORKER_MSG_SPMDREQ:
@@ -519,15 +523,19 @@ static void WaitForNewMessage( workerctx_t *wc)
 {
   workermsg_t msg;
 
+#ifdef USE_LOGGING
   if (wc->mon && MON_CB(worker_waitstart)) {
     MON_CB(worker_waitstart)(wc->mon);
   }
+#endif
 
   LpelMailboxRecv(wc->mailbox, &msg);
 
+#ifdef USE_LOGGING
   if (wc->mon && MON_CB(worker_waitstop)) {
     MON_CB(worker_waitstop)(wc->mon);
   }
+#endif
 
   ProcessMessage( wc, &msg);
 }
@@ -639,11 +647,12 @@ static void *WorkerThread( void *arg)
   }
   /*******************************************************/
 
+#ifdef USE_LOGGING
   /* cleanup monitoring */
   if (wc->mon && MON_CB(worker_destroy)) {
     MON_CB(worker_destroy)(wc->mon);
   }
-
+#endif
 
   /* destroy all the free tasks */
   /*

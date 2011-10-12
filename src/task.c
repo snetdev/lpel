@@ -10,9 +10,7 @@
 #include "worker.h"
 #include "spmdext.h"
 #include "stream.h"
-
-
-
+#include "monitor.h"
 
 static atomic_t taskseq = ATOMIC_INIT(0);
 
@@ -101,10 +99,12 @@ void LpelTaskDestroy( lpel_task_t *t)
 {
   assert( t->state == TASK_ZOMBIE);
 
+#ifdef USE_TASK_EVENT_LOGGING
   /* if task had a monitoring object, destroy it */
   if (t->mon && MON_CB(task_destroy)) {
     MON_CB(task_destroy)(t->mon);
   }
+#endif
 
   atomic_destroy( &t->poll_token);
 
@@ -298,12 +298,15 @@ static void TaskStart( lpel_task_t *t)
   assert( t->state == TASK_READY );
 
   /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
   if (t->mon && MON_CB(task_start)) {
     MON_CB(task_start)(t->mon);
   }
+#endif
 
   t->state = TASK_RUNNING;
 }
+
 
 static void TaskStop( lpel_task_t *t)
 {
@@ -311,9 +314,12 @@ static void TaskStop( lpel_task_t *t)
   assert( t->state != TASK_RUNNING);
 
   /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
   if (t->mon && MON_CB(task_stop)) {
     MON_CB(task_stop)(t->mon, t->state);
   }
+#endif
+
 }
 
 
