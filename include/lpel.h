@@ -47,7 +47,7 @@ typedef struct lpel_monitoring_cb_t {
   void (*worker_destroy)(mon_worker_t*);
   void (*worker_waitstart)(mon_worker_t*);
   void (*worker_waitstop)(mon_worker_t*);
-  void (*worker_debug)(mon_worker_t*, const char *fmt, ...);
+  //void (*worker_debug)(mon_worker_t*, const char *fmt, ...);
   /* task callbacks */
   /* note: no callback for task creation
    * - manual attachment required
