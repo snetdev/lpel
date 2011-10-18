@@ -15,6 +15,6 @@
 	#endif
 #endif
 
-
+//#define BINARY_FORMAT
 
 #endif // _MONITOR_H
