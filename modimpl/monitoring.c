@@ -466,7 +466,7 @@ static void MonCbTaskStart(mon_task_t *mt)
   }
 
   /* set blockon to any */
-  mt->blockon = 'a';
+  mt->blockon = 'A';
 
   /* increment dispatch counter of task */
   mt->disp++;
@@ -495,7 +495,7 @@ static void MonCbTaskStop(mon_task_t *mt, lpel_taskstate_t state)
   fprintf( file, "%lu disp %lu ", mt->tid, mt->disp);
 
   if ( state==TASK_BLOCKED) {
-    fprintf( file, "st B%c ", mt->blockon);
+    fprintf( file, "st %c ", mt->blockon);
   } else {
     fprintf( file, "st %c ", state);
   }
@@ -624,8 +624,8 @@ static void MonCbStreamBlockon(mon_stream_t *ms)
 
   /* track if blocked on reading or writing */
   switch(ms->mode) {
-  case 'r': ms->montask->blockon = 'i'; break;
-  case 'w': ms->montask->blockon = 'o'; break;
+  case 'r': ms->montask->blockon = 'I'; break;
+  case 'w': ms->montask->blockon = 'O'; break;
   default: assert(0);
   }
 }
