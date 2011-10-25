@@ -22,7 +22,7 @@
 #include "lpelcfg.h"
 
 #include "mailbox.h"
-#include "monitor.h"
+#include "lpel/monitor.h"
 
 #define WORKER_PTR(i) (workers[(i)])
 

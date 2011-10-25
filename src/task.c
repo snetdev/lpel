@@ -10,7 +10,7 @@
 #include "worker.h"
 #include "spmdext.h"
 #include "stream.h"
-#include "monitor.h"
+#include "lpel/monitor.h"
 
 static atomic_t taskseq = ATOMIC_INIT(0);
 

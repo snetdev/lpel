@@ -49,7 +49,7 @@
 #include "task.h"
 
 #include "stream.h"
-#include "monitor.h"
+#include "lpel/monitor.h"
 
 /** Macros for lock handling */
 
