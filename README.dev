@@ -1,0 +1,18 @@
+How to make a distributable archive
+===================================
+
+
+1. ensure you have a working build tree
+
+2. run:
+
+    make distcheck  distdir=lpel-VERSION  DISTCHECK_CONFIGURE_FLAGS="--with-pcl=/path/to/pcl"
+
+for example:
+
+    make distcheck  distdir=lpel-1.x.20111103 DISTCHECK_CONFIGURE_FLAGS="--with-pcl=/usr/local"
+
+3. fix any errors and repeat 2 until it succeeds.
+
+4. retrieve the generated lpel-VERSION.tar.bz2 and distribute.
+
