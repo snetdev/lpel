@@ -1,4 +1,22 @@
-There are two kinds of monitoring files: map files and log files. Map files records the mapping of all tasks among workers. Each worker has one log file recording scheduling events. Information of each event is represented by one entry in the log file. Each entry ends with "#". (This is because the efficiency of the monitoring framework. To be read easily, "#" can be replaced by "\n")
+There are two kinds of monitoring files: map files and log files.
+
+Map files
+---------
+Map files records the mapping of all tasks among workers. Each line of the map file has the following format:
+<line-no> [ NET-PATH ] <box-name> <worker-id>
+NET-PATH: {: POS} *
+POS: S<num> ... position within serial composition (indizes start with 1)
+     P ... border line of parallel composition (parallel/collect)
+     P<num> ... position within parallel compostion (indizes start with 0)
+     etc.
+<line-no> ...obsolete, will soon be removed
+<box-name> ... the S-Net box name, or the type for an implicit entity
+<worker-id> ... starts with 0; -1 indicates special threads
+
+
+Log files
+---------
+Each worker has one log file recording scheduling events. Information of each event is represented by one entry in the log file. Each entry ends with "#". (This is because the efficiency of the monitoring framework. To be read easily, "#" can be replaced by "\n")
 There are 2 kinds of events: worker events, task events.
 - Worker events:
 	+ Worker started: Entry = <timestamp> S
