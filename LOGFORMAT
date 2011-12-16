@@ -1,4 +1,22 @@
+FLAGS
+To activate logging mode, use "-m <flags>"
+Flags:
+ - m: mapping
+ - t: timestamp
+ - W: worker events
+ - T: task events
+ - S: stream traces (only with task events)
+ - M: message traces (only with task events)
+ - A: all
+
+
+=======================================
+FORMAT
+
 There are two kinds of monitoring files: map files and log files.
+All files start with the version of log format --> easy to keep track of
+The current version is 2.0 (since Dec 2011)
+
 
 Map files
 ---------
@@ -36,7 +54,7 @@ Stream trace: information of streams on which the task operates
 <stream trace> = {<stream entry>; }*
 <stream entry> = <stream id>,<mode>,<#items>,<flags>
 <mode>: "r" = task reads from stream, "w" = task writes to stream
-<#items>: number of messages read from/written to stream (depending on the mode)
+<#items>: number of messages read from/written to stream (depending on the mode) during the task dispatch
 <flags>:  Activity fags. If no fag is set, the pattern is '--- '.  The first flag ('? ' if set) indicates that the task is blocked on that stream. The second flag '! ' indicates, that reading/writing (dependent on mode) unblocked the task on the other side of the stream.The third flag '* ' indicates that items have been read/written to the stream.
 
 Message trace: information of messages which task consumes/produces
