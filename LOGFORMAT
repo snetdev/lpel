@@ -47,13 +47,14 @@ There are 2 kinds of events: worker events, task events.
 - Task events:
 	+ Task blocked: Entry = <timestamp> <blocked by> <task id> <execution time> <stream trace> | <message trace>
 	+ Task ended: Entry = <timestamp> Z <task id> <execution time> <create time> <stream trace> | <message trace>
-<blocked by>: "I" =  task is blocked by input. "O" = task blocked by output
+<blocked by>: "I" =  task is blocked by input. "O" = task blocked by output. "A" = blocked by any (in poll operation)
 <execution time> execution time since the last dispatch
 
 Stream trace: information of streams on which the task operates
 <stream trace> = {<stream entry>; }*
-<stream entry> = <stream id>,<mode>,<#items>,<flags>
+<stream entry> = <stream id>,<mode>,<state>,<#items>,<flags>
 <mode>: "r" = task reads from stream, "w" = task writes to stream
+<state>: "O" = open, "C" = closed, "I" = in used
 <#items>: number of messages read from/written to stream (depending on the mode) during the task dispatch
 <flags>:  Activity fags. If no fag is set, the pattern is '--- '.  The first flag ('? ' if set) indicates that the task is blocked on that stream. The second flag '! ' indicates, that reading/writing (dependent on mode) unblocked the task on the other side of the stream.The third flag '* ' indicates that items have been read/written to the stream.
 
