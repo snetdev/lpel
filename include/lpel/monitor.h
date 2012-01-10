@@ -9,12 +9,7 @@
 #ifdef USE_LOGGING
 	#ifndef NO_TASK_EVENT_LOGGING
 		#define USE_TASK_EVENT_LOGGING
-		#ifndef NO_USER_EVENT_LOGGING
-			#define USE_USER_EVENT_LOGGING
-		#endif
 	#endif
 #endif
-
-//#define BINARY_FORMAT
 
 #endif // _MONITOR_H
