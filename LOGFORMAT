@@ -7,8 +7,8 @@ Flags:
  - T: task events
  - S: stream traces (only with task events)
  - M: message traces (only with task events)
- - A: all except for L (because the information produced by L can be derived by all worker events)
- - L: load information (total compuatational time, waiting time, waiting count of each worker). If flag W is set, no more information is produced. The load statistics can be derived from worker events.
+ - L: load information (total compuatational time, waiting time, waiting count of each worker). Note that if flag W is set, the load information can be induced from worker events. 
+ - A: all flags are set
 
 =======================================
 FORMAT
