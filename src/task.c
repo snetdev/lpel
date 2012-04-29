@@ -1,6 +1,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <stdio.h>
 
 #include "arch/atomic.h"
 
@@ -88,7 +89,6 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 
   return t;
 }
-
 
 
 /**

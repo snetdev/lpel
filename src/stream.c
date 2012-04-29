@@ -295,7 +295,8 @@ void *LpelStreamPeek( lpel_stream_desc_t *sd)
 void *LpelStreamRead( lpel_stream_desc_t *sd)
 {
   void *item;
-  lpel_task_t *self = sd->task;
+  lpel_task_t *self = LpelTaskSelf();
+  sd->task = self;
 
   assert( sd->mode == 'r');
 
@@ -368,7 +369,8 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
  */
 void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 {
-  lpel_task_t *self = sd->task;
+  lpel_task_t *self = LpelTaskSelf();
+  sd->task = self;
   int poll_wakeup = 0;
 
   /* check if opened for writing */
@@ -498,6 +500,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   assert( *set != NULL);
 
   /* get 'self', i.e. the task calling LpelStreamPoll() */
+  (*set)->task = LpelTaskSelf();
   self = (*set)->task;
 
   iter = LpelStreamIterCreate( set);
@@ -521,6 +524,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   LpelStreamIterReset(iter, set);
   while( LpelStreamIterHasNext( iter)) {
     lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
+    sd->task = LpelTaskSelf();
     lpel_stream_t *s = sd->stream;
     /* lock stream (prod-side) */
     PRODLOCK_LOCK( &s->prod_lock);
