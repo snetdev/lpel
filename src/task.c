@@ -65,6 +65,8 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 
   /* obtain a usable worker context */
   t->worker_context = LpelWorkerGetContext(worker);
+  t->current_worker = worker;
+  t->new_worker = worker;
 
   t->sched_info.prio = 0;
 
@@ -254,6 +256,25 @@ void LpelTaskEnterSPMD( lpel_spmdfunc_t fun, void *arg)
   LpelTaskBlock( ct );
 }
 
+
+
+/**
+ * return the worker id to which the task is assigned
+ */
+int LpelTaskWorkerId()
+{
+  lpel_task_t *t = LpelTaskSelf();
+  return t->current_worker;
+}
+
+/**
+ * return the worker id to which worker it should migrate
+ */
+int LpelTaskMigrationWorkerId()
+{
+  lpel_task_t *t = LpelTaskSelf();
+  return t->new_worker;
+}
 
 
 

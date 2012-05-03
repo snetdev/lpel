@@ -20,6 +20,7 @@
 #include "task.h"
 #include "lpel_main.h"
 #include "lpelcfg.h"
+#include "oracle.h"
 
 #include "mailbox.h"
 #include "lpel/monitor.h"
@@ -414,7 +415,6 @@ void LpelWorkerSelfTaskYield(lpel_task_t *t)
 
 
 
-
 /******************************************************************************/
 /*  PRIVATE FUNCTIONS                                                         */
 /******************************************************************************/
@@ -557,6 +557,7 @@ static void FetchAllMessages( workerctx_t *wc)
 static void WorkerLoop( workerctx_t *wc)
 {
   lpel_task_t *t = NULL;
+  lpel_task_iterator_t *iter = NULL;
 
   do {
     /* before executing a task, handle all pending requests! */
@@ -578,6 +579,8 @@ static void WorkerLoop( workerctx_t *wc)
     }
     /* fetch (remaining) messages */
     FetchAllMessages( wc);
+    iter = LpelSchedTaskIter( wc->sched);
+    LpelRunOracle( iter, num_workers);
   } while ( !( 0==wc->num_tasks && wc->terminate) );
   //} while ( !wc->terminate);
 

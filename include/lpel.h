@@ -146,6 +146,10 @@ typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 /** spmd function */
 typedef void (*lpel_spmdfunc_t)(void *);
 
+/** itarator for tasks */
+typedef struct lpel_task_iterator    lpel_task_iterator_t;
+
+typedef struct taskqueue             taskqueue_t;
 
 
 /******************************************************************************/
@@ -178,9 +182,16 @@ lpel_task_t *LpelTaskSelf(void);
 void LpelTaskExit(void *outarg);
 void LpelTaskYield(void);
 
+/** return the worker id to which the task is assigned */
+int LpelTaskWorkerId();
+
+/** return the worker id to which worker it should migrate */
+int LpelTaskMigrationWorkerId();
+
 /** enter SPMD request */
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
+lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue, int length);
 
 /******************************************************************************/
 /*  STREAM FUNCTIONS                                                          */

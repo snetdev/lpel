@@ -1,10 +1,11 @@
 #ifndef _TASKQUEUE_H_
 #define _TASKQUEUE_H_
 
+#include <lpel.h>
 #include "task.h"
 
 
-typedef struct {
+typedef struct taskqueue {
   lpel_task_t *head, *tail;
   unsigned int count;
 } taskqueue_t;

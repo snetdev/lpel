@@ -1,5 +1,6 @@
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <assert.h>
 
 #include "scheduler.h"
@@ -7,7 +8,7 @@
 
 #include "taskqueue.h"
 #include "task.h"
-
+#include "taskiterator.h"
 
 struct schedctx {
   taskqueue_t queue[SCHED_NUM_PRIO];
@@ -60,3 +61,7 @@ lpel_task_t *LpelSchedFetchReady( schedctx_t *sc)
   return t;
 }
 
+lpel_task_iterator_t * LpelSchedTaskIter( schedctx_t *sc)
+{
+  return LpelTaskIterCreate( sc->queue, SCHED_NUM_PRIO);
+}
