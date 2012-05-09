@@ -42,7 +42,7 @@ static void TaskStop( lpel_task_t *t);
  *
  * TODO reuse task contexts from the worker
  */
-lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
+lpel_task_t *LpelTaskCreate( int worker, int task_type, lpel_taskfunc_t func,
     void *inarg, int size)
 {
   lpel_task_t *t;
