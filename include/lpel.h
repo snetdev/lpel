@@ -151,6 +151,8 @@ typedef struct lpel_task_iterator    lpel_task_iterator_t;
 
 typedef struct taskqueue             taskqueue_t;
 
+typedef struct lpel_worker_indices   lpel_worker_indices_t;
+
 
 /******************************************************************************/
 /*  SPMD FUNCTIONS                                                            */
@@ -163,13 +165,14 @@ int LpelSpmdVId(void);
 /*  TASK FUNCTIONS                                                            */
 /******************************************************************************/
 
-lpel_task_t *LpelTaskCreate( int worker, int task_type, lpel_taskfunc_t func,
+lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
     void *inarg, int stacksize );
 
 /** monitor a task */
 void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
 
 void LpelTaskPrio(lpel_task_t *t, int prio);
+int LpelTaskGetPrio(lpel_task_t *t);
 
 unsigned int LpelTaskGetID( lpel_task_t *t );
 mon_task_t *LpelTaskGetMon( lpel_task_t *t );
@@ -193,6 +196,18 @@ void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
 lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue, int length);
 
+
+/******************************************************************************/
+/*  PLACEMENT SCHEDULER FUNCTIONS                                             */
+/******************************************************************************/
+
+void LpelPlacementSchedulerInit();
+
+void LpelPlacementSchedulerWorkerIndices(int prio, int **workers, int *n);
+
+void * LpelPlacementSchedulerRun(void *args);
+
+void LpelPlacementSchedulerDestroy();
 /******************************************************************************/
 /*  STREAM FUNCTIONS                                                          */
 /******************************************************************************/

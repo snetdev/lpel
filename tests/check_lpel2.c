@@ -154,14 +154,14 @@ static void testBasic(void)
   }
 
   /* create tasks */
-  trelay = LpelTaskCreate( 0, Relay, NULL, 8192);
+  trelay = LpelTaskCreate( 0, 0, Relay, NULL, 8192);
   LpelTaskRun(trelay);
 
-  tcons = LpelTaskCreate( 1, Consumer, NULL, 8192);
+  tcons = LpelTaskCreate( 1, 0, Consumer, NULL, 8192);
   LpelTaskRun(tcons);
 
 
-  intask = LpelTaskCreate( -1, Inputter, sinp, 8192);
+  intask = LpelTaskCreate( -1, 0, Inputter, sinp, 8192);
   LpelTaskRun(intask);
 
   LpelStart();

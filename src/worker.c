@@ -20,7 +20,6 @@
 #include "task.h"
 #include "lpel_main.h"
 #include "lpelcfg.h"
-#include "oracle.h"
 
 #include "mailbox.h"
 #include "lpel/monitor.h"
@@ -113,7 +112,6 @@ void LpelWorkerInit(int size)
   assert(0 <= size);
   num_workers = size;
 
-
 #ifndef HAVE___THREAD
   /* init key for thread specific data */
   pthread_key_create(&workerctx_key, NULL);
@@ -157,6 +155,9 @@ void LpelWorkerInit(int size)
     //LpelTaskqueueInit( &wc->free_tasks);
   }
 
+  /* Initialize placement scheduler */
+  LpelPlacementSchedulerInit();
+
   assert(res==0);
 }
 
@@ -187,12 +188,16 @@ void LpelWorkerCleanup(void)
   /* free workers table */
   free( workers);
 
+  /* destroy placement scheduler */
+  LpelPlacementSchedulerDestroy();
+
   /* cleanup spmdext module */
   LpelSpmdCleanup();
 
 #ifndef HAVE___THREAD
   pthread_key_delete(workerctx_key);
 #endif /* HAVE___THREAD */
+
 }
 
 
@@ -358,7 +363,8 @@ void LpelWorkerTerminate(void)
 /**
  * Get a worker context from the worker id
  */
-workerctx_t *LpelWorkerGetContext(int id) {
+workerctx_t *LpelWorkerGetContext(int id)
+{
 
   workerctx_t *wc = NULL;
 
@@ -413,6 +419,14 @@ void LpelWorkerSelfTaskYield(lpel_task_t *t)
   }
 }
 
+/**
+ * Returns the number of workers excluding the worker which runs
+ * the placement scheduler.
+ */
+int LpelWorkerNumber()
+{
+  return num_workers-1;
+}
 
 
 /******************************************************************************/
@@ -579,8 +593,6 @@ static void WorkerLoop( workerctx_t *wc)
     }
     /* fetch (remaining) messages */
     FetchAllMessages( wc);
-    iter = LpelSchedTaskIter( wc->sched);
-    LpelRunOracle( iter, num_workers);
   } while ( !( 0==wc->num_tasks && wc->terminate) );
   //} while ( !wc->terminate);
 

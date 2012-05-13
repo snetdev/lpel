@@ -33,8 +33,8 @@ liblpel_la_SOURCES = \
 	src/lpelcfg.h \
 	src/lpel_main.c \
 	src/lpel_main.h \
-	src/oracle.c \
-	src/oracle.h \
+	src/placementscheduler.c \
+	src/placementscheduler.h \
 	src/taskiterator.h \
 	src/taskiterator.c \
 	src/worker.c \

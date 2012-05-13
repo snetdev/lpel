@@ -12,6 +12,7 @@
 #include "spmdext.h"
 #include "stream.h"
 #include "lpel/monitor.h"
+#include "placementscheduler.h"
 
 static atomic_t taskseq = ATOMIC_INIT(0);
 
@@ -27,7 +28,7 @@ static void TaskStop( lpel_task_t *t);
 
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096
-
+#define USE_PRIORITY
 
 /**
  * Create a task.
@@ -42,7 +43,7 @@ static void TaskStop( lpel_task_t *t);
  *
  * TODO reuse task contexts from the worker
  */
-lpel_task_t *LpelTaskCreate( int worker, int task_type, lpel_taskfunc_t func,
+lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
     void *inarg, int size)
 {
   lpel_task_t *t;
@@ -68,7 +69,11 @@ lpel_task_t *LpelTaskCreate( int worker, int task_type, lpel_taskfunc_t func,
   t->current_worker = worker;
   t->new_worker = worker;
 
-  t->sched_info.prio = 0;
+#ifdef USE_PRIORITY
+  t->sched_info.prio = prio;
+#else
+  t->sched_info_prio = 0;
+#endif
 
   t->uid = fetch_and_inc( &taskseq);  /* obtain a unique task id */
   t->func = func;
@@ -142,6 +147,10 @@ void LpelTaskPrio(lpel_task_t *t, int prio)
   t->sched_info.prio = prio;
 }
 
+int LpelTaskGetPrio(lpel_task_t *t)
+{
+  return t->sched_info.prio;
+}
 
 /**
  * Let the task run on the worker

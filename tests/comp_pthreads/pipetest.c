@@ -143,7 +143,7 @@ static void CreateTask(task_arg_t *arg)
 
   place = PLACEMENT(arg->id);
 
-  t = LpelTaskCreate( place, Relay, arg, STACK_SIZE);
+  t = LpelTaskCreate( place, 0, Relay, arg, STACK_SIZE);
   LpelTaskRun(t);
 }
 
@@ -175,10 +175,10 @@ static void CreatePipe(void)
   glob_in = LpelStreamCreate(0);
   glob_out = PipeElement(glob_in, 1);
 
-  t = LpelTaskCreate( 0, Source, glob_in, STACK_SIZE);
+  t = LpelTaskCreate( 0, 0, Source, glob_in, STACK_SIZE);
   LpelTaskRun(t);
 
-  t = LpelTaskCreate( 1, Sink, glob_out, STACK_SIZE);
+  t = LpelTaskCreate( 1, 0, Sink, glob_out, STACK_SIZE);
   LpelTaskRun(t);
 }
 

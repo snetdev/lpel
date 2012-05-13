@@ -63,5 +63,6 @@ lpel_task_t *LpelWorkerCurrentTask(void);
 
 void LpelWorkerSelfTaskExit(lpel_task_t *t);
 void LpelWorkerSelfTaskYield(lpel_task_t *t);
+int LpelWorkerNumber();
 
 #endif /* _WORKER_H_ */
