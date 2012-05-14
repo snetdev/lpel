@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include "placementscheduler.h"
 #include "scheduler.h"
 #include "worker.h"
@@ -30,8 +31,8 @@ void LpelPlacementSchedulerInit()
 #ifdef TASK_WORKER_SEPARATION
   assert(SCHED_NUM_PRIO >= 2);
   assert(number_workers >= 2);
-  int num0_workers = (number_workers/6 > 0) ? number_workers/6 : 1;
-  int num1_workers = number_workers-num0_workers;
+  int num1_workers = (number_workers/6 > 0) ? number_workers/6 : 1;
+  int num0_workers = number_workers-num1_workers;
   int num0_i;
   int num1_i;
 
@@ -41,18 +42,19 @@ void LpelPlacementSchedulerInit()
   task_types[1].n = num1_workers;
 
   for(i = 0, num0_i = 0, num1_i = 0; i < number_workers; i++) {
-    if(i % num0_workers == 0) {
-      task_types[0].workers[num0_i] = i;
-      num0_i++;
-    } else {
+    if(i % number_workers == 0) {
       task_types[1].workers[num1_i] = i;
       num1_i++;
+    } else {
+      task_types[0].workers[num0_i] = i;
+      num0_i++;
     }
   }
 
   for(i = 2; i<SCHED_NUM_PRIO; i++) {
     task_types[i].n = 0;
   }
+
 #else
   assert(SCHED_NUM_PRIO >= 1);
   task_types[0].workers = malloc(number_workers * sizeof(int));
