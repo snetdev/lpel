@@ -28,7 +28,6 @@ static void TaskStop( lpel_task_t *t);
 
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096
-#define USE_PRIORITY
 
 /**
  * Create a task.
@@ -72,7 +71,7 @@ lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
 #ifdef USE_PRIORITY
   t->sched_info.prio = prio;
 #else
-  t->sched_info_prio = 0;
+  t->sched_info.prio = 0;
 #endif
 
   t->uid = fetch_and_inc( &taskseq);  /* obtain a unique task id */

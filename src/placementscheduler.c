@@ -76,20 +76,14 @@ void LpelPlacementSchedulerInit()
 
 }
 
-void LpelPlacementSchedulerWorkerIndices(int prio, int **workers, int *n)
-{
-#ifdef TASK_WORKER_SEPARATION
-  assert(prio < 2);
-  *workers = task_types[prio].workers;
-  *n = task_types[prio].n;
-#else
-  *workers = task_types[0].workers;
-  *n = task_types[0].n;
-#endif
-}
-
 void * LpelPlacementSchedulerRun(void * args)
 {
+  lpel_task_t *t = LpelTaskSelf();
+  workerctx_t *wc = t->worker_context;
+  do {
+    
+    LpelTaskYield();
+  } while(!wc->terminate);
 /*  while(LpelTaskIterHasNext(iter)) {
     lpel_task_t *t;
     int current_worker;
@@ -118,3 +112,43 @@ void * LpelPlacementSchedulerRun(void * args)
   LpelTaskIterDestroy(iter);*/
 }
 
+int LpelPlacementSchedulerGetWorker(int prio, int i)
+{
+#ifdef TASK_WORKER_SEPARATION
+  assert(prio < 2);
+  return task_types[prio].workers[i];
+#else
+  return task_types[0].workers[i];
+#endif
+}
+
+int LpelPlacementSchedulerNumWorkers(int prio)
+{
+#ifdef TASK_WORKER_SEPARATION
+  assert(prio < 2);
+  return task_types[prio].n;
+#else
+  return task_types[0].n;
+#endif
+}
+
+int LpelPlacementSchedulerGetIndexWorker(int prio, int worker)
+{
+  int i;
+#ifdef TASK_WORKER_SEPARATION
+  assert(prio < 2);
+  for(i = 0; i<task_types[prio].n; i++) {
+    if(task_types[prio].workers[i] == worker) {
+      return i;
+    }
+  }
+  return -1;
+#else
+  for(i = 0; i<task_types[0].n; i++) {
+    if(task_types[prio].workers[i] == worker) {
+      return i;
+    }
+  }
+  return -1;
+#endif
+}

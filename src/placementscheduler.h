@@ -4,6 +4,5 @@
 #include <lpel.h>
 #include "taskiterator.h"
 
-//#define TASK_WORKER_SEPARATION
 
 #endif

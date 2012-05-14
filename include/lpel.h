@@ -7,7 +7,14 @@
 #ifndef _LPEL_H_
 #define _LPEL_H_
 
+/******************************************************************************/
+/*  DEFINE THAT TASKS WITH PRIORITY 0 RUN ON DIFFERENT WORKERS AS TASKS       */
+/*  WITH PRIORITY 1                                                           */
+/******************************************************************************/
 
+//#define TASK_WORKER_SEPARATION
+
+#define USE_PRIORITY
 
 /******************************************************************************/
 /*  RETURN VALUES OF LPEL FUNCTIONS                                           */
@@ -208,6 +215,13 @@ void LpelPlacementSchedulerWorkerIndices(int prio, int **workers, int *n);
 void * LpelPlacementSchedulerRun(void *args);
 
 void LpelPlacementSchedulerDestroy();
+
+int LpelPlacementSchedulerGetWorker(int prio, int i);
+
+int LpelPlacementSchedulerNumWorkers(int prio);
+
+int LpelPlacementSchedulerGetIndexWorker(int prio, int worker);
+
 /******************************************************************************/
 /*  STREAM FUNCTIONS                                                          */
 /******************************************************************************/
