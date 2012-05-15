@@ -64,5 +64,7 @@ lpel_task_t *LpelWorkerCurrentTask(void);
 void LpelWorkerSelfTaskExit(lpel_task_t *t);
 void LpelWorkerSelfTaskYield(lpel_task_t *t);
 int LpelWorkerNumber();
+workerctx_t **LpelWorkerGetWorkers();
+pthread_mutex_t *LpelWorkerGetMutexes();
 
 #endif /* _WORKER_H_ */

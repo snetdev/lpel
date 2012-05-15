@@ -4,5 +4,4 @@
 #include <lpel.h>
 #include "taskiterator.h"
 
-
 #endif

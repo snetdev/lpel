@@ -35,6 +35,7 @@
 static int num_workers = -1;
 static workerctx_t **workers;
 
+static pthread_mutex_t *mutex_workers;
 
 
 #ifdef HAVE___THREAD
@@ -122,9 +123,14 @@ void LpelWorkerInit(int size)
 
   /* allocate worker context table */
   workers = (workerctx_t **) malloc( num_workers * sizeof(workerctx_t*) );
-  /* allocate worker contexts */
+
+  /* allocate memory for mutexes for each worker*/
+  mutex_workers = malloc(num_workers * sizeof(pthread_mutex_t));
+  /* allocate worker contexts  and mutexes*/
   for (i=0; i<num_workers; i++) {
     workers[i] = (workerctx_t *) malloc( sizeof(workerctx_t) );
+
+    pthread_mutex_init(&mutex_workers[i], NULL);
   }
 
   /* prepare data structures */
@@ -183,10 +189,15 @@ void LpelWorkerCleanup(void)
     LpelMailboxDestroy(wc->mailbox);
     LpelSchedDestroy( wc->sched);
     free(wc);
+
+    pthread_mutex_destroy(&mutex_workers[i]);
   }
 
   /* free workers table */
   free( workers);
+
+  /* free mutex table */
+  free(mutex_workers);
 
   /* destroy placement scheduler */
   LpelPlacementSchedulerDestroy();
@@ -428,6 +439,17 @@ int LpelWorkerNumber()
   return num_workers-1;
 }
 
+workerctx_t **LpelWorkerGetWorkers()
+{
+  return workers;
+}
+
+pthread_mutex_t *LpelWorkerGetMutexes()
+{
+  return mutex_workers;
+}
+
+
 
 /******************************************************************************/
 /*  PRIVATE FUNCTIONS                                                         */
@@ -478,7 +500,9 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       break;
 
     case WORKER_MSG_TERMINATE:
+      pthread_mutex_lock(&mutex_workers[wc->wid]);
       wc->terminate = 1;
+      pthread_mutex_unlock(&mutex_workers[wc->wid]);
       break;
 
     case WORKER_MSG_ASSIGN:
