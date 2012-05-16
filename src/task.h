@@ -86,10 +86,8 @@ struct lpel_task_t {
   struct timespec last_measurement_start;
   /* The state is either the first sliding window or the second */
   int waiting_state;
-  /* The time at which the task was created */
-  struct timespec time_at_creation;
-  /* The total number of times the state was set to ready from creation */
-  int total_creation_ready_num;
+  /* The total measured time over a certain period */
+  struct timespec total_time[2];
 
   /** Mutex used for reading from and writing to the different variables */
   pthread_mutex_t t_mu;

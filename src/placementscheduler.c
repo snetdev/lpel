@@ -8,6 +8,11 @@
 #include "worker.h"
 #include "taskiterator.h"
 
+#ifdef WAITING
+#define MAX_PERCENTAGE 0.5
+#define LOW_LOAD 0.3
+#endif
+
 
 typedef struct lpel_worker_indices {
   int * workers;
@@ -15,6 +20,10 @@ typedef struct lpel_worker_indices {
 } lpel_worker_indices_t;
 
 lpel_worker_indices_t task_types[SCHED_NUM_PRIO];
+
+#ifdef WAITING
+double *worker_percentages;
+#endif
 
 static void RandomPlacement(workerctx_t *wc)
 {
@@ -47,19 +56,87 @@ static void RandomPlacement(workerctx_t *wc)
 }
 
 #ifdef WAITING
-typedef struct lpel_worker_stats {
-  lpel_worker_stats_t *next;
-  workerctx_t *wc;
-  double average_percentage_ready;
-} lpel_worker_stats_t;
 
-typedef struct lpel_migration_task {
-  lpel_migration_task_t *next;
-  lpel_task_t *t;
-  double percentage_ready;
-} lpel_migration_task_t;
+static void CalculateAverageReadyTime(workerctx_t **workers,
+                                      int num_workers,
+                                      pthread_mutex_t *mutex_workers)
+{
+  int i;
+  for(i = 0; i < num_workers; i++) {
+    double worker_percentage = 0;
+    int n_tasks;
+    pthread_mutex_lock(&mutex_workers[i]);
+    lpel_task_iterator_t *iter = LpelSchedTaskIter(workers[i]->sched);
+    pthread_mutex_unlock(&mutex_workers[i]);
 
-//static void WaitingPlacement(workerctx_t *wc
+    while(LpelTaskIterHasNext(iter)) {
+      lpel_task_t *t;
+      double ready_percentage;
+
+      t = LpelTaskIterNext(iter);
+
+      ready_percentage = LpelTaskGetPercentageReady(t);
+      if(ready_percentage > MAX_PERCENTAGE) {
+        worker_percentages[i] = -1;
+        break;
+      } else {
+        worker_percentages[i] += ready_percentage;
+        n_tasks++;
+      }
+    }
+    if(worker_percentages[i] >= 0) {
+      worker_percentages[i] = worker_percentages[i] / (double)n_tasks;
+    }
+    LpelTaskIterDestroy(iter);
+  }
+}
+
+static void FindWorker(lpel_task_t *t)
+{
+  int i;
+  int prio;
+#ifdef TASK_WORKERS_SEPARATION
+  prio = LpelTaskGetPrio(t);
+#else
+  prio = 0;
+#endif
+  for(i = 0; i<task_types[prio].n; i++) {
+    int wid = task_types[prio].workers[i];
+    if(worker_percentages[wid] >= 0 && worker_percentages[i] < LOW_LOAD) {
+      t->new_worker = wid;
+      return;
+    }
+  }
+  t->new_worker = t->current_worker;
+}
+
+static void WaitingPlacement(workerctx_t **workers,
+                             int num_workers,
+                             pthread_mutex_t *mutex_workers)
+{
+  int i;
+  CalculateAverageReadyTime(workers, num_workers, mutex_workers);
+
+  //TODO ADD TASK SEGMENTATION
+  for(i = 0; i<num_workers; i++) {
+    pthread_mutex_lock(&mutex_workers[i]);
+    lpel_task_iterator_t *iter = LpelSchedTaskIter(workers[i]->sched);
+    pthread_mutex_unlock(&mutex_workers[i]);
+    while(LpelTaskIterHasNext(iter)) {
+      lpel_task_t *t;
+      double ready_percentage;
+
+      t = LpelTaskIterNext(iter);
+
+      ready_percentage = LpelTaskGetPercentageReady(t);
+
+      if(ready_percentage > MAX_PERCENTAGE) {
+        FindWorker(t);
+      }
+    }
+    LpelTaskIterDestroy(iter);
+  }
+}
 #endif
 
 void LpelPlacementSchedulerDestroy()
@@ -70,12 +147,19 @@ void LpelPlacementSchedulerDestroy()
       free(task_types[i].workers);
     }
   }
+  free(worker_percentages);
 }
 
 void LpelPlacementSchedulerInit()
 {
   int i;
   int number_workers = LpelWorkerNumber();
+#ifdef WAITING
+  worker_percentages = malloc(number_workers * sizeof(double));
+  for(i = 0; i<number_workers; i++) {
+    worker_percentages[i] = -1;
+  }
+#endif
 
 #ifdef TASK_WORKER_SEPARATION
   assert(SCHED_NUM_PRIO >= 2);
@@ -134,6 +218,9 @@ void * LpelPlacementSchedulerRun(void * args)
   do {
     workerctx_t **workers = LpelWorkerGetWorkers();
     pthread_mutex_t *mutex_workers = LpelWorkerGetMutexes();
+#ifdef WAITING
+    WaitingPlacement(workers, LpelWorkerNumber(), mutex_workers);
+#else
     int i;
 
     for(i = 0; i<LpelWorkerNumber(); i++) {
@@ -143,7 +230,7 @@ void * LpelPlacementSchedulerRun(void * args)
       }
       pthread_mutex_unlock(&mutex_workers[i]);
     }
-
+#endif
 
     LpelTaskYield();
   } while(!wc->terminate);
