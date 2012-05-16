@@ -46,6 +46,22 @@ static void RandomPlacement(workerctx_t *wc)
   LpelTaskIterDestroy(iter);
 }
 
+#ifdef WAITING
+typedef struct lpel_worker_stats {
+  lpel_worker_stats_t *next;
+  workerctx_t *wc;
+  double average_percentage_ready;
+} lpel_worker_stats_t;
+
+typedef struct lpel_migration_task {
+  lpel_migration_task_t *next;
+  lpel_task_t *t;
+  double percentage_ready;
+} lpel_migration_task_t;
+
+//static void WaitingPlacement(workerctx_t *wc
+#endif
+
 void LpelPlacementSchedulerDestroy()
 {
   int i;

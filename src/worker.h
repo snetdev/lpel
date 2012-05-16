@@ -4,6 +4,10 @@
 #include <pthread.h>
 #include <lpel.h>
 
+#ifdef WAITING
+#include <time.h>
+#endif
+
 #include "arch/mctx.h"
 #include "task.h"
 #include "scheduler.h"
@@ -26,6 +30,7 @@ typedef struct workerctx_t {
   schedctx_t   *sched;
   lpel_task_t  *wraptask;
   char          padding[64];
+
 } workerctx_t;
 
 

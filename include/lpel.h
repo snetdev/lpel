@@ -17,6 +17,17 @@
 #define USE_PRIORITY
 
 /******************************************************************************/
+/*  DEFINE THE TYPE OF PLACEMENT SCHEDULER                                    */
+/******************************************************************************/
+
+//#define RANDOM
+#define WAITING
+
+#ifdef WAITING
+#include <time.h>
+#endif
+
+/******************************************************************************/
 /*  RETURN VALUES OF LPEL FUNCTIONS                                           */
 /******************************************************************************/
 
@@ -149,7 +160,6 @@ typedef lpel_stream_desc_t          *lpel_streamset_t;
 /** iterator for streamset */
 typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 
-
 /** spmd function */
 typedef void (*lpel_spmdfunc_t)(void *);
 
@@ -201,8 +211,8 @@ int LpelTaskMigrationWorkerId();
 /** enter SPMD request */
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
+/* Task iterator creation function */
 lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue, int length);
-
 
 /******************************************************************************/
 /*  PLACEMENT SCHEDULER FUNCTIONS                                             */

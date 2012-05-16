@@ -159,6 +159,7 @@ void LpelWorkerInit(int size)
 
     /* taskqueue of free tasks */
     //LpelTaskqueueInit( &wc->free_tasks);
+
   }
 
   /* Initialize placement scheduler */
@@ -450,7 +451,6 @@ pthread_mutex_t *LpelWorkerGetMutexes()
 }
 
 
-
 /******************************************************************************/
 /*  PRIVATE FUNCTIONS                                                         */
 /******************************************************************************/
@@ -488,6 +488,9 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
        */
       t = msg->body.task;
       assert(t->state != TASK_READY);
+#ifdef WAITING
+      clock_gettime(CLOCK_REALTIME, &t->last_measurement_start);
+#endif
       t->state = TASK_READY;
 
       WORKER_DBGMSG(wc, "Received wakeup for %d.\n", t->uid);
@@ -509,6 +512,9 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       t = msg->body.task;
 
       assert(t->state == TASK_CREATED);
+#ifdef WAITING
+      clock_gettime(CLOCK_REALTIME, &t->last_measurement_start);
+#endif
       t->state = TASK_READY;
 
       wc->num_tasks++;
@@ -595,7 +601,7 @@ static void FetchAllMessages( workerctx_t *wc)
 static void WorkerLoop( workerctx_t *wc)
 {
   lpel_task_t *t = NULL;
-  lpel_task_iterator_t *iter = NULL;
+  //lpel_task_iterator_t *iter = NULL;
 
   do {
     /* before executing a task, handle all pending requests! */
@@ -606,6 +612,7 @@ static void WorkerLoop( workerctx_t *wc)
       /* execute task */
       wc->current_task = t;
       mctx_switch(&wc->mctx, &t->mctx);
+
 
       WORKER_DBGMSG(wc, "Back on worker %d context.\n", wc->wid);
 

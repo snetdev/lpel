@@ -3,6 +3,11 @@
 
 
 #include <lpel.h>
+#include <pthread.h>
+
+#ifdef WAITING
+#include <time.h>
+#endif
 
 #include "arch/mctx.h"
 
@@ -54,8 +59,41 @@ struct lpel_task_t {
   void *inarg;          /** input argument  */
   void *outarg;         /** output argument  */
 
-  int current_worker;
+  int current_worker;   /** The current worker id */
+
+  /**
+   * Indicates the worker id which the placement scheduler has decided
+   * the task should migrate to, if it is the same as current worker,
+   * it keeps running on the current worker.
+   */
   int new_worker;
+
+#ifdef WAITING
+  /**
+   * total time the task is waiting in ready state. the implementation is
+   * sort of a sliding window
+   * TODO further explanation
+   */
+  struct timespec total_time_ready[2];
+
+  /** total number of times the state switched to ready. the implementation is
+   * sort of a sliding window
+   * TODO further explanation
+   *
+   */
+  int total_ready_num[2];
+  /** the time at which the last time measurement started*/
+  struct timespec last_measurement_start;
+  /* The state is either the first sliding window or the second */
+  int waiting_state;
+  /* The time at which the task was created */
+  struct timespec time_at_creation;
+  /* The total number of times the state was set to ready from creation */
+  int total_creation_ready_num;
+
+  /** Mutex used for reading from and writing to the different variables */
+  pthread_mutex_t t_mu;
+#endif
 };
 
 
@@ -68,5 +106,17 @@ void LpelTaskBlock( lpel_task_t *t );
 void LpelTaskBlockStream( lpel_task_t *ct);
 void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
 
+#ifdef WAITING
+/**
+ * The task is not ready anymore, stop the timing and update the statistics
+ */
+void LpelTaskStopTiming( lpel_task_t *t);
+
+/**
+ * Returns an estimate percentage of the task begin ready over the time from
+ * creation
+ */
+double LpelTaskGetPercentageReady( lpel_task_t *t);
+#endif
 
 #endif /* _TASK_H_ */
