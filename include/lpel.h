@@ -12,20 +12,17 @@
 /*  WITH PRIORITY 1                                                           */
 /******************************************************************************/
 
-//#define TASK_WORKER_SEPARATION
 
 #define USE_PRIORITY
-
+#ifdef USE_PRIORITY
+//#define TASK_WORKER_SEPARATION
+#endif
 /******************************************************************************/
 /*  DEFINE THE TYPE OF PLACEMENT SCHEDULER                                    */
 /******************************************************************************/
 
 //#define RANDOM
-#define WAITING
-
-#ifdef WAITING
-#include <time.h>
-#endif
+//#define WAITING
 
 /******************************************************************************/
 /*  RETURN VALUES OF LPEL FUNCTIONS                                           */
@@ -212,7 +209,7 @@ int LpelTaskMigrationWorkerId();
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
 /* Task iterator creation function */
-lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue, int length);
+lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue, int length, int order);
 
 /******************************************************************************/
 /*  PLACEMENT SCHEDULER FUNCTIONS                                             */

@@ -433,7 +433,9 @@ static void TaskStart( lpel_task_t *t)
 #endif
 
   t->state = TASK_RUNNING;
+#ifdef WAITING
   LpelTaskStopTiming(t);
+#endif
 }
 
 

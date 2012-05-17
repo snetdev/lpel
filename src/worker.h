@@ -30,7 +30,7 @@ typedef struct workerctx_t {
   schedctx_t   *sched;
   lpel_task_t  *wraptask;
   char          padding[64];
-
+  int           waiting;
 } workerctx_t;
 
 

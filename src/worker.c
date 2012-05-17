@@ -619,6 +619,9 @@ static void WorkerLoop( workerctx_t *wc)
       /* cleanup task context marked for deletion */
       CleanupTaskContext(wc, NULL);
     } else {
+      pthread_mutex_lock(&mutex_workers[wc->wid]);
+      wc->waiting = 1;
+      pthread_mutex_unlock(&mutex_workers[wc->wid]);
       /* no ready tasks */
       WaitForNewMessage( wc);
     }
