@@ -5,7 +5,7 @@
 #include <lpel.h>
 
 #ifdef WAITING
-#include <time.h>
+#include <sys/time.h>
 #endif
 
 #include "arch/mctx.h"

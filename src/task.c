@@ -30,7 +30,7 @@ static void TaskStop( lpel_task_t *t);
 #define TASK_MINSIZE  4096
 
 #ifdef WAITING
-#define SLIDING_WINDOW_STEPS 20
+#define SLIDING_WINDOW_STEPS 10
 #endif
 
 /**
@@ -93,16 +93,16 @@ lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
 
 #ifdef WAITING
   t->total_time_ready[0].tv_sec = 0;
-  t->total_time_ready[0].tv_nsec = 0;
+  t->total_time_ready[0].tv_usec = 0;
   t->total_ready_num[0] = 0;
   t->total_time_ready[1].tv_sec = 0;
-  t->total_time_ready[1].tv_nsec = 0;
+  t->total_time_ready[1].tv_usec = 0;
   t->total_ready_num[1] = 0;
 
   t->last_measurement_start.tv_sec = 0;
-  t->last_measurement_start.tv_nsec = 0;
+  t->last_measurement_start.tv_usec = 0;
   t->waiting_state = 0;
-  clock_gettime(CLOCK_REALTIME, &t->total_time[t->waiting_state]);
+  gettimeofday(&t->total_time[t->waiting_state], NULL);
   pthread_mutex_init(&t->t_mu, NULL);
 #endif
 
@@ -231,7 +231,7 @@ void LpelTaskYield(void)
 
   ct->state = TASK_READY;
 #ifdef WAITING
-  clock_gettime(CLOCK_REALTIME, &ct->last_measurement_start);
+  gettimeofday(&ct->last_measurement_start, NULL);
 #endif
   LpelWorkerSelfTaskYield(ct);
   LpelTaskBlock( ct );
@@ -317,32 +317,31 @@ int LpelTaskMigrationWorkerId()
  */
 void LpelTaskStopTiming( lpel_task_t *t)
 {
-  struct timespec time;
-  struct timespec add_time;
+  struct timeval time;
+  struct timeval add_time;
   pthread_mutex_lock(&t->t_mu);
   /* take the second measurement */
-  clock_gettime(CLOCK_REALTIME, &time);
+  gettimeofday(&time, NULL);
 
   /* calculate the difference between the first and second measurment */
   add_time.tv_sec = time.tv_sec - t->last_measurement_start.tv_sec;
-  add_time.tv_nsec = time.tv_nsec - t->last_measurement_start.tv_nsec;
+  add_time.tv_usec = time.tv_usec - t->last_measurement_start.tv_usec;
 
   /* reset measurement */
   t->last_measurement_start.tv_sec = 0;
-  t->last_measurement_start.tv_nsec = 0;
+  t->last_measurement_start.tv_usec = 0;
 
   /* add measurement to the total time the task has been ready */
   t->total_time_ready[t->waiting_state].tv_sec += add_time.tv_sec;
-  t->total_time_ready[t->waiting_state].tv_nsec += add_time.tv_nsec;
-
+  t->total_time_ready[t->waiting_state].tv_usec += add_time.tv_usec;
 
   if(t->total_ready_num[t->waiting_state] >= SLIDING_WINDOW_STEPS / 2) {
     t->total_time_ready[!t->waiting_state].tv_sec += add_time.tv_sec;
-    t->total_time_ready[!t->waiting_state].tv_nsec += add_time.tv_nsec;
+    t->total_time_ready[!t->waiting_state].tv_usec += add_time.tv_usec;
     t->total_ready_num[!t->waiting_state]++;
   } else if(t->total_ready_num[t->waiting_state] ==
             (SLIDING_WINDOW_STEPS / 2) - 1) {
-    clock_gettime(CLOCK_REALTIME, &t->total_time[!t->waiting_state]);
+    gettimeofday(&t->total_time[!t->waiting_state], NULL);
   }
 
   /* add 1 to the total number of times the task has been ready */
@@ -351,7 +350,7 @@ void LpelTaskStopTiming( lpel_task_t *t)
   if(t->total_ready_num[t->waiting_state] == SLIDING_WINDOW_STEPS) {
     /* reset current state and use the other state for timing */
     t->total_time_ready[t->waiting_state].tv_sec = 0;
-    t->total_time_ready[t->waiting_state].tv_nsec = 0;
+    t->total_time_ready[t->waiting_state].tv_usec = 0;
     t->total_ready_num[t->waiting_state] = 0;
     t->waiting_state = !t->waiting_state;
   }
@@ -361,27 +360,32 @@ void LpelTaskStopTiming( lpel_task_t *t)
 
 double LpelTaskGetPercentageReady( lpel_task_t *t)
 {
-  struct timespec time;
-  int total_task_time;
-  int ready_time;
-  double percentage_ready;
+  struct timeval time;
+  //long total_task_time_seconds;
+  //long total_task_time_useconds;
+  long ready_time_seconds;
+  long ready_time_useconds;
+  double ready_ratio;
+  int index = t->waiting_state;
   pthread_mutex_lock(&t->t_mu);
-  clock_gettime(CLOCK_REALTIME, &time);
-  total_task_time = (time.tv_sec - t->total_time[t->waiting_state].tv_sec) +
-                    (time.tv_nsec - t->total_time[t->waiting_state].tv_nsec) *
-                    1000000;
-  ready_time =
-      t->total_time_ready[t->waiting_state].tv_sec +
-      t->total_time_ready[t->waiting_state].tv_nsec * 1000000;
+  gettimeofday(&time, NULL);
+  /*total_task_time_seconds = time.tv_sec -
+                            t->total_time[t->waiting_state].tv_sec;
+  total_task_time_useconds = time.tv_usec -
+                             t->total_time[t->waiting_state].tv_usec;*/
+  ready_time_seconds = t->total_time_ready[index].tv_sec;
+  ready_time_useconds = t->total_time_ready[index].tv_usec;
 
-  if(t->last_measurement_start.tv_sec + t->last_measurement_start.tv_nsec > 0) {
-    ready_time += (time.tv_sec - t->last_measurement_start.tv_sec) +
-                  (time.tv_nsec - t->last_measurement_start.tv_nsec) * 1000000;
+  if(t->last_measurement_start.tv_sec + t->last_measurement_start.tv_usec > 0) {
+    ready_time_seconds += time.tv_sec - t->last_measurement_start.tv_sec;
+    ready_time_useconds += time.tv_usec - t->last_measurement_start.tv_usec;
   }
-  percentage_ready =
-      (double)total_task_time / (double)ready_time;
+
+  ready_ratio =
+      ((double)ready_time_seconds / t->total_ready_num[index]) * 1000000 +
+      ((double)ready_time_useconds / t->total_ready_num[index]);
   pthread_mutex_unlock(&t->t_mu);
-  return percentage_ready;
+  return ready_ratio/1000;
 }
 #endif
 

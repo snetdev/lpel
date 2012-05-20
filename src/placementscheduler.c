@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include <pthread.h>
 
@@ -8,9 +9,9 @@
 #include "worker.h"
 #include "taskiterator.h"
 
+
 #ifdef WAITING
-#define MAX_PERCENTAGE 0.5
-#define LOW_LOAD 0.3
+#define MAX_PERCENTAGE 1
 #endif
 
 
@@ -30,7 +31,6 @@ typedef struct lpel_task_list{
   lpel_task_stat_t *list;
   int length;
   int real_length;
-  int head;
 } lpel_task_list_t;
 
 typedef struct lpel_steal_workers{
@@ -95,6 +95,11 @@ static int GetWorkerId()
   return wid;
 }
 
+static void ResetWorkers()
+{
+  steal_workers.length = 0;
+}
+
 static void AddTaskToList(lpel_task_t *t, double stat)
 {
   int i;
@@ -103,9 +108,12 @@ static void AddTaskToList(lpel_task_t *t, double stat)
   if(task_list.length == 0) {
     task_list.list[0].t = t;
     task_list.list[0].stat = stat;
+    task_list.length++;
   }else {
+    int is_added = 0;
     for(i = 0; i<task_list.length; i++) {
       if(task_list.list[i].stat <= stat) {
+        is_added = 1;
         lpel_task_t *temp_t = task_list.list[i].t;
         double temp_stat = task_list.list[i].stat;
 
@@ -127,34 +135,102 @@ static void AddTaskToList(lpel_task_t *t, double stat)
         if(t != NULL) {
           temp_t->new_worker = temp_t->current_worker;
         }
+        break;
       }
+    }
+
+    /* all other tasks in list have higher ready time and task is not added
+     * set new_worker to current_worker
+     */
+    if(!is_added) {
+      t->new_worker = t->current_worker;
     }
   }
 }
 
-static lpel_task_t * GetTask()
+/**
+ * Returns the first task in the list.
+ *
+ */
+static lpel_task_t * GetTask(int index)
 {
-  if(task_list.head == task_list.length) {
-    return NULL;
-  } else {
-    lpel_task_t *t = task_list.list[task_list.head].t;
-    task_list.list[task_list.head].t = NULL;
-    task_list.head++;
-    return t;
+  lpel_task_t *t = task_list.list[index].t;
+  task_list.list[index].t = NULL;
+  return t;
+}
+
+/**
+ * Create a list of tasks that are to be used for migration.
+ *
+ * @param workers       The workers array
+ * @param num_workers   The length of the array
+ * @param mutex_workers The mutexes for the workers
+ */
+static void CreateTaskList(workerctx_t **workers,
+                           int num_workers,
+                           pthread_mutex_t *mutex_workers)
+{
+  int i;
+  for(i = 0; i<num_workers; i++) {
+    lpel_task_iterator_t *iter;
+
+    /* workers with a negative percentage are asking for work and don't
+     * hand tasks over to other workers
+     */
+    if(worker_percentages[i] <= 0) {
+      continue;
+    }
+
+    /* start getting suitable tasks from workers */
+    pthread_mutex_lock(&mutex_workers[i]);
+    iter = LpelSchedTaskIter(workers[i]->sched, 1);
+    pthread_mutex_unlock(&mutex_workers[i]);
+
+    while(LpelTaskIterHasNext(iter)) {
+      lpel_task_t *t;
+      double ready_ratio;
+
+      t = LpelTaskIterNext(iter);
+
+      ready_ratio = LpelTaskGetPercentageReady(t);
+      /* add task to queue for migration to another worker */
+      if(ready_ratio >= worker_percentages[i]) {
+        AddTaskToList(t, ready_ratio);
+      } else {
+        t->new_worker = t->current_worker;
+      }
+    }
+
   }
 }
 
+/**
+ * Remove any tasks that are not used for migration, set the new_worker of
+ * the task to the current worker. Reset the list
+ */
 static void ResetTaskList()
 {
   int i;
-  for(i = task_list.head; i<task_list.length; i++) {
+  /*for(i = 0; i<task_list.length; i++) {
     task_list.list[i].t->new_worker = task_list.list[i].t->current_worker;
     task_list.list[i].t = NULL;
-  }
+  }*/
   task_list.length = 0;
-  task_list.head = 0;
 }
 
+/**
+ * For each worker go through all tasks that are in the ready list and
+ * sum up all waiting times from all tasks and average them. If a worker
+ * is tagged waiting (ie, there weren't any tasks in the ready queue to run)
+ * it will not calculate the average but instead add its id to the list
+ * of workers that need tasks. The average is set to -1.
+ * Note to make, average is multiplied by some value. This is the threshold
+ * value for tasks that are chosen for migration.
+ *
+ * @param workers         The workers array
+ * @param num_workers     The number of workers
+ * @param mutex_workers   The mutexes for the workers
+ */
 static void CalculateAverageReadyTime(workerctx_t **workers,
                                       int num_workers,
                                       pthread_mutex_t *mutex_workers)
@@ -162,15 +238,22 @@ static void CalculateAverageReadyTime(workerctx_t **workers,
   int i;
   for(i = 0; i < num_workers; i++) {
     double worker_percentage = 0;
-    int n_tasks;
+    int n_tasks = 0;
+    lpel_task_iterator_t *iter;
 
     pthread_mutex_lock(&mutex_workers[i]);
+    if(workers[i]->terminate) {
+      pthread_mutex_unlock(&mutex_workers[i]);
+      return;
+    }
     if(workers[i]->waiting) {
       workers[i]->waiting = 0;
       worker_percentages[i] = -1;
+      AddStealingWorkerId(i);
+      pthread_mutex_unlock(&mutex_workers[i]);
       continue;
     }
-    lpel_task_iterator_t *iter = LpelSchedTaskIter(workers[i]->sched, 1);
+    iter = LpelSchedTaskIter(workers[i]->sched, 1);
 
     pthread_mutex_unlock(&mutex_workers[i]);
 
@@ -181,59 +264,43 @@ static void CalculateAverageReadyTime(workerctx_t **workers,
       t = LpelTaskIterNext(iter);
 
       ready_percentage = LpelTaskGetPercentageReady(t);
-      worker_percentages[i] += ready_percentage;
+      worker_percentage += ready_percentage;
       n_tasks++;
     }
-    worker_percentages[i] = worker_percentages[i] / (double)n_tasks;
+    if(n_tasks > 0) {
+      worker_percentages[i] = worker_percentage / (double)n_tasks;
+    } else {
+      worker_percentages[i] = -1;
+      AddStealingWorkerId(i);
+    }
     LpelTaskIterDestroy(iter);
   }
 }
-
-static void FindWorker(lpel_task_t *t)
-{
-  int i;
-  int prio;
-#ifdef TASK_WORKERS_SEPARATION
-  prio = LpelTaskGetPrio(t);
-#else
-  prio = 0;
-#endif
-  for(i = 0; i<task_types[prio].n; i++) {
-    int wid = task_types[prio].workers[i];
-    if(worker_percentages[wid] >= 0 && worker_percentages[i] < LOW_LOAD) {
-      t->new_worker = wid;
-      return;
-    }
-  }
-  t->new_worker = t->current_worker;
-}
-
 
 static void WaitingPlacement(workerctx_t **workers,
                              int num_workers,
                              pthread_mutex_t *mutex_workers)
 {
-  int i;
+  int i = 0;
+  int stealing_workers_num;
+  /* Calculate averages of ready time for all workers */
   CalculateAverageReadyTime(workers, num_workers, mutex_workers);
+  CreateTaskList(workers, num_workers, mutex_workers);
 
-  for(i = 0; i<num_workers; i++) {
-    pthread_mutex_lock(&mutex_workers[i]);
-    lpel_task_iterator_t *iter = LpelSchedTaskIter(workers[i]->sched, 0);
-    pthread_mutex_unlock(&mutex_workers[i]);
-    while(LpelTaskIterHasNext(iter)) {
-      lpel_task_t *t;
-      double ready_percentage;
+  stealing_workers_num = steal_workers.length;
 
-      t = LpelTaskIterNext(iter);
-
-      ready_percentage = LpelTaskGetPercentageReady(t);
-
-      if(ready_percentage > MAX_PERCENTAGE) {
-        FindWorker(t);
-      }
+  while(steal_workers.length > 0) {
+    int wid = GetWorkerId();
+    int counter;
+    for(counter = i; counter < task_list.length;
+        counter = counter + stealing_workers_num) {
+      task_list.list[i].t->new_worker = wid;
     }
-    LpelTaskIterDestroy(iter);
+    i++;
   }
+
+  ResetWorkers();
+  ResetTaskList();
 }
 #endif
 
@@ -267,7 +334,6 @@ void LpelPlacementSchedulerInit()
   task_list.list = malloc(number_workers * 2 * sizeof(lpel_task_stat_t));
   task_list.real_length = number_workers * 2;
   task_list.length = 0;
-  task_list.head = 0;
   for(i = 0; i<task_list.real_length; i++) {
     task_list.list[i].t = NULL;
   }
@@ -328,25 +394,40 @@ void LpelPlacementSchedulerInit()
 void * LpelPlacementSchedulerRun(void * args)
 {
   workerctx_t *wc = LpelTaskSelf()->worker_context;
+  workerctx_t **workers = LpelWorkerGetWorkers();
+  pthread_mutex_t *mutex_workers = LpelWorkerGetMutexes();
+  int num_workers = LpelWorkerNumber();
+  int terminate;
+  int wid = wc->wid;
   do {
-    workerctx_t **workers = LpelWorkerGetWorkers();
-    pthread_mutex_t *mutex_workers = LpelWorkerGetMutexes();
+    int tasks;
+    pthread_mutex_lock(&mutex_workers[wid]);
+
+    if(wc->terminate) {
+      break;
+    }
 #ifdef WAITING
-    WaitingPlacement(workers, LpelWorkerNumber(), mutex_workers);
+   WaitingPlacement(workers, num_workers, mutex_workers);
 #else
     int i;
 
-    for(i = 0; i<LpelWorkerNumber(); i++) {
+    for(i = 0; i<num_workers; i++) {
       pthread_mutex_trylock(&mutex_workers[i]);
-      if(workers[i]->terminate == 0) {
+      if(!workers[i]->terminate) {
         RandomPlacement(workers[i]);
+      } else {
+        return;
       }
       pthread_mutex_unlock(&mutex_workers[i]);
     }
 #endif
-
+    pthread_mutex_unlock(&mutex_workers[wc->wid]);
+    usleep(100);
     LpelTaskYield();
-  } while(!wc->terminate);
+    pthread_mutex_lock(&mutex_workers[wid]);
+    terminate = wc->terminate;
+    pthread_mutex_unlock(&mutex_workers[wid]);
+  } while(!terminate);
 }
 
 int LpelPlacementSchedulerGetWorker(int prio, int i)

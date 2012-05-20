@@ -186,10 +186,12 @@ void LpelWorkerCleanup(void)
   }
   /* cleanup the data structures */
   for( i=0; i<num_workers; i++) {
+    pthread_mutex_lock(&mutex_workers[i]);
     wc = WORKER_PTR(i);
     LpelMailboxDestroy(wc->mailbox);
     LpelSchedDestroy( wc->sched);
     free(wc);
+    pthread_mutex_unlock(&mutex_workers[i]);
 
     pthread_mutex_destroy(&mutex_workers[i]);
   }
@@ -489,7 +491,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       t = msg->body.task;
       assert(t->state != TASK_READY);
 #ifdef WAITING
-      clock_gettime(CLOCK_REALTIME, &t->last_measurement_start);
+      gettimeofday(&t->last_measurement_start, NULL);
 #endif
       t->state = TASK_READY;
 
@@ -513,7 +515,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 
       assert(t->state == TASK_CREATED);
 #ifdef WAITING
-      clock_gettime(CLOCK_REALTIME, &t->last_measurement_start);
+      gettimeofday(&t->last_measurement_start, NULL);
 #endif
       t->state = TASK_READY;
 
