@@ -9,6 +9,10 @@
 #include <assert.h>
 #include <errno.h>
 
+#ifdef MEASUREMENTS
+#include <time.h>
+#endif
+
 #include <pthread.h>
 #include "arch/mctx.h"
 
@@ -31,6 +35,12 @@
 
 /******************************************************************************/
 
+#ifdef MEASUREMENTS
+static pthread_mutex_t measure_mutex;
+static long max_time;
+static long min_time;
+static long total_tasks;
+#endif
 
 static int num_workers = -1;
 static workerctx_t **workers;
@@ -118,6 +128,12 @@ void LpelWorkerInit(int size)
   pthread_key_create(&workerctx_key, NULL);
 #endif /* HAVE___THREAD */
 
+#ifdef measurements
+  pthread_mutex_create(&measure_mutex, NULL);
+  max_time = 0;
+  min_time = 0;
+#endif
+
   /* initialize spmdext module */
   res = LpelSpmdInit(num_workers);
 
@@ -177,6 +193,10 @@ void LpelWorkerCleanup(void)
 {
   int i;
   workerctx_t *wc;
+#ifdef MEASUREMENTS
+  struct timespec res_spec;
+  long res;
+#endif
 
   /* wait on workers */
   for( i=0; i<num_workers; i++) {
@@ -201,6 +221,18 @@ void LpelWorkerCleanup(void)
 
   /* free mutex table */
   free(mutex_workers);
+
+#ifdef MEASUREMENTS
+  clock_gettime(CLOCK_MONOTONIC, &res_spec);
+  res = res_spec.tv_sec * 1000000000 + res_spec.tv_nsec;
+  pthread_mutex_destroy(&measure_mutex);
+
+  printf("WORKER STATISTICS:\n");
+  printf("RESOLUTION:\t%ld\n", res);
+  printf("MINIMUM TIME:\t%ld\n", min_time);
+  printf("MAXIMUM TIME:\t%ld\n", max_time);
+  printf("TOTAL NUMBER OF TASKS:\t%ld\n", total_tasks);
+#endif
 
   /* destroy placement scheduler */
   LpelPlacementSchedulerDestroy();
@@ -452,6 +484,21 @@ pthread_mutex_t *LpelWorkerGetMutexes()
   return mutex_workers;
 }
 
+#ifdef TASK_SEGMENTATION
+void LpelWorkerSetTaskType(int wid, int type)
+{
+  workers[wid]->task_type = type;
+}
+#endif
+
+#ifdef MEASUREMENTS
+void LpelWorkerAddTask()
+{
+  pthread_mutex_lock(&measure_mutex);
+  total_tasks++;
+  pthread_mutex_unlock(&measure_mutex);
+}
+#endif
 
 /******************************************************************************/
 /*  PRIVATE FUNCTIONS                                                         */
@@ -538,7 +585,21 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
         }
 #endif
       } else {
+#ifdef MEASUREMENTS
+        struct timespec stop_time;
+        long time;
+#endif
         LpelSchedMakeReady( wc->sched, t);
+#ifdef MEASUREMENTS
+        clock_gettime(CLOCK_MONOTONIC, &stop_time);
+        time = (stop_time.tv_sec - t->start_time.tv_sec) * 1000000000 +
+               (stop_time.tv_nsec - t->start_time.tv_nsec);
+        pthread_mutex_lock(&measure_mutex);
+        max_time = (time > max_time) ? time : max_time;
+        min_time = (time < min_time || min_time == 0) ? time : max_time;
+        total_tasks++;
+        pthread_mutex_unlock(&measure_mutex);
+#endif
       }
 
 #ifdef USE_LOGGING
@@ -621,9 +682,11 @@ static void WorkerLoop( workerctx_t *wc)
       /* cleanup task context marked for deletion */
       CleanupTaskContext(wc, NULL);
     } else {
+#ifdef WAITING
       pthread_mutex_lock(&mutex_workers[wc->wid]);
       wc->waiting = 1;
       pthread_mutex_unlock(&mutex_workers[wc->wid]);
+#endif
       /* no ready tasks */
       WaitForNewMessage( wc);
     }

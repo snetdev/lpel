@@ -15,14 +15,19 @@
 
 #define USE_PRIORITY
 #ifdef USE_PRIORITY
-//#define TASK_WORKER_SEPARATION
+//#define TASK_SEGMENTATION
 #endif
 /******************************************************************************/
 /*  DEFINE THE TYPE OF PLACEMENT SCHEDULER                                    */
 /******************************************************************************/
 
-//#define RANDOM
 #define WAITING
+
+/******************************************************************************/
+/*  DEFINE MEASUREMENTS                                                       */
+/******************************************************************************/
+
+#define MEASUREMENTS
 
 /******************************************************************************/
 /*  RETURN VALUES OF LPEL FUNCTIONS                                           */
@@ -228,6 +233,13 @@ int LpelPlacementSchedulerGetWorker(int prio, int i);
 int LpelPlacementSchedulerNumWorkers(int prio);
 
 int LpelPlacementSchedulerGetIndexWorker(int prio, int worker);
+
+#ifdef MEASUREMENTS
+/******************************************************************************/
+/*  WORKER MEASUREMENTS FUNCTIONS                                             */
+/******************************************************************************/
+void LpelWorkerAddTask();
+#endif
 
 /******************************************************************************/
 /*  STREAM FUNCTIONS                                                          */

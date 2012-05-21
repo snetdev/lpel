@@ -9,6 +9,10 @@
 #include <sys/time.h>
 #endif
 
+#ifdef MEASUREMENTS
+#include <time.h>
+#endif
+
 #include "arch/mctx.h"
 
 
@@ -25,8 +29,6 @@
 
 struct workerctx_t;
 struct mon_task_t;
-
-
 
 
 /**
@@ -91,6 +93,10 @@ struct lpel_task_t {
 
   /** Mutex used for reading from and writing to the different variables */
   pthread_mutex_t t_mu;
+#endif
+
+#ifdef MEASUREMENTS
+  struct timespec start_time;
 #endif
 };
 

@@ -17,7 +17,6 @@
 static atomic_t taskseq = ATOMIC_INIT(0);
 
 
-
 /* declaration of startup function */
 //static void TaskStartup( unsigned int y, unsigned int x);
 static void TaskStartup( void *arg);
@@ -52,6 +51,12 @@ lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
   lpel_task_t *t;
   char *stackaddr;
   int offset;
+#ifdef MEASUREMENTS
+  struct timespec start_time;
+  if(worker != -1) {
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+  }
+#endif
 
   if (size <= 0) {
     size = LPEL_TASK_SIZE_DEFAULT;
@@ -110,6 +115,10 @@ lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
   mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
 #ifdef USE_MCTX_PCL
   assert(t->mctx != NULL);
+#endif
+
+#ifdef MEASUREMENTS
+  t->start_time = start_time;
 #endif
 
   return t;

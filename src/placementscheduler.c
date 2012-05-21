@@ -12,6 +12,11 @@
 
 #ifdef WAITING
 #define MAX_PERCENTAGE 1
+#ifdef TASK_SEGMENTATION
+#define LISTS_LENGTH 2
+#else
+#define LISTS_LENGTH 1
+#endif
 #endif
 
 
@@ -40,7 +45,7 @@ typedef struct lpel_steal_workers{
 
 double *worker_percentages;
 lpel_task_list_t task_list;
-lpel_steal_workers_t steal_workers;
+lpel_steal_workers_t steal_workers[LISTS_LENGTH];
 #endif
 
 lpel_worker_indices_t task_types[SCHED_NUM_PRIO];
@@ -53,7 +58,7 @@ static void RandomPlacement(workerctx_t *wc)
     int current_worker;
     double c;
     int migrate;
-#ifdef TASK_WORKER_SEPARATION
+#ifdef TASK_SEGMENTATION
     int prio;
 #endif
 
@@ -62,7 +67,7 @@ static void RandomPlacement(workerctx_t *wc)
 
     c = (double)rand() / (double)RAND_MAX;
     migrate = (c < 0.5) ? 1 : 0;
-#ifdef TASK_WORKER_SEPARATION
+#ifdef TASK_SEGMENTATION
     assert(prio < 2);
     prio = LpelTaskGetPrio(t);
     t->new_worker = c ? task_types[prio].workers[(rand() %
@@ -76,28 +81,32 @@ static void RandomPlacement(workerctx_t *wc)
 }
 
 #ifdef WAITING
-static void AddStealingWorkerId(int i)
+static void AddStealingWorkerId(int i, int prio)
 {
-  steal_workers.workers[steal_workers.length] = i;
-  steal_workers.length++;
+  steal_workers[prio].workers[steal_workers[prio].length] = i;
+  steal_workers[prio].length++;
 }
 
-static int GetWorkerId()
+static int GetWorkerId(int prio)
 {
   int wid;
-  int r = rand()%steal_workers.length;
-  wid = steal_workers.workers[r];
-  if(steal_workers.length == 0) {
+  int r = rand()%steal_workers[prio].length;
+  wid = steal_workers[prio].workers[r];
+  if(steal_workers[prio].length == 0) {
     return -1;
   }
-  steal_workers.length--;
-  steal_workers.workers[r] = steal_workers.workers[steal_workers.length];
+  steal_workers[prio].length--;
+  steal_workers[prio].workers[r] =
+          steal_workers[prio].workers[steal_workers[prio].length];
   return wid;
 }
 
 static void ResetWorkers()
 {
-  steal_workers.length = 0;
+  int i;
+  for(i = 0; i < LISTS_LENGTH; i++) {
+    steal_workers[i].length = 0;
+  }
 }
 
 static void AddTaskToList(lpel_task_t *t, double stat)
@@ -132,7 +141,7 @@ static void AddTaskToList(lpel_task_t *t, double stat)
           temp_t = newtemp_t;
           temp_stat = newtemp_stat;
         }
-        if(t != NULL) {
+        if(temp_t != NULL) {
           temp_t->new_worker = temp_t->current_worker;
         }
         break;
@@ -236,12 +245,16 @@ static void CalculateAverageReadyTime(workerctx_t **workers,
                                       pthread_mutex_t *mutex_workers)
 {
   int i;
+  int prio = 0;
   for(i = 0; i < num_workers; i++) {
     double worker_percentage = 0;
     int n_tasks = 0;
     lpel_task_iterator_t *iter;
 
     pthread_mutex_lock(&mutex_workers[i]);
+#ifdef TASK_SEGMENTATION
+    prio = workers[i]->task_type;
+#endif
     if(workers[i]->terminate) {
       pthread_mutex_unlock(&mutex_workers[i]);
       return;
@@ -249,7 +262,7 @@ static void CalculateAverageReadyTime(workerctx_t **workers,
     if(workers[i]->waiting) {
       workers[i]->waiting = 0;
       worker_percentages[i] = -1;
-      AddStealingWorkerId(i);
+      AddStealingWorkerId(i, prio);
       pthread_mutex_unlock(&mutex_workers[i]);
       continue;
     }
@@ -271,7 +284,7 @@ static void CalculateAverageReadyTime(workerctx_t **workers,
       worker_percentages[i] = worker_percentage / (double)n_tasks;
     } else {
       worker_percentages[i] = -1;
-      AddStealingWorkerId(i);
+      AddStealingWorkerId(i, prio);
     }
     LpelTaskIterDestroy(iter);
   }
@@ -281,22 +294,25 @@ static void WaitingPlacement(workerctx_t **workers,
                              int num_workers,
                              pthread_mutex_t *mutex_workers)
 {
-  int i = 0;
+  int j = 0;
+  int i;
   int stealing_workers_num;
   /* Calculate averages of ready time for all workers */
   CalculateAverageReadyTime(workers, num_workers, mutex_workers);
   CreateTaskList(workers, num_workers, mutex_workers);
 
-  stealing_workers_num = steal_workers.length;
+  for(i = 0; i < LISTS_LENGTH; i++) {
+    stealing_workers_num = steal_workers[i].length;
 
-  while(steal_workers.length > 0) {
-    int wid = GetWorkerId();
-    int counter;
-    for(counter = i; counter < task_list.length;
-        counter = counter + stealing_workers_num) {
-      task_list.list[i].t->new_worker = wid;
+    while(steal_workers[i].length > 0) {
+      int wid = GetWorkerId(i);
+      int counter;
+      for(counter = j; counter < task_list.length;
+          counter = counter + stealing_workers_num) {
+        task_list.list[j].t->new_worker = wid;
+      }
+      j++;
     }
-    i++;
   }
 
   ResetWorkers();
@@ -314,6 +330,9 @@ void LpelPlacementSchedulerDestroy()
   }
 #ifdef WAITING
   free(worker_percentages);
+  for( i = 0; i < LISTS_LENGTH; i++) {
+    free(steal_workers[i].workers);
+  }
   free(task_list.list);
 #endif
 }
@@ -324,12 +343,14 @@ void LpelPlacementSchedulerInit()
   int number_workers = LpelWorkerNumber();
 #ifdef WAITING
   worker_percentages = malloc(number_workers * sizeof(double));
-  for(i = 0; i<number_workers; i++) {
+  for(i = 0; i < number_workers; i++) {
     worker_percentages[i] = -1;
   }
 
-  steal_workers.workers = malloc(number_workers * sizeof(int));
-  steal_workers.length = 0;
+  for(i = 0; i < LISTS_LENGTH; i++) {
+    steal_workers[i].workers = malloc(number_workers * sizeof(int));
+    steal_workers[i].length = 0;
+  }
 
   task_list.list = malloc(number_workers * 2 * sizeof(lpel_task_stat_t));
   task_list.real_length = number_workers * 2;
@@ -340,7 +361,7 @@ void LpelPlacementSchedulerInit()
 
 #endif
 
-#ifdef TASK_WORKER_SEPARATION
+#ifdef TASK_SEGMENTATION
   assert(SCHED_NUM_PRIO >= 2);
   assert(number_workers >= 2);
   int num1_workers = (number_workers/6 > 0) ? number_workers/6 : 1;
@@ -356,9 +377,11 @@ void LpelPlacementSchedulerInit()
   for(i = 0, num0_i = 0, num1_i = 0; i < number_workers; i++) {
     if(i % number_workers == 0) {
       task_types[1].workers[num1_i] = i;
+      LpelWorkerSetTaskType(i, 1);
       num1_i++;
     } else {
       task_types[0].workers[num0_i] = i;
+      LpelWorkerSetTaskType(i, 0);
       num0_i++;
     }
   }
@@ -432,7 +455,7 @@ void * LpelPlacementSchedulerRun(void * args)
 
 int LpelPlacementSchedulerGetWorker(int prio, int i)
 {
-#ifdef TASK_WORKER_SEPARATION
+#ifdef TASK_SEGMENTATION
   assert(prio < 2);
   return task_types[prio].workers[i];
 #else
@@ -442,7 +465,7 @@ int LpelPlacementSchedulerGetWorker(int prio, int i)
 
 int LpelPlacementSchedulerNumWorkers(int prio)
 {
-#ifdef TASK_WORKER_SEPARATION
+#ifdef TASK_SEGMENTATION
   assert(prio < 2);
   return task_types[prio].n;
 #else
@@ -453,7 +476,7 @@ int LpelPlacementSchedulerNumWorkers(int prio)
 int LpelPlacementSchedulerGetIndexWorker(int prio, int worker)
 {
   int i;
-#ifdef TASK_WORKER_SEPARATION
+#ifdef TASK_SEGMENTATION
   assert(prio < 2);
   for(i = 0; i<task_types[prio].n; i++) {
     if(task_types[prio].workers[i] == worker) {
