@@ -5,10 +5,10 @@
 #include "task.h"
 
 
-typedef struct taskqueue {
+struct taskqueue {
   lpel_task_t *head, *tail;
   unsigned int count;
-} taskqueue_t;
+};
 
 void LpelTaskqueueInit( taskqueue_t *tq);
 
