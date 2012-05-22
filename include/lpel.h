@@ -174,9 +174,6 @@ typedef struct lpel_task_iterator    lpel_task_iterator_t;
 
 typedef struct taskqueue             taskqueue_t;
 
-typedef struct lpel_worker_indices   lpel_worker_indices_t;
-
-
 /******************************************************************************/
 /*  SPMD FUNCTIONS                                                            */
 /******************************************************************************/
