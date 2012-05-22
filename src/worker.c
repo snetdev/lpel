@@ -195,7 +195,6 @@ void LpelWorkerCleanup(void)
   workerctx_t *wc;
 #ifdef MEASUREMENTS
   struct timespec res_spec;
-  long res;
 #endif
 
   /* wait on workers */
@@ -223,14 +222,13 @@ void LpelWorkerCleanup(void)
   free(mutex_workers);
 
 #ifdef MEASUREMENTS
-  clock_gettime(CLOCK_MONOTONIC, &res_spec);
-  res = res_spec.tv_sec * 1000000000 + res_spec.tv_nsec;
+  clock_getres(CLOCK_ID, &res_spec);
   pthread_mutex_destroy(&measure_mutex);
 
   printf("WORKER STATISTICS:\n");
-  printf("RESOLUTION:\t%ld\n", res);
-  printf("MINIMUM TIME:\t%ld\n", min_time);
-  printf("MAXIMUM TIME:\t%ld\n", max_time);
+  printf("RESOLUTION:\t%ld.%ld\n", res_spec.tv_sec, res_spec.tv_nsec);
+  printf("MINIMUM TIME:\t%lf\n", (double)min_time / (double)1000000000);
+  printf("MAXIMUM TIME:\t%lf\n", (double)max_time / (double)1000000000);
   printf("TOTAL NUMBER OF TASKS:\t%ld\n", total_tasks);
 #endif
 
@@ -591,7 +589,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 #endif
         LpelSchedMakeReady( wc->sched, t);
 #ifdef MEASUREMENTS
-        clock_gettime(CLOCK_MONOTONIC, &stop_time);
+        clock_gettime(CLOCK_ID, &stop_time);
         time = (stop_time.tv_sec - t->start_time.tv_sec) * 1000000000 +
                (stop_time.tv_nsec - t->start_time.tv_nsec);
         pthread_mutex_lock(&measure_mutex);

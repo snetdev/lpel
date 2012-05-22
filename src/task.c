@@ -54,7 +54,7 @@ lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
 #ifdef MEASUREMENTS
   struct timespec start_time;
   if(worker != -1) {
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
+    clock_gettime(CLOCK_ID, &start_time);
   }
 #endif
 
@@ -385,10 +385,10 @@ double LpelTaskGetPercentageReady( lpel_task_t *t)
   ready_time_seconds = t->total_time_ready[index].tv_sec;
   ready_time_useconds = t->total_time_ready[index].tv_usec;
 
-  if(t->last_measurement_start.tv_sec + t->last_measurement_start.tv_usec > 0) {
+/*  if(t->last_measurement_start.tv_sec + t->last_measurement_start.tv_usec > 0) {
     ready_time_seconds += time.tv_sec - t->last_measurement_start.tv_sec;
     ready_time_useconds += time.tv_usec - t->last_measurement_start.tv_usec;
-  }
+  }*/
 
   ready_ratio =
       ((double)ready_time_seconds / t->total_ready_num[index]) * 1000000 +

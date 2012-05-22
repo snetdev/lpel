@@ -27,7 +27,11 @@
 /*  DEFINE MEASUREMENTS                                                       */
 /******************************************************************************/
 
-#define MEASUREMENTS
+//#define MEASUREMENTS
+#ifdef MEASUREMENTS
+#include <time.h>
+#define CLOCK_ID CLOCK_REALTIME
+#endif
 
 /******************************************************************************/
 /*  RETURN VALUES OF LPEL FUNCTIONS                                           */

@@ -294,7 +294,7 @@ static void WaitingPlacement(workerctx_t **workers,
                              int num_workers,
                              pthread_mutex_t *mutex_workers)
 {
-  int j = 0;
+  int j;
   int i;
   int stealing_workers_num;
   /* Calculate averages of ready time for all workers */
@@ -303,6 +303,8 @@ static void WaitingPlacement(workerctx_t **workers,
 
   for(i = 0; i < LISTS_LENGTH; i++) {
     stealing_workers_num = steal_workers[i].length;
+
+    j = 0;
 
     while(steal_workers[i].length > 0) {
       int wid = GetWorkerId(i);
