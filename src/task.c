@@ -79,6 +79,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->prev = t->next = NULL;
 
   t->mon = NULL;
+  t->usrdata = NULL;
 
   /* function, argument (data), stack base address, stacksize */
   mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
@@ -160,9 +161,20 @@ void LpelTaskRun( lpel_task_t *t)
  */
 lpel_task_t *LpelTaskSelf(void)
 {
-  return LpelWorkerCurrentTask();
+  lpel_task_t *t = LpelWorkerCurrentTask();
+  /* It is quite a common bug to call LpelTaskSelf() from a non-task context.
+   * Provide an assertion error instead of just segfaulting on a null dereference. */
+  assert(t && "Not in an LPEL task context!");
+  return t;
 }
 
+/**
+ * Get the current task, or NULL if not called in a task context.
+ */
+lpel_task_t *LpelTaskSelfOrNull(void)
+{
+  return LpelWorkerCurrentTask();
+}
 
 /**
  * Exit the current task
@@ -332,4 +344,20 @@ void LpelTaskBlock( lpel_task_t *t )
   TaskStart( t);
 }
 
+/** user data */
+void  LpelSetUserData(lpel_task_t *t, void *data)
+{
+  assert(t);
+  t->usrdata = data;
+}
 
+void *LpelGetUserData(lpel_task_t *t)
+{
+  assert(t);
+  return t->usrdata;
+}
+
+int LpelTaskCurrentWorkerId(lpel_task_t *t)
+{
+  return t->worker_context->wid;
+}

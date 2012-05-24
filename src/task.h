@@ -53,6 +53,9 @@ struct lpel_task_t {
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
   void *outarg;         /** output argument  */
+  
+  /* user data */
+  void *usrdata;
 };
 
 
