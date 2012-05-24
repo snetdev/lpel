@@ -70,7 +70,32 @@ void LpelTaskStart( lpel_task_t *t)
  */
 lpel_task_t *LpelTaskSelf(void)
 {
+  lpel_task_t *t = LpelWorkerCurrentTask();
+  /* It is quite a common bug to call LpelTaskSelf() from a non-task context.
+   * Provide an assertion error instead of just segfaulting on a null dereference. */
+  assert(t && "Not in an LPEL task context!");
+  return t;
+}
+
+/**
+ * Get the current task, or NULL if not called in a task context.
+ */
+lpel_task_t *LpelTaskSelfOrNull(void)
+{
   return LpelWorkerCurrentTask();
+}
+
+/** user data */
+void  LpelSetUserData(lpel_task_t *t, void *data)
+{
+  assert(t);
+  t->usrdata = data;
+}
+
+void *LpelGetUserData(lpel_task_t *t)
+{
+  assert(t);
+  return t->usrdata;
 }
 
 

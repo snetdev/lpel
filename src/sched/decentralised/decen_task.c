@@ -63,6 +63,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 	t->prev = t->next = NULL;
 
 	t->mon = NULL;
+	t->usrdata = NULL;
 
 	/* function, argument (data), stack base address, stacksize */
 	mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);

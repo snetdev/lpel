@@ -643,7 +643,11 @@ workerctx_t *LpelWorkerSelf(void){
 
 lpel_task_t *LpelWorkerCurrentTask(void)
 {
-  return LpelWorkerSelf()->current_task;
+	workerctx_t *w = LpelWorkerSelf();
+	if (!w)
+		return NULL;
+	else
+		return w->current_task;
 }
 
 

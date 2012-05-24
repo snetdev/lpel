@@ -221,7 +221,11 @@ workerctx_t *LpelWorkerSelf(void)
 
 lpel_task_t *LpelWorkerCurrentTask(void)
 {
-  return GetCurrentWorker()->current_task;
+  workerctx_t *w = GetCurrentWorker();
+  if (!w)
+    return NULL;
+  else
+    return w->current_task; 
 }
 
 
@@ -730,4 +734,5 @@ static void *WorkerThread( void *arg)
 
   return NULL;
 }
+
 

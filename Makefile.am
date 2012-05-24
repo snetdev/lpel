@@ -6,6 +6,7 @@ liblpel_la_SOURCES = \
 	src/mailbox.c \
 	src/streamset.c \
 	src/timing.c \
+	src/sema.c \
 	src/lpelcfg.c \
 	src/lpel_main.c \
 	src/lpel_hwloc.c \
