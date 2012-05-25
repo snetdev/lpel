@@ -56,7 +56,7 @@ typedef struct workerctx_t {
 
 
 
-void LpelWorkerInit( int size);
+void LpelWorkerInit( lpel_config_t *config);
 void LpelWorkerCleanup( void);
 void LpelWorkerRunTask( lpel_task_t *t);
 

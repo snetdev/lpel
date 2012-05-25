@@ -15,7 +15,7 @@
 
 #define USE_PRIORITY
 #ifdef USE_PRIORITY
-//#define TASK_SEGMENTATION
+#define TASK_SEGMENTATION
 #endif
 /******************************************************************************/
 /*  DEFINE THE TYPE OF PLACEMENT SCHEDULER                                    */
@@ -26,6 +26,7 @@
 /******************************************************************************/
 /*  DEFINE MEASUREMENTS                                                       */
 /******************************************************************************/
+
 
 //#define MEASUREMENTS
 #ifdef MEASUREMENTS
@@ -105,6 +106,9 @@ typedef struct lpel_monitoring_cb_t {
  *   REALTIME - set realtime priority for workers, will succeed only if
  *              there is a 1:1 mapping of workers to procs,
  *              proc_others > 0 and the process has needed privileges.
+ * threshold is a variable used for the placement scheduler
+ * segmentation is a variable used when there is task segementation
+ * segmentation gives the number of workers assigned to tasks with priority 1
  */
 typedef struct {
   int num_workers;
@@ -112,6 +116,10 @@ typedef struct {
   int proc_others;
   int flags;
   struct lpel_monitoring_cb_t mon;
+  float threshold;
+#ifdef TASK_SEGMENTATION
+  int segmentation;
+#endif
 } lpel_config_t;
 
 
@@ -215,13 +223,13 @@ int LpelTaskMigrationWorkerId();
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
 /* Task iterator creation function */
-lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue, int length, int order);
+lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue, int length);
 
 /******************************************************************************/
 /*  PLACEMENT SCHEDULER FUNCTIONS                                             */
 /******************************************************************************/
 
-void LpelPlacementSchedulerInit();
+void LpelPlacementSchedulerInit(lpel_config_t *config);
 
 void LpelPlacementSchedulerWorkerIndices(int prio, int **workers, int *n);
 

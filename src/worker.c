@@ -116,9 +116,11 @@ static inline workerctx_t *GetCurrentWorker(void)
  *
  * @param size    size of the worker set, i.e., the total number of workers
  */
-void LpelWorkerInit(int size)
+void LpelWorkerInit(lpel_config_t *config)
 {
-  int i, res;
+  int i, res, size;
+
+  size = config->num_workers;
 
   assert(0 <= size);
   num_workers = size;
@@ -179,7 +181,7 @@ void LpelWorkerInit(int size)
   }
 
   /* Initialize placement scheduler */
-  LpelPlacementSchedulerInit();
+  LpelPlacementSchedulerInit(config);
 
   assert(res==0);
 }

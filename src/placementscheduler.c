@@ -48,11 +48,12 @@ lpel_task_list_t task_list;
 lpel_steal_workers_t steal_workers[LISTS_LENGTH];
 #endif
 
-lpel_worker_indices_t task_types[SCHED_NUM_PRIO];
+static lpel_worker_indices_t task_types[SCHED_NUM_PRIO];
+static float threshold;
 
 static void RandomPlacement(workerctx_t *wc)
 {
-  lpel_task_iterator_t *iter = LpelSchedTaskIter(wc->sched, 1);
+  lpel_task_iterator_t *iter = LpelSchedTaskIter(wc->sched);
   while(LpelTaskIterHasNext(iter)) {
     lpel_task_t *t;
     int current_worker;
@@ -66,7 +67,7 @@ static void RandomPlacement(workerctx_t *wc)
     current_worker = t->current_worker;
 
     c = (double)rand() / (double)RAND_MAX;
-    migrate = (c < 0.5) ? 1 : 0;
+    migrate = (c > threshold) ? 1 : 0;
 #ifdef TASK_SEGMENTATION
     assert(prio < 2);
     prio = LpelTaskGetPrio(t);
@@ -192,8 +193,8 @@ static void CreateTaskList(workerctx_t **workers,
 
     /* start getting suitable tasks from workers */
     pthread_mutex_lock(&mutex_workers[i]);
-    iter = LpelSchedTaskIter(workers[i]->sched, 1);
-    pthread_mutex_unlock(&mutex_workers[i]);
+    LpelSchedLockQueue(workers[i]->sched);
+    iter = LpelSchedTaskIter(workers[i]->sched);
 
     while(LpelTaskIterHasNext(iter)) {
       lpel_task_t *t;
@@ -201,14 +202,20 @@ static void CreateTaskList(workerctx_t **workers,
 
       t = LpelTaskIterNext(iter);
 
+      if(t->state != TASK_READY) {
+        continue;
+      }
+
       ready_ratio = LpelTaskGetPercentageReady(t);
       /* add task to queue for migration to another worker */
-      if(ready_ratio >= worker_percentages[i]) {
+      if(ready_ratio >= worker_percentages[i] * threshold) {
         AddTaskToList(t, ready_ratio);
       } else {
         t->new_worker = t->current_worker;
       }
     }
+    LpelSchedUnlockQueue(workers[i]->sched);
+    pthread_mutex_unlock(&mutex_workers[i]);
 
   }
 }
@@ -266,15 +273,18 @@ static void CalculateAverageReadyTime(workerctx_t **workers,
       pthread_mutex_unlock(&mutex_workers[i]);
       continue;
     }
-    iter = LpelSchedTaskIter(workers[i]->sched, 1);
+    LpelSchedLockQueue(workers[i]->sched);
+    iter = LpelSchedTaskIter(workers[i]->sched);
 
-    pthread_mutex_unlock(&mutex_workers[i]);
 
     while(LpelTaskIterHasNext(iter)) {
       lpel_task_t *t;
       double ready_percentage;
 
       t = LpelTaskIterNext(iter);
+      if(t->state != TASK_READY) {
+        continue;
+      }
 
       ready_percentage = LpelTaskGetPercentageReady(t);
       worker_percentage += ready_percentage;
@@ -287,6 +297,9 @@ static void CalculateAverageReadyTime(workerctx_t **workers,
       AddStealingWorkerId(i, prio);
     }
     LpelTaskIterDestroy(iter);
+
+    LpelSchedUnlockQueue(workers[i]->sched);
+    pthread_mutex_unlock(&mutex_workers[i]);
   }
 }
 
@@ -298,6 +311,7 @@ static void WaitingPlacement(workerctx_t **workers,
   int i;
   int stealing_workers_num;
   /* Calculate averages of ready time for all workers */
+
   CalculateAverageReadyTime(workers, num_workers, mutex_workers);
   CreateTaskList(workers, num_workers, mutex_workers);
 
@@ -316,6 +330,7 @@ static void WaitingPlacement(workerctx_t **workers,
       j++;
     }
   }
+
 
   ResetWorkers();
   ResetTaskList();
@@ -339,10 +354,12 @@ void LpelPlacementSchedulerDestroy()
 #endif
 }
 
-void LpelPlacementSchedulerInit()
+void LpelPlacementSchedulerInit(lpel_config_t *config)
 {
   int i;
   int number_workers = LpelWorkerNumber();
+  threshold = (config->threshold > 0) ? config->threshold : 1;
+
 #ifdef WAITING
   worker_percentages = malloc(number_workers * sizeof(double));
   for(i = 0; i < number_workers; i++) {
@@ -366,7 +383,7 @@ void LpelPlacementSchedulerInit()
 #ifdef TASK_SEGMENTATION
   assert(SCHED_NUM_PRIO >= 2);
   assert(number_workers >= 2);
-  int num1_workers = (number_workers/6 > 0) ? number_workers/6 : 1;
+  int num1_workers = (config->segmentation > 0) ? config->segmentation : 1;
   int num0_workers = number_workers-num1_workers;
   int num0_i;
   int num1_i;
@@ -437,13 +454,15 @@ void * LpelPlacementSchedulerRun(void * args)
     int i;
 
     for(i = 0; i<num_workers; i++) {
-      pthread_mutex_trylock(&mutex_workers[i]);
-      if(!workers[i]->terminate) {
-        RandomPlacement(workers[i]);
-      } else {
-        return;
+      int status = pthread_mutex_trylock(&mutex_workers[i]);
+      if(status == 0) {
+        if(!workers[i]->terminate) {
+          RandomPlacement(workers[i]);
+        } else {
+          return;
+        }
+        pthread_mutex_unlock(&mutex_workers[i]);
       }
-      pthread_mutex_unlock(&mutex_workers[i]);
     }
 #endif
     pthread_mutex_unlock(&mutex_workers[wc->wid]);

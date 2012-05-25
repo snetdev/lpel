@@ -3,45 +3,27 @@
 
 static void FindNext(lpel_task_iterator_t *iter) {
   iter->next = (iter->current != NULL) ? iter->current->next : NULL;
-  if(iter->order) {
-    while( iter->next == NULL && iter->index-- >= 0) {
-      iter->next = iter->queue[iter->index].head;
-    }
-  } else {
-    while( iter->next == NULL && iter->index++ < iter->queue_length) {
-      iter->next = iter->queue[iter->index].head;
-    }
+  while( iter->next == NULL && iter->index-- >= 0) {
+    iter->next = iter->queue[iter->index].head;
   }
 }
 
 lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue,
-                                          int length,
-                                          int order)
+                                          int length)
 {
   int i = 0;
   lpel_task_iterator_t *iter = malloc(sizeof(lpel_task_iterator_t));
   iter->queue = queue;
   iter->current = NULL;
 
-  if(order) {
-    iter->index = length-1;
-  } else {
-    iter->index = 0;
-  }
+  iter->index = length-1;
 
   iter->queue_length = length;
 
-  iter->order = order;
 
-  if(iter->order) {
-    do {
-      iter->current = queue[iter->index].head;
-    } while(iter->current == NULL && iter->index-- >= 0);
-  } else {
-    do {
-      iter->current = queue[iter->index].head;
-    } while(iter->current == NULL && iter->index++ < length);
-  }
+  do {
+    iter->current = queue[iter->index].head;
+  } while(iter->current == NULL && iter->index-- >= 0);
 
 
 
