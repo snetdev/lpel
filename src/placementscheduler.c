@@ -51,35 +51,6 @@ lpel_steal_workers_t steal_workers[LISTS_LENGTH];
 static lpel_worker_indices_t task_types[SCHED_NUM_PRIO];
 static float threshold;
 
-static void RandomPlacement(workerctx_t *wc)
-{
-  lpel_task_iterator_t *iter = LpelSchedTaskIter(wc->sched);
-  while(LpelTaskIterHasNext(iter)) {
-    lpel_task_t *t;
-    int current_worker;
-    double c;
-    int migrate;
-#ifdef TASK_SEGMENTATION
-    int prio;
-#endif
-
-    t = LpelTaskIterNext(iter);
-    current_worker = t->current_worker;
-
-    c = (double)rand() / (double)RAND_MAX;
-    migrate = (c > threshold) ? 1 : 0;
-#ifdef TASK_SEGMENTATION
-    assert(prio < 2);
-    prio = LpelTaskGetPrio(t);
-    t->new_worker = c ? task_types[prio].workers[(rand() %
-                        task_types[prio].n)] : current_worker;
-#else
-    t->new_worker = c ? task_types[0].workers[(rand() %
-                        task_types[0].n)] : current_worker;
-#endif
-  }
-  LpelTaskIterDestroy(iter);
-}
 
 #ifdef WAITING
 static void AddStealingWorkerId(int i, int prio)
@@ -335,6 +306,38 @@ static void WaitingPlacement(workerctx_t **workers,
   ResetWorkers();
   ResetTaskList();
 }
+#else
+static void RandomPlacement(workerctx_t *wc)
+{
+  LpelSchedLockQueue(wc->sched);
+  lpel_task_iterator_t *iter = LpelSchedTaskIter(wc->sched);
+  while(LpelTaskIterHasNext(iter)) {
+    lpel_task_t *t;
+    int current_worker;
+    double c;
+    int migrate;
+#ifdef TASK_SEGMENTATION
+    int prio = wc->task_type;
+#endif
+
+    t = LpelTaskIterNext(iter);
+    current_worker = t->current_worker;
+
+    c = (double)rand() / (double)RAND_MAX;
+    migrate = (c > threshold) ? 1 : 0;
+#ifdef TASK_SEGMENTATION
+    assert(prio < 2);
+    prio = LpelTaskGetPrio(t);
+    t->new_worker = c ? task_types[prio].workers[(rand() %
+                        task_types[prio].n)] : current_worker;
+#else
+    t->new_worker = c ? task_types[0].workers[(rand() %
+                        task_types[0].n)] : current_worker;
+#endif
+  }
+  LpelTaskIterDestroy(iter);
+  LpelSchedUnlockQueue(wc->sched);
+}
 #endif
 
 void LpelPlacementSchedulerDestroy()
@@ -377,7 +380,6 @@ void LpelPlacementSchedulerInit(lpel_config_t *config)
   for(i = 0; i<task_list.real_length; i++) {
     task_list.list[i].t = NULL;
   }
-
 #endif
 
 #ifdef TASK_SEGMENTATION
@@ -459,7 +461,9 @@ void * LpelPlacementSchedulerRun(void * args)
         if(!workers[i]->terminate) {
           RandomPlacement(workers[i]);
         } else {
-          return;
+          pthread_mutex_unlock(&mutex_workers[i]);
+          pthread_mutex_unlock(&mutex_workers[wc->wid]);
+          return NULL;
         }
         pthread_mutex_unlock(&mutex_workers[i]);
       }
@@ -472,6 +476,7 @@ void * LpelPlacementSchedulerRun(void * args)
     terminate = wc->terminate;
     pthread_mutex_unlock(&mutex_workers[wid]);
   } while(!terminate);
+  return NULL;
 }
 
 int LpelPlacementSchedulerGetWorker(int prio, int i)
