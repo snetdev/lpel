@@ -12,7 +12,6 @@
 /*  WITH PRIORITY 1                                                           */
 /******************************************************************************/
 
-
 #define USE_PRIORITY
 #ifdef USE_PRIORITY
 #define TASK_SEGMENTATION

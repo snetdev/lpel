@@ -198,10 +198,9 @@ static void CreateTaskList(workerctx_t **workers,
 static void ResetTaskList()
 {
   int i;
-  /*for(i = 0; i<task_list.length; i++) {
-    task_list.list[i].t->new_worker = task_list.list[i].t->current_worker;
+  for(i = 0; i<task_list.length; i++) {
     task_list.list[i].t = NULL;
-  }*/
+  }
   task_list.length = 0;
 }
 
