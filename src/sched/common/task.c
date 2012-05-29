@@ -19,6 +19,8 @@
 #include "stream.h"
 #include "lpel/monitor.h"
 
+static void FinishOffCurrentTask(lpel_task_t *ct);
+
 /**
  * Get Task Id
  *		usually used for debugging
@@ -77,13 +79,6 @@ lpel_task_t *LpelTaskSelf(void)
   return t;
 }
 
-/**
- * Get the current task, or NULL if not called in a task context.
- */
-lpel_task_t *LpelTaskSelfOrNull(void)
-{
-  return LpelWorkerCurrentTask();
-}
 
 /** user data */
 void  LpelSetUserData(lpel_task_t *t, void *data)
@@ -112,11 +107,7 @@ void LpelTaskExit(void *outarg)
 
   ct->outarg = outarg;
 
-  /* context switch happens, this task is cleaned up then */
-  ct->state = TASK_ZOMBIE;
-  LpelWorkerSelfTaskExit(ct);
-  TaskStop( ct);
-  LpelWorkerDispatcher( ct);
+  FinishOffCurrentTask(ct);
   /* execution never comes back here */
   assert(0);
 }
@@ -189,3 +180,17 @@ void TaskStop( lpel_task_t *t)
 
 }
 
+static void FinishOffCurrentTask(lpel_task_t *ct)
+{
+  /* call the destructor for the Task Local Data */
+  if (ct->usrdt_destr && ct->usrdata) {
+    ct->usrdt_destr (ct, ct->usrdata);
+  }
+
+  /* context switch happens, this task is cleaned up then */
+  ct->state = TASK_ZOMBIE;
+  LpelWorkerSelfTaskExit(ct);
+  LpelTaskBlock( ct );
+  /* execution never comes back here */
+  assert(0);
+}

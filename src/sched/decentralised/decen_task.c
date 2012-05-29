@@ -64,6 +64,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 
 	t->mon = NULL;
 	t->usrdata = NULL;
+	t->usrdt_destr = NULL;
 
 	/* function, argument (data), stack base address, stacksize */
 	mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
@@ -235,6 +236,18 @@ void LpelTaskCheckMigrate(void) {
 		  LpelWorkerSelfTaskMigrate(t, target);
 		  TaskStart(t);
 	}
+}
+
+void LpelSetUserDataDestructor(lpel_task_t *t, lpel_usrdata_destructor_t destr)
+{
+  assert(t);
+  t->usrdt_destr = destr;
+}
+
+lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t)
+{
+  assert(t);
+  return t->usrdt_destr;
 }
 
 

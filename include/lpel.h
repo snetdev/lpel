@@ -201,15 +201,26 @@ void LpelTaskCheckMigrate(void);
  * when called outside a task context, return NULL */
 lpel_task_t *LpelTaskSelfOrNull(void);
 
-/** user task-specific data */
+/**
+ * Task Local Data
+ */
 void  LpelSetUserData(lpel_task_t *t, void *data);
 void *LpelGetUserData(lpel_task_t *t);
+
+/**
+ * Destructor for Task Local Data
+ */
+typedef void (*lpel_usrdata_destructor_t) (lpel_task_t *t, void *data);
+
+void LpelSetUserDataDestructor(lpel_task_t *t, lpel_usrdata_destructor_t destr);
+lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t);
+
 
 /** enter SPMD request */
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
 /** return the current worker index of the given task */
-int LpelTaskCurrentWorkerId(lpel_task_t *t);
+int LpelTaskGetWorkerId(lpel_task_t *t);
 
 /** return the total number of workers */
 int LpelWorkerCount(void);
@@ -287,9 +298,5 @@ void LpelBiSemaWait(lpel_bisema_t *sem);
 
 /** Signal the semaphore, possibly releasing a waiting task. */
 void LpelBiSemaSignal(lpel_bisema_t *sem);
-
-/** Return the number of currently waiting tasks on the semaphore */
-int LpelBiSemaCountWaiting(lpel_bisema_t *sem);
-
 
 #endif /* _LPEL_H_ */
