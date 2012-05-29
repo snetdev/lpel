@@ -56,6 +56,8 @@ struct lpel_task_t {
   
   /* user data */
   void *usrdata;
+  /* destructor for user data */
+  lpel_usrdata_destructor_t usrdt_destr;
 };
 
 
