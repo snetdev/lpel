@@ -217,7 +217,11 @@ workerctx_t *LpelWorkerSelf(void)
 
 lpel_task_t *LpelWorkerCurrentTask(void)
 {
-  return GetCurrentWorker()->current_task;
+  workerctx_t *w = GetCurrentWorker();
+  /* It is quite a common bug to call LpelWorkerCurrentTask() from a non-task context.
+   * Provide an assertion error instead of just segfaulting on a null dereference. */
+  assert(w && "Currently not in an LPEL worker context!");
+  return w->current_task; 
 }
 
 
@@ -678,3 +682,8 @@ static void *WorkerThread( void *arg)
   return NULL;
 }
 
+/** return the total number of workers */
+int LpelWorkerCount(void)
+{
+  return num_workers;
+}

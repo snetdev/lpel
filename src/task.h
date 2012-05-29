@@ -53,6 +53,11 @@ struct lpel_task_t {
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
   void *outarg;         /** output argument  */
+  
+  /* user data */
+  void *usrdata;
+  /* destructor for user data */
+  lpel_usrdata_destructor_t usrdt_destr;
 };
 
 
