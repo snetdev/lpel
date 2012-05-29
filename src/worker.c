@@ -130,7 +130,7 @@ void LpelWorkerInit(lpel_config_t *config)
   pthread_key_create(&workerctx_key, NULL);
 #endif /* HAVE___THREAD */
 
-#ifdef measurements
+#ifdef MEASUREMENTS
   pthread_mutex_create(&measure_mutex, NULL);
   max_time = 0;
   min_time = 0;
@@ -538,7 +538,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       t = msg->body.task;
       assert(t->state != TASK_READY);
 #ifdef WAITING
-      gettimeofday(&t->last_measurement_start, NULL);
+      LpelTimingStart(&t->last_measurement_start);
 #endif
       t->state = TASK_READY;
 
@@ -562,7 +562,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 
       assert(t->state == TASK_CREATED);
 #ifdef WAITING
-      gettimeofday(&t->last_measurement_start, NULL);
+      LpelTimingStart(&t->last_measurement_start);
 #endif
       t->state = TASK_READY;
 
