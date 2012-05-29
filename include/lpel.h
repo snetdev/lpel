@@ -222,7 +222,7 @@ int LpelTaskMigrationWorkerId();
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
 /* Task iterator creation function */
-lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue, int length);
+void LpelTaskIterReset(taskqueue_t *queue, int length);
 
 /******************************************************************************/
 /*  PLACEMENT SCHEDULER FUNCTIONS                                             */
@@ -295,8 +295,25 @@ int  LpelStreamIterHasNext( lpel_stream_iter_t *iter);
 lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter);
 void LpelStreamIterAppend(  lpel_stream_iter_t *iter, lpel_stream_desc_t *node);
 void LpelStreamIterRemove(  lpel_stream_iter_t *iter);
+#include <stdio.h>
+#include <stddef.h>
+#include <stdlib.h>
 
+void* dlmalloc(size_t sz);
+void dlfree(void*ptr);
 
+        //fprintf(stderr, "%s:%d: valloc(%zd): %p\n", __FILE__, __LINE__, (size_t)(X), __x);
+#define valloc(X) ({ \
+        void *__x = dlmalloc(X); \
+        __x; }) 
 
+        //fprintf(stderr, "%s:%d: malloc(%zd): %p\n", __FILE__, __LINE__, (size_t)(X), __x);
+#define malloc(X) ({ \
+        void *__x = dlmalloc((X) + 1024); \
+        __x; })
+
+        //fprintf(stderr, "%s:%d: free: %p\n", __FILE__, __LINE__, (void*)(X));
+#define free(X) ({ \
+    dlfree(X); })
 
 #endif /* _LPEL_H_ */

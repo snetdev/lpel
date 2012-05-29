@@ -69,9 +69,9 @@ lpel_task_t *LpelSchedFetchReady( schedctx_t *sc)
   return t;
 }
 
-lpel_task_iterator_t * LpelSchedTaskIter( schedctx_t *sc)
+void LpelSchedTaskIter( schedctx_t *sc)
 {
-  return LpelTaskIterCreate( sc->queue, SCHED_NUM_PRIO);
+  return LpelTaskIterReset( sc->queue, SCHED_NUM_PRIO);
 }
 
 void LpelSchedLockQueue( schedctx_t *sc)
