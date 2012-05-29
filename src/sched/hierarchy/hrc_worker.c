@@ -643,11 +643,11 @@ workerctx_t *LpelWorkerSelf(void){
 
 lpel_task_t *LpelWorkerCurrentTask(void)
 {
-	workerctx_t *w = LpelWorkerSelf();
-	if (!w)
-		return NULL;
-	else
-		return w->current_task;
+	 workerctx_t *w = GetCurrentWorker();
+	  /* It is quite a common bug to call LpelWorkerCurrentTask() from a non-task context.
+	   * Provide an assertion error instead of just segfaulting on a null dereference. */
+	  assert(w && "Currently not in an LPEL worker context!");
+	  return w->current_task;
 }
 
 
