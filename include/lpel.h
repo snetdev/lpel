@@ -218,6 +218,21 @@ int LpelTaskWorkerId();
 /** return the worker id to which worker it should migrate */
 int LpelTaskMigrationWorkerId();
 
+/**
+ * Task Local Data
+ */
+void  LpelSetUserData(lpel_task_t *t, void *data);
+void *LpelGetUserData(lpel_task_t *t);
+
+/**
+ * Destructor for Task Local Data
+ */
+typedef void (*lpel_usrdata_destructor_t) (lpel_task_t *t, void *data);
+
+void LpelSetUserDataDestructor(lpel_task_t *t, lpel_usrdata_destructor_t destr);
+lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t);
+
+
 /** enter SPMD request */
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
@@ -248,6 +263,12 @@ int LpelPlacementSchedulerGetIndexWorker(int prio, int worker);
 /******************************************************************************/
 void LpelWorkerAddTask();
 #endif
+/** return the current worker index of the given task */
+int LpelTaskGetWorkerId(lpel_task_t *t);
+
+/** return the total number of workers */
+int LpelWorkerCount(void);
+
 
 /******************************************************************************/
 /*  STREAM FUNCTIONS                                                          */
@@ -295,6 +316,7 @@ int  LpelStreamIterHasNext( lpel_stream_iter_t *iter);
 lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter);
 void LpelStreamIterAppend(  lpel_stream_iter_t *iter, lpel_stream_desc_t *node);
 void LpelStreamIterRemove(  lpel_stream_iter_t *iter);
+
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -315,5 +337,31 @@ void dlfree(void*ptr);
         //fprintf(stderr, "%s:%d: free: %p\n", __FILE__, __LINE__, (void*)(X));
 #define free(X) ({ \
     dlfree(X); })
+
+
+/******************************************************************************/
+/*  SEMAPHORE FUNCTIONS                                                       */
+/******************************************************************************/
+
+/**
+ * Binary Semaphores
+ */
+typedef struct {
+  volatile int counter;
+  unsigned char padding[64-sizeof(int)];
+} lpel_bisema_t;
+
+
+/** Initialize a binary semaphore. It is signalled by default. */
+void LpelBiSemaInit(lpel_bisema_t *sem);
+
+/** Destroy a semaphore */
+void LpelBiSemaDestroy(lpel_bisema_t *sem);
+
+/** Wait on the semaphore */
+void LpelBiSemaWait(lpel_bisema_t *sem);
+
+/** Signal the semaphore, possibly releasing a waiting task. */
+void LpelBiSemaSignal(lpel_bisema_t *sem);
 
 #endif /* _LPEL_H_ */

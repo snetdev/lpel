@@ -29,6 +29,7 @@ liblpel_la_SOURCES = \
 	src/taskqueue.c \
 	src/taskqueue.h \
 	src/timing.c \
+	src/sema.c \
 	src/lpelcfg.c \
 	src/lpelcfg.h \
 	src/lpel_main.c \

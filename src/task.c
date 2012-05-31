@@ -24,6 +24,8 @@ static void TaskStartup( void *arg);
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
 
+static void FinishOffCurrentTask(lpel_task_t *ct);
+
 
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096
@@ -95,6 +97,8 @@ lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
   t->prev = t->next = NULL;
 
   t->mon = NULL;
+  t->usrdata = NULL;
+  t->usrdt_destr = NULL;
 
 #ifdef WAITING
   LpelTimingZero(&t->total_time_ready[0]);
@@ -203,7 +207,6 @@ lpel_task_t *LpelTaskSelf(void)
   return LpelWorkerCurrentTask();
 }
 
-
 /**
  * Exit the current task
  *
@@ -217,12 +220,7 @@ void LpelTaskExit(void *outarg)
 
   ct->outarg = outarg;
 
-  /* context switch happens, this task is cleaned up then */
-  ct->state = TASK_ZOMBIE;
-  LpelWorkerSelfTaskExit(ct);
-  LpelTaskBlock( ct );
-  /* execution never comes back here */
-  assert(0);
+  FinishOffCurrentTask(ct);
 }
 
 
@@ -414,13 +412,23 @@ static void TaskStartup( void *data)
   t->outarg = t->func(t->inarg);
 
   /* if task function returns, exit properly */
-  t->state = TASK_ZOMBIE;
-  LpelWorkerSelfTaskExit(t);
-  LpelTaskBlock( t );
+  FinishOffCurrentTask(t);
+}
+
+static void FinishOffCurrentTask(lpel_task_t *ct)
+{
+  /* call the destructor for the Task Local Data */
+  if (ct->usrdt_destr && ct->usrdata) {
+    ct->usrdt_destr (ct, ct->usrdata);
+  }
+
+  /* context switch happens, this task is cleaned up then */
+  ct->state = TASK_ZOMBIE;
+  LpelWorkerSelfTaskExit(ct);
+  LpelTaskBlock( ct );
   /* execution never comes back here */
   assert(0);
 }
-
 
 static void TaskStart( lpel_task_t *t)
 {
@@ -464,4 +472,32 @@ void LpelTaskBlock( lpel_task_t *t )
   TaskStart( t);
 }
 
+/** user data */
+void  LpelSetUserData(lpel_task_t *t, void *data)
+{
+  assert(t);
+  t->usrdata = data;
+}
 
+void *LpelGetUserData(lpel_task_t *t)
+{
+  assert(t);
+  return t->usrdata;
+}
+
+void LpelSetUserDataDestructor(lpel_task_t *t, lpel_usrdata_destructor_t destr)
+{
+  assert(t);
+  t->usrdt_destr = destr;
+}
+
+lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t)
+{
+  assert(t);
+  return t->usrdt_destr;
+}
+
+int LpelTaskGetWorkerId(lpel_task_t *t)
+{
+  return t->worker_context->wid;
+}
