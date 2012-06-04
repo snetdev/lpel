@@ -131,7 +131,7 @@ void LpelWorkerInit(lpel_config_t *config)
 #endif /* HAVE___THREAD */
 
 #ifdef MEASUREMENTS
-  pthread_mutex_create(&measure_mutex, NULL);
+  pthread_mutex_init(&measure_mutex, NULL);
   max_time = 0;
   min_time = 0;
 #endif
