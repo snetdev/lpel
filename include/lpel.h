@@ -7,20 +7,23 @@
 #ifndef _LPEL_H_
 #define _LPEL_H_
 
+
+
 /******************************************************************************/
 /*  DEFINE THAT TASKS WITH PRIORITY 0 RUN ON DIFFERENT WORKERS AS TASKS       */
 /*  WITH PRIORITY 1                                                           */
 /******************************************************************************/
 
-#define USE_PRIORITY
+//#define USE_PRIORITY
 #ifdef USE_PRIORITY
-#define TASK_SEGMENTATION
+//#define TASK_SEGMENTATION
 #endif
 /******************************************************************************/
 /*  DEFINE THE TYPE OF PLACEMENT SCHEDULER                                    */
 /******************************************************************************/
 
 #define WAITING
+//#define SCHEDULER_CONCURRENT_PLACEMENT
 
 /******************************************************************************/
 /*  DEFINE MEASUREMENTS                                                       */

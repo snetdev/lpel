@@ -475,7 +475,11 @@ void LpelWorkerSelfTaskYield(lpel_task_t *t)
  */
 int LpelWorkerNumber()
 {
+#ifdef SCHEDULER_CONCURRENT_PLACEMENT
   return num_workers-1;
+#else
+  return num_workers;
+#endif
 }
 
 workerctx_t **LpelWorkerGetWorkers()

@@ -323,11 +323,11 @@ static void RandomPlacement(workerctx_t *wc)
 #ifdef TASK_SEGMENTATION
     assert(prio < 2);
     prio = LpelTaskGetPrio(t);
-    t->new_worker = c ? task_types[prio].workers[(rand() %
-                        task_types[prio].n)] : current_worker;
+    t->new_worker = migrate ? task_types[prio].workers[(rand() %
+                              task_types[prio].n)] : t->current_worker;
 #else
-    t->new_worker = c ? task_types[0].workers[(rand() %
-                        task_types[0].n)] : current_worker;
+    t->new_worker = migrate ? task_types[0].workers[(rand() %
+                              task_types[0].n)] : t->current_worker;
 #endif
   }
   LpelSchedUnlockQueue(wc->sched);
@@ -354,6 +354,7 @@ void LpelPlacementSchedulerDestroy()
 void LpelPlacementSchedulerInit(lpel_config_t *config)
 {
   int i;
+  lpel_task_t *t;
   int number_workers = LpelWorkerNumber();
   threshold = (config->threshold > 0) ? config->threshold : 1;
 
@@ -389,7 +390,16 @@ void LpelPlacementSchedulerInit(lpel_config_t *config)
   task_types[1].workers = malloc(num1_workers * sizeof(int));
   task_types[1].n = num1_workers;
 
-  for(i = 0, num0_i = 0, num1_i = 0; i < number_workers; i++) {
+  for(i = 0; i < number_workers; i++) {
+    if(i < num0_workers) {
+      task_types[0].workers[i] = i;
+      LpelWorkerSetTaskType(i, 0);
+    } else {
+      int index = i - num0_workers;
+      task_types[1].workers[index] = i;
+      LpelWorkerSetTaskType(i, 1);
+    }
+    /*
     if(i % number_workers == 0) {
       task_types[1].workers[num1_i] = i;
       LpelWorkerSetTaskType(i, 1);
@@ -398,7 +408,7 @@ void LpelPlacementSchedulerInit(lpel_config_t *config)
       task_types[0].workers[num0_i] = i;
       LpelWorkerSetTaskType(i, 0);
       num0_i++;
-    }
+    }*/
   }
 
   for(i = 2; i<SCHED_NUM_PRIO; i++) {
@@ -417,15 +427,22 @@ void LpelPlacementSchedulerInit(lpel_config_t *config)
     task_types[i].n = 0;
   }
 #endif
-
+#ifdef SCHEDULER_CONCURRENT_PLACEMENT
   if(number_workers >= 2) {
-    lpel_task_t *t = LpelTaskCreate(number_workers,
-                                    0,
-                                    &LpelPlacementSchedulerRun,
-                                    NULL,
-                                    256 * 1024);
-    LpelTaskRun(t);
+    t = LpelTaskCreate(number_workers,
+                       0,
+                      &LpelPlacementSchedulerRun,
+                       NULL,
+                       256 * 1024);
   }
+#else
+  t = LpelTaskCreate(-1,
+                      0,
+                     &LpelPlacementSchedulerRun,
+                      NULL,
+                      256 * 1024);
+#endif
+    LpelTaskRun(t);
 
 }
 
@@ -436,10 +453,8 @@ void * LpelPlacementSchedulerRun(void * args)
   pthread_mutex_t *mutex_workers = LpelWorkerGetMutexes();
   int num_workers = LpelWorkerNumber();
   int terminate;
-  int wid = wc->wid;
   do {
     int tasks;
-    pthread_mutex_lock(&mutex_workers[wid]);
 
     if(wc->terminate) {
       break;
@@ -463,12 +478,9 @@ void * LpelPlacementSchedulerRun(void * args)
       }
     }
 #endif
-    pthread_mutex_unlock(&mutex_workers[wc->wid]);
     usleep(100);
     LpelTaskYield();
-    pthread_mutex_lock(&mutex_workers[wid]);
     terminate = wc->terminate;
-    pthread_mutex_unlock(&mutex_workers[wid]);
   } while(!terminate);
   return NULL;
 }
