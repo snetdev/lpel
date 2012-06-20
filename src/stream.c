@@ -174,12 +174,10 @@ void *LpelStreamGetUsrData(lpel_stream_t *s)
  */
 lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
 {
+  lpel_task_t *ct = NULL;
   lpel_stream_desc_t *sd;
-  lpel_task_t *ct = LpelTaskSelf();
-
   assert( mode == 'r' || mode == 'w' );
-  sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
-  sd->task = ct;
+  sd = malloc( sizeof( lpel_stream_desc_t));
   sd->stream = s;
   sd->mode = mode;
   sd->next  = NULL;
@@ -188,7 +186,7 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   /* create monitoring object, or NULL if stream
    * is not going to be monitored (depends on ct->mon)
    */
-  if (ct->mon && MON_CB(stream_open)) {
+  if (ct && ct->mon && MON_CB(stream_open)) {
     sd->mon = MON_CB(stream_open)( ct->mon, s->uid, mode);
   } else {
     sd->mon = NULL;
@@ -295,8 +293,7 @@ void *LpelStreamPeek( lpel_stream_desc_t *sd)
 void *LpelStreamRead( lpel_stream_desc_t *sd)
 {
   void *item;
-  lpel_task_t *self = LpelTaskSelf();
-  sd->task = self;
+  sd->task = LpelTaskSelf();
 
   assert( sd->mode == 'r');
 
@@ -318,7 +315,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
 #endif
 
     /* wait on stream: */
-    LpelTaskBlockStream( self);
+    LpelTaskBlockStream( sd->task);
   }
 
 
@@ -334,7 +331,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
     /* e_sem was -1 */
     lpel_task_t *prod = sd->stream->prod_sd->task;
     /* wakeup producer: make ready */
-    LpelTaskUnblock( self, prod);
+    LpelTaskUnblock( LpelTaskSelf(), prod);
 
     /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -369,9 +366,8 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
  */
 void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 {
-  lpel_task_t *self = LpelTaskSelf();
-  sd->task = self;
   int poll_wakeup = 0;
+  sd->task = LpelTaskSelf();
 
   /* check if opened for writing */
   assert( sd->mode == 'w' );
@@ -395,7 +391,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 #endif
 
     /* wait on stream: */
-    LpelTaskBlockStream( self);
+    LpelTaskBlockStream( sd->task);
   }
 
   /* writing to the buffer and checking if consumer polls must be atomic */
@@ -421,7 +417,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     /* n_sem was -1 */
     lpel_task_t *cons = sd->stream->cons_sd->task;
     /* wakeup consumer: make ready */
-    LpelTaskUnblock( self, cons);
+    LpelTaskUnblock( LpelTaskSelf(), cons);
 
     /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -435,7 +431,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
       lpel_task_t *cons = sd->stream->cons_sd->task;
       cons->wakeup_sd = sd->stream->cons_sd;
 
-      LpelTaskUnblock( self, cons);
+      LpelTaskUnblock( LpelTaskSelf(), cons);
 
       /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
