@@ -5,7 +5,7 @@
 #include <lpel.h>
 
 #ifdef WAITING
-#include <sys/time.h>
+#include <lpel/timing.h>
 #endif
 
 #include "arch/mctx.h"
@@ -56,7 +56,7 @@ typedef struct workerctx_t {
 
 
 
-void LpelWorkerInit( int size);
+void LpelWorkerInit( lpel_config_t *config);
 void LpelWorkerCleanup( void);
 void LpelWorkerRunTask( lpel_task_t *t);
 

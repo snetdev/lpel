@@ -6,7 +6,7 @@
 #include <pthread.h>
 
 #ifdef WAITING
-#include <sys/time.h>
+#include "lpel/timing.h"
 #endif
 
 #ifdef MEASUREMENTS
@@ -19,6 +19,7 @@
 #include "arch/atomic.h"
 
 #include "scheduler.h"
+
 
 
 /**
@@ -76,7 +77,7 @@ struct lpel_task_t {
    * sort of a sliding window
    * TODO further explanation
    */
-  struct timeval total_time_ready[2];
+  lpel_timing_t total_time_ready[2];
 
   /** total number of times the state switched to ready. the implementation is
    * sort of a sliding window
@@ -85,11 +86,11 @@ struct lpel_task_t {
    */
   int total_ready_num[2];
   /** the time at which the last time measurement started*/
-  struct timeval last_measurement_start;
+  lpel_timing_t last_measurement_start;
   /* The state is either the first sliding window or the second */
   int waiting_state;
   /* The total measured time over a certain period */
-  struct timeval total_time[2];
+  lpel_timing_t total_time[2];
 
   /** Mutex used for reading from and writing to the different variables */
   pthread_mutex_t t_mu;
@@ -98,6 +99,11 @@ struct lpel_task_t {
 #ifdef MEASUREMENTS
   struct timespec start_time;
 #endif
+
+  /* user data */
+  void *usrdata;
+  /* destructor for user data */
+  lpel_usrdata_destructor_t usrdt_destr;
 };
 
 

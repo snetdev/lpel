@@ -116,9 +116,11 @@ static inline workerctx_t *GetCurrentWorker(void)
  *
  * @param size    size of the worker set, i.e., the total number of workers
  */
-void LpelWorkerInit(int size)
+void LpelWorkerInit(lpel_config_t *config)
 {
-  int i, res;
+  int i, res, size;
+
+  size = config->num_workers;
 
   assert(0 <= size);
   num_workers = size;
@@ -128,8 +130,8 @@ void LpelWorkerInit(int size)
   pthread_key_create(&workerctx_key, NULL);
 #endif /* HAVE___THREAD */
 
-#ifdef measurements
-  pthread_mutex_create(&measure_mutex, NULL);
+#ifdef MEASUREMENTS
+  pthread_mutex_init(&measure_mutex, NULL);
   max_time = 0;
   min_time = 0;
 #endif
@@ -179,7 +181,7 @@ void LpelWorkerInit(int size)
   }
 
   /* Initialize placement scheduler */
-  LpelPlacementSchedulerInit();
+  LpelPlacementSchedulerInit(config);
 
   assert(res==0);
 }
@@ -267,7 +269,11 @@ workerctx_t *LpelWorkerSelf(void)
 
 lpel_task_t *LpelWorkerCurrentTask(void)
 {
-  return GetCurrentWorker()->current_task;
+  workerctx_t *w = GetCurrentWorker();
+  /* It is quite a common bug to call LpelWorkerCurrentTask() from a non-task context.
+   * Provide an assertion error instead of just segfaulting on a null dereference. */
+  assert(w && "Currently not in an LPEL worker context!");
+  return w->current_task; 
 }
 
 
@@ -469,7 +475,11 @@ void LpelWorkerSelfTaskYield(lpel_task_t *t)
  */
 int LpelWorkerNumber()
 {
+#ifdef SCHEDULER_CONCURRENT_PLACEMENT
   return num_workers-1;
+#else
+  return num_workers;
+#endif
 }
 
 workerctx_t **LpelWorkerGetWorkers()
@@ -536,7 +546,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       t = msg->body.task;
       assert(t->state != TASK_READY);
 #ifdef WAITING
-      gettimeofday(&t->last_measurement_start, NULL);
+      LpelTimingStart(&t->last_measurement_start);
 #endif
       t->state = TASK_READY;
 
@@ -560,7 +570,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 
       assert(t->state == TASK_CREATED);
 #ifdef WAITING
-      gettimeofday(&t->last_measurement_start, NULL);
+      LpelTimingStart(&t->last_measurement_start);
 #endif
       t->state = TASK_READY;
 
@@ -790,3 +800,8 @@ static void *WorkerThread( void *arg)
   return NULL;
 }
 
+/** return the total number of workers */
+int LpelWorkerCount(void)
+{
+  return num_workers;
+}

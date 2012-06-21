@@ -24,6 +24,8 @@ static void TaskStartup( void *arg);
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
 
+static void FinishOffCurrentTask(lpel_task_t *ct);
+
 
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096
@@ -91,19 +93,19 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->prev = t->next = NULL;
 
   t->mon = NULL;
+  t->usrdata = NULL;
+  t->usrdt_destr = NULL;
 
 #ifdef WAITING
-  t->total_time_ready[0].tv_sec = 0;
-  t->total_time_ready[0].tv_usec = 0;
+  LpelTimingZero(&t->total_time_ready[0]);
+  LpelTimingZero(&t->total_time_ready[1]);
+  LpelTimingZero(&t->last_measurement_start);
+
   t->total_ready_num[0] = 0;
-  t->total_time_ready[1].tv_sec = 0;
-  t->total_time_ready[1].tv_usec = 0;
   t->total_ready_num[1] = 0;
 
-  t->last_measurement_start.tv_sec = 0;
-  t->last_measurement_start.tv_usec = 0;
   t->waiting_state = 0;
-  gettimeofday(&t->total_time[t->waiting_state], NULL);
+  LpelTimingStart(&t->total_time[t->waiting_state]);
   pthread_mutex_init(&t->t_mu, NULL);
 #endif
 
@@ -201,7 +203,6 @@ lpel_task_t *LpelTaskSelf(void)
   return LpelWorkerCurrentTask();
 }
 
-
 /**
  * Exit the current task
  *
@@ -215,12 +216,7 @@ void LpelTaskExit(void *outarg)
 
   ct->outarg = outarg;
 
-  /* context switch happens, this task is cleaned up then */
-  ct->state = TASK_ZOMBIE;
-  LpelWorkerSelfTaskExit(ct);
-  LpelTaskBlock( ct );
-  /* execution never comes back here */
-  assert(0);
+  FinishOffCurrentTask(ct);
 }
 
 
@@ -236,7 +232,7 @@ void LpelTaskYield(void)
 
   ct->state = TASK_READY;
 #ifdef WAITING
-  gettimeofday(&ct->last_measurement_start, NULL);
+  LpelTimingStart(&ct->last_measurement_start);
 #endif
   LpelWorkerSelfTaskYield(ct);
   LpelTaskBlock( ct );
@@ -322,31 +318,26 @@ int LpelTaskMigrationWorkerId()
  */
 void LpelTaskStopTiming( lpel_task_t *t)
 {
-  struct timeval time;
-  struct timeval add_time;
+  lpel_timing_t time_difference;
   pthread_mutex_lock(&t->t_mu);
-  /* take the second measurement */
-  gettimeofday(&time, NULL);
+  /* take the second measurement and calculate the difference*/
+  time_difference = t->last_measurement_start;
+  LpelTimingEnd(&time_difference);
 
-  /* calculate the difference between the first and second measurment */
-  add_time.tv_sec = time.tv_sec - t->last_measurement_start.tv_sec;
-  add_time.tv_usec = time.tv_usec - t->last_measurement_start.tv_usec;
+
 
   /* reset measurement */
-  t->last_measurement_start.tv_sec = 0;
-  t->last_measurement_start.tv_usec = 0;
+  LpelTimingZero(&t->last_measurement_start);
 
   /* add measurement to the total time the task has been ready */
-  t->total_time_ready[t->waiting_state].tv_sec += add_time.tv_sec;
-  t->total_time_ready[t->waiting_state].tv_usec += add_time.tv_usec;
+  LpelTimingAdd(&t->total_time_ready[t->waiting_state], &time_difference);
 
   if(t->total_ready_num[t->waiting_state] >= SLIDING_WINDOW_STEPS / 2) {
-    t->total_time_ready[!t->waiting_state].tv_sec += add_time.tv_sec;
-    t->total_time_ready[!t->waiting_state].tv_usec += add_time.tv_usec;
+    LpelTimingAdd(&t->total_time_ready[!t->waiting_state], &time_difference);
     t->total_ready_num[!t->waiting_state]++;
   } else if(t->total_ready_num[t->waiting_state] ==
             (SLIDING_WINDOW_STEPS / 2) - 1) {
-    gettimeofday(&t->total_time[!t->waiting_state], NULL);
+    LpelTimingStart(&t->total_time[!t->waiting_state]);
   }
 
   /* add 1 to the total number of times the task has been ready */
@@ -354,8 +345,7 @@ void LpelTaskStopTiming( lpel_task_t *t)
 
   if(t->total_ready_num[t->waiting_state] == SLIDING_WINDOW_STEPS) {
     /* reset current state and use the other state for timing */
-    t->total_time_ready[t->waiting_state].tv_sec = 0;
-    t->total_time_ready[t->waiting_state].tv_usec = 0;
+    LpelTimingZero(&t->total_time_ready[t->waiting_state]);
     t->total_ready_num[t->waiting_state] = 0;
     t->waiting_state = !t->waiting_state;
   }
@@ -365,32 +355,28 @@ void LpelTaskStopTiming( lpel_task_t *t)
 
 double LpelTaskGetPercentageReady( lpel_task_t *t)
 {
-  struct timeval time;
-  //long total_task_time_seconds;
-  //long total_task_time_useconds;
-  long ready_time_seconds;
-  long ready_time_useconds;
+  lpel_timing_t total_time;
+  int num = 0;
   double ready_ratio;
   int index = t->waiting_state;
   pthread_mutex_lock(&t->t_mu);
-  gettimeofday(&time, NULL);
-  /*total_task_time_seconds = time.tv_sec -
-                            t->total_time[t->waiting_state].tv_sec;
-  total_task_time_useconds = time.tv_usec -
-                             t->total_time[t->waiting_state].tv_usec;*/
-  ready_time_seconds = t->total_time_ready[index].tv_sec;
-  ready_time_useconds = t->total_time_ready[index].tv_usec;
 
-/*  if(t->last_measurement_start.tv_sec + t->last_measurement_start.tv_usec > 0) {
-    ready_time_seconds += time.tv_sec - t->last_measurement_start.tv_sec;
-    ready_time_useconds += time.tv_usec - t->last_measurement_start.tv_usec;
-  }*/
+  total_time = t->total_time_ready[index];
 
-  ready_ratio =
-      ((double)ready_time_seconds / t->total_ready_num[index]) * 1000000 +
-      ((double)ready_time_useconds / t->total_ready_num[index]);
+  if(LpelTimingToNSec(&t->last_measurement_start) > 0) {
+    lpel_timing_t time_difference;
+    time_difference = t->last_measurement_start;
+    LpelTimingEnd(&time_difference);
+    num++;
+    LpelTimingAdd(&total_time, &time_difference);
+  }
+
+  num += t->total_ready_num[index];
+
+
+  ready_ratio = LpelTimingToNSec(&total_time)/num;
   pthread_mutex_unlock(&t->t_mu);
-  return ready_ratio/1000;
+  return ready_ratio;
 }
 #endif
 
@@ -422,13 +408,23 @@ static void TaskStartup( void *data)
   t->outarg = t->func(t->inarg);
 
   /* if task function returns, exit properly */
-  t->state = TASK_ZOMBIE;
-  LpelWorkerSelfTaskExit(t);
-  LpelTaskBlock( t );
+  FinishOffCurrentTask(t);
+}
+
+static void FinishOffCurrentTask(lpel_task_t *ct)
+{
+  /* call the destructor for the Task Local Data */
+  if (ct->usrdt_destr && ct->usrdata) {
+    ct->usrdt_destr (ct, ct->usrdata);
+  }
+
+  /* context switch happens, this task is cleaned up then */
+  ct->state = TASK_ZOMBIE;
+  LpelWorkerSelfTaskExit(ct);
+  LpelTaskBlock( ct );
   /* execution never comes back here */
   assert(0);
 }
-
 
 static void TaskStart( lpel_task_t *t)
 {
@@ -472,4 +468,32 @@ void LpelTaskBlock( lpel_task_t *t )
   TaskStart( t);
 }
 
+/** user data */
+void  LpelSetUserData(lpel_task_t *t, void *data)
+{
+  assert(t);
+  t->usrdata = data;
+}
 
+void *LpelGetUserData(lpel_task_t *t)
+{
+  assert(t);
+  return t->usrdata;
+}
+
+void LpelSetUserDataDestructor(lpel_task_t *t, lpel_usrdata_destructor_t destr)
+{
+  assert(t);
+  t->usrdt_destr = destr;
+}
+
+lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t)
+{
+  assert(t);
+  return t->usrdt_destr;
+}
+
+int LpelTaskGetWorkerId(lpel_task_t *t)
+{
+  return t->worker_context->wid;
+}

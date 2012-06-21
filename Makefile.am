@@ -29,6 +29,7 @@ liblpel_la_SOURCES = \
 	src/taskqueue.c \
 	src/taskqueue.h \
 	src/timing.c \
+	src/sema.c \
 	src/lpelcfg.c \
 	src/lpelcfg.h \
 	src/lpel_main.c \
@@ -37,6 +38,7 @@ liblpel_la_SOURCES = \
 	src/placementscheduler.h \
 	src/taskiterator.h \
 	src/taskiterator.c \
+	src/malloc.c \
 	src/worker.c \
 	src/worker.h \
 	src/workermsg.h

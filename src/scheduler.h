@@ -19,7 +19,10 @@ void LpelSchedDestroy( schedctx_t *sc);
 
 void LpelSchedMakeReady( schedctx_t* sc, struct lpel_task_t *t);
 struct lpel_task_t *LpelSchedFetchReady( schedctx_t *sc);
-lpel_task_iterator_t * LpelSchedTaskIter( schedctx_t *sc, int order);
+void LpelSchedTaskIter( schedctx_t *sc);
+
+void LpelSchedLockQueue( schedctx_t *sc);
+void LpelSchedUnlockQueue( schedctx_t *sc);
 
 
 

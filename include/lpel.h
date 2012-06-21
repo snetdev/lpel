@@ -7,13 +7,14 @@
 #ifndef _LPEL_H_
 #define _LPEL_H_
 
+
+
 /******************************************************************************/
 /*  DEFINE THAT TASKS WITH PRIORITY 0 RUN ON DIFFERENT WORKERS AS TASKS       */
 /*  WITH PRIORITY 1                                                           */
 /******************************************************************************/
 
-
-#define USE_PRIORITY
+//#define USE_PRIORITY
 #ifdef USE_PRIORITY
 //#define TASK_SEGMENTATION
 #endif
@@ -22,10 +23,12 @@
 /******************************************************************************/
 
 #define WAITING
+//#define SCHEDULER_CONCURRENT_PLACEMENT
 
 /******************************************************************************/
 /*  DEFINE MEASUREMENTS                                                       */
 /******************************************************************************/
+
 
 //#define MEASUREMENTS
 #ifdef MEASUREMENTS
@@ -105,6 +108,9 @@ typedef struct lpel_monitoring_cb_t {
  *   REALTIME - set realtime priority for workers, will succeed only if
  *              there is a 1:1 mapping of workers to procs,
  *              proc_others > 0 and the process has needed privileges.
+ * threshold is a variable used for the placement scheduler
+ * segmentation is a variable used when there is task segementation
+ * segmentation gives the number of workers assigned to tasks with priority 1
  */
 typedef struct {
   int num_workers;
@@ -112,6 +118,10 @@ typedef struct {
   int proc_others;
   int flags;
   struct lpel_monitoring_cb_t mon;
+  float threshold;
+#ifdef TASK_SEGMENTATION
+  int segmentation;
+#endif
 } lpel_config_t;
 
 
@@ -174,9 +184,6 @@ typedef struct lpel_task_iterator    lpel_task_iterator_t;
 
 typedef struct taskqueue             taskqueue_t;
 
-typedef struct lpel_worker_indices   lpel_worker_indices_t;
-
-
 /******************************************************************************/
 /*  SPMD FUNCTIONS                                                            */
 /******************************************************************************/
@@ -214,17 +221,32 @@ int LpelTaskWorkerId();
 /** return the worker id to which worker it should migrate */
 int LpelTaskMigrationWorkerId();
 
+/**
+ * Task Local Data
+ */
+void  LpelSetUserData(lpel_task_t *t, void *data);
+void *LpelGetUserData(lpel_task_t *t);
+
+/**
+ * Destructor for Task Local Data
+ */
+typedef void (*lpel_usrdata_destructor_t) (lpel_task_t *t, void *data);
+
+void LpelSetUserDataDestructor(lpel_task_t *t, lpel_usrdata_destructor_t destr);
+lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t);
+
+
 /** enter SPMD request */
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
 /* Task iterator creation function */
-lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue, int length, int order);
+void LpelTaskIterReset(taskqueue_t *queue, int length);
 
 /******************************************************************************/
 /*  PLACEMENT SCHEDULER FUNCTIONS                                             */
 /******************************************************************************/
 
-void LpelPlacementSchedulerInit();
+void LpelPlacementSchedulerInit(lpel_config_t *config);
 
 void LpelPlacementSchedulerWorkerIndices(int prio, int **workers, int *n);
 
@@ -244,6 +266,12 @@ int LpelPlacementSchedulerGetIndexWorker(int prio, int worker);
 /******************************************************************************/
 void LpelWorkerAddTask();
 #endif
+/** return the current worker index of the given task */
+int LpelTaskGetWorkerId(lpel_task_t *t);
+
+/** return the total number of workers */
+int LpelWorkerCount(void);
+
 
 /******************************************************************************/
 /*  STREAM FUNCTIONS                                                          */
@@ -292,7 +320,51 @@ lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter);
 void LpelStreamIterAppend(  lpel_stream_iter_t *iter, lpel_stream_desc_t *node);
 void LpelStreamIterRemove(  lpel_stream_iter_t *iter);
 
+#include <stdio.h>
+#include <stddef.h>
+#include <stdlib.h>
+
+void* dlmalloc(size_t sz);
+void dlfree(void*ptr);
+
+        //fprintf(stderr, "%s:%d: valloc(%zd): %p\n", __FILE__, __LINE__, (size_t)(X), __x);
+#define valloc(X) ({ \
+        void *__x = dlmalloc(X); \
+        __x; }) 
+
+        //fprintf(stderr, "%s:%d: malloc(%zd): %p\n", __FILE__, __LINE__, (size_t)(X), __x);
+#define malloc(X) ({ \
+        void *__x = dlmalloc((X) + 1024); \
+        __x; })
+
+        //fprintf(stderr, "%s:%d: free: %p\n", __FILE__, __LINE__, (void*)(X));
+#define free(X) ({ \
+    dlfree(X); })
 
 
+/******************************************************************************/
+/*  SEMAPHORE FUNCTIONS                                                       */
+/******************************************************************************/
+
+/**
+ * Binary Semaphores
+ */
+typedef struct {
+  volatile int counter;
+  unsigned char padding[64-sizeof(int)];
+} lpel_bisema_t;
+
+
+/** Initialize a binary semaphore. It is signalled by default. */
+void LpelBiSemaInit(lpel_bisema_t *sem);
+
+/** Destroy a semaphore */
+void LpelBiSemaDestroy(lpel_bisema_t *sem);
+
+/** Wait on the semaphore */
+void LpelBiSemaWait(lpel_bisema_t *sem);
+
+/** Signal the semaphore, possibly releasing a waiting task. */
+void LpelBiSemaSignal(lpel_bisema_t *sem);
 
 #endif /* _LPEL_H_ */
