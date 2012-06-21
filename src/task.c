@@ -45,7 +45,7 @@ static void TaskStop( lpel_task_t *t);
  *
  * TODO reuse task contexts from the worker
  */
-lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
+lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
     void *inarg, int size)
 {
   lpel_task_t *t;
@@ -77,11 +77,7 @@ lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
   t->current_worker = worker;
   t->new_worker = worker;
 
-#ifdef USE_PRIORITY
-  t->sched_info.prio = prio;
-#else
   t->sched_info.prio = 0;
-#endif
 
   t->uid = fetch_and_inc( &taskseq);  /* obtain a unique task id */
   t->func = func;

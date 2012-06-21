@@ -20,10 +20,10 @@
 #endif
 
 
-typedef struct lpel_worker_indices {
+struct lpel_worker_indices {
   int * workers;
   int n;
-} lpel_worker_indices_t;
+};
 
 
 #ifdef WAITING
@@ -407,7 +407,6 @@ void LpelPlacementSchedulerInit()
 
   if(number_workers >= 2) {
     lpel_task_t *t = LpelTaskCreate(number_workers,
-                                    0,
                                     &LpelPlacementSchedulerRun,
                                     NULL,
                                     256 * 1024);

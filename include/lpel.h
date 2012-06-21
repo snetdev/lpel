@@ -188,7 +188,7 @@ int LpelSpmdVId(void);
 /*  TASK FUNCTIONS                                                            */
 /******************************************************************************/
 
-lpel_task_t *LpelTaskCreate( int worker, int prio, lpel_taskfunc_t func,
+lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
     void *inarg, int stacksize );
 
 /** monitor a task */
