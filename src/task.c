@@ -12,9 +12,9 @@
 #include "spmdext.h"
 #include "stream.h"
 #include "lpel/monitor.h"
+#include "placementscheduler.h"
 
 static atomic_t taskseq = ATOMIC_INIT(0);
-
 
 
 /* declaration of startup function */
@@ -28,6 +28,9 @@ static void TaskStop( lpel_task_t *t);
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096
 
+#ifdef WAITING
+#define SLIDING_WINDOW_STEPS 10
+#endif
 
 /**
  * Create a task.
@@ -48,6 +51,12 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   lpel_task_t *t;
   char *stackaddr;
   int offset;
+#ifdef MEASUREMENTS
+  struct timespec start_time;
+  if(worker != -1) {
+    clock_gettime(CLOCK_ID, &start_time);
+  }
+#endif
 
   if (size <= 0) {
     size = LPEL_TASK_SIZE_DEFAULT;
@@ -65,6 +74,8 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 
   /* obtain a usable worker context */
   t->worker_context = LpelWorkerGetContext(worker);
+  t->current_worker = worker;
+  t->new_worker = worker;
 
   t->sched_info.prio = 0;
 
@@ -81,10 +92,29 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 
   t->mon = NULL;
 
+#ifdef WAITING
+  t->total_time_ready[0].tv_sec = 0;
+  t->total_time_ready[0].tv_usec = 0;
+  t->total_ready_num[0] = 0;
+  t->total_time_ready[1].tv_sec = 0;
+  t->total_time_ready[1].tv_usec = 0;
+  t->total_ready_num[1] = 0;
+
+  t->last_measurement_start.tv_sec = 0;
+  t->last_measurement_start.tv_usec = 0;
+  t->waiting_state = 0;
+  gettimeofday(&t->total_time[t->waiting_state], NULL);
+  pthread_mutex_init(&t->t_mu, NULL);
+#endif
+
   /* function, argument (data), stack base address, stacksize */
   mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
 #ifdef USE_MCTX_PCL
   assert(t->mctx != NULL);
+#endif
+
+#ifdef MEASUREMENTS
+  t->start_time = start_time;
 #endif
 
   return t;
@@ -111,6 +141,10 @@ void LpelTaskDestroy( lpel_task_t *t)
 //FIXME
 #ifdef USE_MCTX_PCL
   co_delete(t->mctx);
+#endif
+
+#ifdef WAITING
+  pthread_mutex_destroy(&t->t_mu);
 #endif
 
   /* free the TCB itself*/
@@ -140,6 +174,10 @@ void LpelTaskPrio(lpel_task_t *t, int prio)
   t->sched_info.prio = prio;
 }
 
+int LpelTaskGetPrio(lpel_task_t *t)
+{
+  return t->sched_info.prio;
+}
 
 /**
  * Let the task run on the worker
@@ -197,6 +235,9 @@ void LpelTaskYield(void)
   assert( ct->state == TASK_RUNNING );
 
   ct->state = TASK_READY;
+#ifdef WAITING
+  gettimeofday(&ct->last_measurement_start, NULL);
+#endif
   LpelWorkerSelfTaskYield(ct);
   LpelTaskBlock( ct );
 }
@@ -256,6 +297,102 @@ void LpelTaskEnterSPMD( lpel_spmdfunc_t fun, void *arg)
 
 
 
+/**
+ * return the worker id to which the task is assigned
+ */
+int LpelTaskWorkerId()
+{
+  lpel_task_t *t = LpelTaskSelf();
+  return t->current_worker;
+}
+
+/**
+ * return the worker id to which worker it should migrate
+ */
+int LpelTaskMigrationWorkerId()
+{
+  lpel_task_t *t = LpelTaskSelf();
+  return t->new_worker;
+}
+
+
+#ifdef WAITING
+/**
+ * The task is not ready anymore, stop the timing and update the statistics
+ */
+void LpelTaskStopTiming( lpel_task_t *t)
+{
+  struct timeval time;
+  struct timeval add_time;
+  pthread_mutex_lock(&t->t_mu);
+  /* take the second measurement */
+  gettimeofday(&time, NULL);
+
+  /* calculate the difference between the first and second measurment */
+  add_time.tv_sec = time.tv_sec - t->last_measurement_start.tv_sec;
+  add_time.tv_usec = time.tv_usec - t->last_measurement_start.tv_usec;
+
+  /* reset measurement */
+  t->last_measurement_start.tv_sec = 0;
+  t->last_measurement_start.tv_usec = 0;
+
+  /* add measurement to the total time the task has been ready */
+  t->total_time_ready[t->waiting_state].tv_sec += add_time.tv_sec;
+  t->total_time_ready[t->waiting_state].tv_usec += add_time.tv_usec;
+
+  if(t->total_ready_num[t->waiting_state] >= SLIDING_WINDOW_STEPS / 2) {
+    t->total_time_ready[!t->waiting_state].tv_sec += add_time.tv_sec;
+    t->total_time_ready[!t->waiting_state].tv_usec += add_time.tv_usec;
+    t->total_ready_num[!t->waiting_state]++;
+  } else if(t->total_ready_num[t->waiting_state] ==
+            (SLIDING_WINDOW_STEPS / 2) - 1) {
+    gettimeofday(&t->total_time[!t->waiting_state], NULL);
+  }
+
+  /* add 1 to the total number of times the task has been ready */
+  t->total_ready_num[t->waiting_state]++;
+
+  if(t->total_ready_num[t->waiting_state] == SLIDING_WINDOW_STEPS) {
+    /* reset current state and use the other state for timing */
+    t->total_time_ready[t->waiting_state].tv_sec = 0;
+    t->total_time_ready[t->waiting_state].tv_usec = 0;
+    t->total_ready_num[t->waiting_state] = 0;
+    t->waiting_state = !t->waiting_state;
+  }
+
+  pthread_mutex_unlock(&t->t_mu);
+}
+
+double LpelTaskGetPercentageReady( lpel_task_t *t)
+{
+  struct timeval time;
+  //long total_task_time_seconds;
+  //long total_task_time_useconds;
+  long ready_time_seconds;
+  long ready_time_useconds;
+  double ready_ratio;
+  int index = t->waiting_state;
+  pthread_mutex_lock(&t->t_mu);
+  gettimeofday(&time, NULL);
+  /*total_task_time_seconds = time.tv_sec -
+                            t->total_time[t->waiting_state].tv_sec;
+  total_task_time_useconds = time.tv_usec -
+                             t->total_time[t->waiting_state].tv_usec;*/
+  ready_time_seconds = t->total_time_ready[index].tv_sec;
+  ready_time_useconds = t->total_time_ready[index].tv_usec;
+
+/*  if(t->last_measurement_start.tv_sec + t->last_measurement_start.tv_usec > 0) {
+    ready_time_seconds += time.tv_sec - t->last_measurement_start.tv_sec;
+    ready_time_useconds += time.tv_usec - t->last_measurement_start.tv_usec;
+  }*/
+
+  ready_ratio =
+      ((double)ready_time_seconds / t->total_ready_num[index]) * 1000000 +
+      ((double)ready_time_useconds / t->total_ready_num[index]);
+  pthread_mutex_unlock(&t->t_mu);
+  return ready_ratio/1000;
+}
+#endif
 
 /******************************************************************************/
 /* PRIVATE FUNCTIONS                                                          */
@@ -305,6 +442,9 @@ static void TaskStart( lpel_task_t *t)
 #endif
 
   t->state = TASK_RUNNING;
+#ifdef WAITING
+  LpelTaskStopTiming(t);
+#endif
 }
 
 

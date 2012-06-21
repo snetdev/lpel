@@ -7,7 +7,31 @@
 #ifndef _LPEL_H_
 #define _LPEL_H_
 
+/******************************************************************************/
+/*  DEFINE THAT TASKS WITH PRIORITY 0 RUN ON DIFFERENT WORKERS AS TASKS       */
+/*  WITH PRIORITY 1                                                           */
+/******************************************************************************/
 
+
+#define USE_PRIORITY
+#ifdef USE_PRIORITY
+//#define TASK_SEGMENTATION
+#endif
+/******************************************************************************/
+/*  DEFINE THE TYPE OF PLACEMENT SCHEDULER                                    */
+/******************************************************************************/
+
+#define WAITING
+
+/******************************************************************************/
+/*  DEFINE MEASUREMENTS                                                       */
+/******************************************************************************/
+
+//#define MEASUREMENTS
+#ifdef MEASUREMENTS
+#include <time.h>
+#define CLOCK_ID CLOCK_REALTIME
+#endif
 
 /******************************************************************************/
 /*  RETURN VALUES OF LPEL FUNCTIONS                                           */
@@ -142,10 +166,15 @@ typedef lpel_stream_desc_t          *lpel_streamset_t;
 /** iterator for streamset */
 typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 
-
 /** spmd function */
 typedef void (*lpel_spmdfunc_t)(void *);
 
+/** itarator for tasks */
+typedef struct lpel_task_iterator    lpel_task_iterator_t;
+
+typedef struct taskqueue             taskqueue_t;
+
+typedef struct lpel_worker_indices   lpel_worker_indices_t;
 
 
 /******************************************************************************/
@@ -166,6 +195,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
 
 void LpelTaskPrio(lpel_task_t *t, int prio);
+int LpelTaskGetPrio(lpel_task_t *t);
 
 unsigned int LpelTaskGetID( lpel_task_t *t );
 mon_task_t *LpelTaskGetMon( lpel_task_t *t );
@@ -178,9 +208,42 @@ lpel_task_t *LpelTaskSelf(void);
 void LpelTaskExit(void *outarg);
 void LpelTaskYield(void);
 
+/** return the worker id to which the task is assigned */
+int LpelTaskWorkerId();
+
+/** return the worker id to which worker it should migrate */
+int LpelTaskMigrationWorkerId();
+
 /** enter SPMD request */
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
+/* Task iterator creation function */
+lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue, int length, int order);
+
+/******************************************************************************/
+/*  PLACEMENT SCHEDULER FUNCTIONS                                             */
+/******************************************************************************/
+
+void LpelPlacementSchedulerInit();
+
+void LpelPlacementSchedulerWorkerIndices(int prio, int **workers, int *n);
+
+void * LpelPlacementSchedulerRun(void *args);
+
+void LpelPlacementSchedulerDestroy();
+
+int LpelPlacementSchedulerGetWorker(int prio, int i);
+
+int LpelPlacementSchedulerNumWorkers(int prio);
+
+int LpelPlacementSchedulerGetIndexWorker(int prio, int worker);
+
+#ifdef MEASUREMENTS
+/******************************************************************************/
+/*  WORKER MEASUREMENTS FUNCTIONS                                             */
+/******************************************************************************/
+void LpelWorkerAddTask();
+#endif
 
 /******************************************************************************/
 /*  STREAM FUNCTIONS                                                          */
