@@ -116,14 +116,13 @@ static inline workerctx_t *GetCurrentWorker(void)
  *
  * @param size    size of the worker set, i.e., the total number of workers
  */
-void LpelWorkerInit(lpel_config_t *config)
+void LpelWorkerInit(int size)
 {
-  int i, res, size;
-
-  size = config->num_workers;
+  int i, res;
 
   assert(0 <= size);
   num_workers = size;
+
 
 #ifndef HAVE___THREAD
   /* init key for thread specific data */
@@ -181,7 +180,7 @@ void LpelWorkerInit(lpel_config_t *config)
   }
 
   /* Initialize placement scheduler */
-  LpelPlacementSchedulerInit(config);
+  LpelPlacementSchedulerInit();
 
   assert(res==0);
 }

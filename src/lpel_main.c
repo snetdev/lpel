@@ -201,7 +201,7 @@ int LpelInit(lpel_config_t *cfg)
 
 
   /* initialise workers */
-  LpelWorkerInit( &_lpel_global_config);
+  LpelWorkerInit( _lpel_global_config.num_workers);
 
 
   return 0;

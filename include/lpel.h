@@ -7,30 +7,11 @@
 #ifndef _LPEL_H_
 #define _LPEL_H_
 
-
-
-/******************************************************************************/
-/*  DEFINE THAT TASKS WITH PRIORITY 0 RUN ON DIFFERENT WORKERS AS TASKS       */
-/*  WITH PRIORITY 1                                                           */
-/******************************************************************************/
-
-//#define USE_PRIORITY
-#ifdef USE_PRIORITY
-//#define TASK_SEGMENTATION
-#endif
-/******************************************************************************/
-/*  DEFINE THE TYPE OF PLACEMENT SCHEDULER                                    */
-/******************************************************************************/
-
-#define WAITING
-//#define SCHEDULER_CONCURRENT_PLACEMENT
-
 /******************************************************************************/
 /*  DEFINE MEASUREMENTS                                                       */
 /******************************************************************************/
 
 
-//#define MEASUREMENTS
 #ifdef MEASUREMENTS
 #include <time.h>
 #define CLOCK_ID CLOCK_REALTIME
@@ -109,7 +90,7 @@ typedef struct lpel_monitoring_cb_t {
  *              there is a 1:1 mapping of workers to procs,
  *              proc_others > 0 and the process has needed privileges.
  * threshold is a variable used for the placement scheduler
- * segmentation is a variable used when there is task segementation
+ * segmentation is a variable used when there is task segmentation
  * segmentation gives the number of workers assigned to tasks with priority 1
  */
 typedef struct {
@@ -119,9 +100,7 @@ typedef struct {
   int flags;
   struct lpel_monitoring_cb_t mon;
   float threshold;
-#ifdef TASK_SEGMENTATION
   int segmentation;
-#endif
 } lpel_config_t;
 
 
@@ -202,13 +181,13 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
 
 void LpelTaskPrio(lpel_task_t *t, int prio);
-int LpelTaskGetPrio(lpel_task_t *t);
 
 unsigned int LpelTaskGetID( lpel_task_t *t );
 mon_task_t *LpelTaskGetMon( lpel_task_t *t );
 
 /** let the previously created task run */
 void LpelTaskRun( lpel_task_t *t );
+
 
 /** to be called from within a task: */
 lpel_task_t *LpelTaskSelf(void);
@@ -240,13 +219,13 @@ lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t);
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
 /* Task iterator creation function */
-void LpelTaskIterReset(taskqueue_t *queue, int length);
+lpel_task_iterator_t *LpelTaskIterCreate(taskqueue_t *queue, int length);
 
 /******************************************************************************/
 /*  PLACEMENT SCHEDULER FUNCTIONS                                             */
 /******************************************************************************/
 
-void LpelPlacementSchedulerInit(lpel_config_t *config);
+void LpelPlacementSchedulerInit();
 
 void LpelPlacementSchedulerWorkerIndices(int prio, int **workers, int *n);
 
@@ -319,27 +298,6 @@ int  LpelStreamIterHasNext( lpel_stream_iter_t *iter);
 lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter);
 void LpelStreamIterAppend(  lpel_stream_iter_t *iter, lpel_stream_desc_t *node);
 void LpelStreamIterRemove(  lpel_stream_iter_t *iter);
-
-#include <stdio.h>
-#include <stddef.h>
-#include <stdlib.h>
-
-void* dlmalloc(size_t sz);
-void dlfree(void*ptr);
-
-        //fprintf(stderr, "%s:%d: valloc(%zd): %p\n", __FILE__, __LINE__, (size_t)(X), __x);
-#define valloc(X) ({ \
-        void *__x = dlmalloc(X); \
-        __x; }) 
-
-        //fprintf(stderr, "%s:%d: malloc(%zd): %p\n", __FILE__, __LINE__, (size_t)(X), __x);
-#define malloc(X) ({ \
-        void *__x = dlmalloc((X) + 1024); \
-        __x; })
-
-        //fprintf(stderr, "%s:%d: free: %p\n", __FILE__, __LINE__, (void*)(X));
-#define free(X) ({ \
-    dlfree(X); })
 
 
 /******************************************************************************/
