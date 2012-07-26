@@ -42,7 +42,7 @@ struct lpel_task_t {
    * and caused this task to be woken up
    */
   struct lpel_stream_desc_t *wakeup_sd;
-  atomic_t poll_token;        /** poll token, accessed concurrently */
+  atomic_int poll_token;        /** poll token, accessed concurrently */
 
   /* ACCOUNTING INFORMATION */
   struct mon_task_t *mon;
