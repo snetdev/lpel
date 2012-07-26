@@ -46,7 +46,7 @@ static void PrintEOR(msg_t *msg) {
 }
 
 
-void *Process(void *arg)
+void Process(void *arg)
 {
   int id = *(int *)arg;
   lpel_stream_desc_t *in, *out;
@@ -107,8 +107,6 @@ void *Process(void *arg)
 
   LpelStreamClose( in, 1);
   LpelStreamClose( out, 0);
-
-  return NULL;
 }
 
 
@@ -122,7 +120,7 @@ static void CreateTask(int id)
   // i = id % 2;
   // i = (id < RING_SIZE/2) ? 0 : 1;
 
-  t = LpelTaskCreate( i, Process, &ids[id], STACK_SIZE);
+  t = LpelTaskCreate( i, &Process, &ids[id], STACK_SIZE);
   LpelTaskRun( t );
 }
 

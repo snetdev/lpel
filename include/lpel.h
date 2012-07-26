@@ -122,7 +122,7 @@ int LpelCanSetExclusive( int *result);
 typedef struct lpel_task_t lpel_task_t;
 
 /* task function signature */
-typedef void *(*lpel_taskfunc_t)(void *inarg);
+typedef void (*lpel_taskfunc_t)(void *inarg);
 
 
 /* stream type */
@@ -175,7 +175,8 @@ void LpelTaskRun( lpel_task_t *t );
 
 /** to be called from within a task: */
 lpel_task_t *LpelTaskSelf(void);
-void LpelTaskExit(void *outarg);
+void LpelTaskExit(void);
+void LpelTaskRespawn(lpel_taskfunc_t);
 void LpelTaskYield(void);
 
 /**

@@ -73,6 +73,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->uid = atomic_fetch_add( &taskseq, 1);  /* obtain a unique task id */
   t->func = func;
   t->inarg = inarg;
+  t->terminate = 1;
 
   /* initialize poll token to 0 */
   atomic_init( &t->poll_token, 0);
@@ -173,12 +174,10 @@ lpel_task_t *LpelTaskSelf(void)
  * @param outarg  output argument of the task
  * @pre This call must be made from within a LPEL task!
  */
-void LpelTaskExit(void *outarg)
+void LpelTaskExit(void)
 {
   lpel_task_t *ct = LpelTaskSelf();
   assert( ct->state == TASK_RUNNING );
-
-  ct->outarg = outarg;
 
   FinishOffCurrentTask(ct);
 }
@@ -225,7 +224,12 @@ void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
 }
 
 
-
+void LpelTaskRespawn(lpel_taskfunc_t f)
+{
+  lpel_task_t *t = LpelTaskSelf();
+  if (f) t->func = f;
+  t->terminate = 0;
+}
 
 
 /**
@@ -278,9 +282,19 @@ static void TaskStartup( void *data)
   t = (lpel_task_t *)z;
 #endif
   TaskStart( t);
-
   /* call the task function with inarg as parameter */
-  t->outarg = t->func(t->inarg);
+  t->func(t->inarg);
+
+   while (!t->terminate) {
+     t->state = TASK_ZOMBIE;
+     TaskStop( t);
+     t->state = TASK_READY;
+
+     t->terminate = 1;
+     TaskStart( t);
+     /* call the task function with inarg as parameter */
+     t->func(t->inarg);
+   }
 
   /* if task function returns, exit properly */
   FinishOffCurrentTask(t);

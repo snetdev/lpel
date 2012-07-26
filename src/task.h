@@ -52,7 +52,7 @@ struct lpel_task_t {
   mctx_t mctx;          /** machine context of the task*/
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
-  void *outarg;         /** output argument  */
+  int terminate;
   
   /* user data */
   void *usrdata;
