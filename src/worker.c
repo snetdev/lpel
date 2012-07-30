@@ -38,7 +38,7 @@ static workerctx_t **workers;
 
 
 #ifdef HAVE___THREAD
-static __thread workerctx_t *workerctx_cur;
+static TLSSPEC workerctx_t *workerctx_cur;
 #else /* HAVE___THREAD */
 static pthread_key_t workerctx_key;
 #endif /* HAVE___THREAD */
