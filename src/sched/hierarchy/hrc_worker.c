@@ -38,8 +38,8 @@ static masterctx_t *master;
 static int *waitworkers;	// table of waiting worker
 
 #ifdef HAVE___THREAD
-static __thread workerctx_t *workerctx_cur;
-static __thread masterctx_t *masterctx;
+static TLSSPEC workerctx_t *workerctx_cur;
+static TLSSPEC masterctx_t *masterctx;
 #else /* HAVE___THREAD */
 static pthread_key_t workerctx_key;
 static pthread_key_t masterctx_key;
