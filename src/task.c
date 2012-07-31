@@ -12,9 +12,9 @@
 #include "spmdext.h"
 #include "stream.h"
 #include "lpel/monitor.h"
+#include "placementscheduler.h"
 
 static atomic_int taskseq = ATOMIC_VAR_INIT(0);
-
 
 
 /* declaration of startup function */
@@ -30,6 +30,9 @@ static void FinishOffCurrentTask(lpel_task_t *ct);
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096
 
+#ifdef WAITING
+#define SLIDING_WINDOW_STEPS 10
+#endif
 
 /**
  * Create a task.
@@ -50,6 +53,12 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   lpel_task_t *t;
   char *stackaddr;
   int offset;
+#ifdef MEASUREMENTS
+  struct timespec start_time;
+  if(worker != -1) {
+    clock_gettime(CLOCK_ID, &start_time);
+  }
+#endif
 
   if (size <= 0) {
     size = LPEL_TASK_SIZE_DEFAULT;
@@ -67,6 +76,8 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 
   /* obtain a usable worker context */
   t->worker_context = LpelWorkerGetContext(worker);
+  t->current_worker = worker;
+  t->new_worker = worker;
 
   t->sched_info.prio = 0;
 
@@ -86,10 +97,27 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->usrdata = NULL;
   t->usrdt_destr = NULL;
 
+#ifdef WAITING
+  LpelTimingZero(&t->total_time_ready[0]);
+  LpelTimingZero(&t->total_time_ready[1]);
+  LpelTimingZero(&t->last_measurement_start);
+
+  t->total_ready_num[0] = 0;
+  t->total_ready_num[1] = 0;
+
+  t->waiting_state = 0;
+  LpelTimingStart(&t->total_time[t->waiting_state]);
+  pthread_mutex_init(&t->t_mu, NULL);
+#endif
+
   /* function, argument (data), stack base address, stacksize */
   mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
 #ifdef USE_MCTX_PCL
   assert(t->mctx != NULL);
+#endif
+
+#ifdef MEASUREMENTS
+  t->start_time = start_time;
 #endif
 
   return t;
@@ -116,6 +144,10 @@ void LpelTaskDestroy( lpel_task_t *t)
 //FIXME
 #ifdef USE_MCTX_PCL
   co_delete(t->mctx);
+#endif
+
+#ifdef WAITING
+  pthread_mutex_destroy(&t->t_mu);
 #endif
 
   /* free the TCB itself*/
@@ -145,6 +177,10 @@ void LpelTaskPrio(lpel_task_t *t, int prio)
   t->sched_info.prio = prio;
 }
 
+int LpelTaskGetPrio(lpel_task_t *t)
+{
+  return t->sched_info.prio;
+}
 
 /**
  * Let the task run on the worker
@@ -194,6 +230,9 @@ void LpelTaskYield(void)
   assert( ct->state == TASK_RUNNING );
 
   ct->state = TASK_READY;
+#ifdef WAITING
+  LpelTimingStart(&ct->last_measurement_start);
+#endif
   LpelWorkerSelfTaskYield(ct);
   LpelTaskBlock( ct );
 }
@@ -258,6 +297,92 @@ void LpelTaskEnterSPMD( lpel_spmdfunc_t fun, void *arg)
 
 
 
+/**
+ * return the worker id to which the task is assigned
+ */
+int LpelTaskWorkerId()
+{
+  lpel_task_t *t = LpelTaskSelf();
+  return t->current_worker;
+}
+
+/**
+ * return the worker id to which worker it should migrate
+ */
+int LpelTaskMigrationWorkerId()
+{
+  lpel_task_t *t = LpelTaskSelf();
+  return t->new_worker;
+}
+
+
+#ifdef WAITING
+/**
+ * The task is not ready anymore, stop the timing and update the statistics
+ */
+void LpelTaskStopTiming( lpel_task_t *t)
+{
+  lpel_timing_t time_difference;
+  pthread_mutex_lock(&t->t_mu);
+  /* take the second measurement and calculate the difference*/
+  time_difference = t->last_measurement_start;
+  LpelTimingEnd(&time_difference);
+
+
+
+  /* reset measurement */
+  LpelTimingZero(&t->last_measurement_start);
+
+  /* add measurement to the total time the task has been ready */
+  LpelTimingAdd(&t->total_time_ready[t->waiting_state], &time_difference);
+
+  if(t->total_ready_num[t->waiting_state] >= SLIDING_WINDOW_STEPS / 2) {
+    LpelTimingAdd(&t->total_time_ready[!t->waiting_state], &time_difference);
+    t->total_ready_num[!t->waiting_state]++;
+  } else if(t->total_ready_num[t->waiting_state] ==
+            (SLIDING_WINDOW_STEPS / 2) - 1) {
+    LpelTimingStart(&t->total_time[!t->waiting_state]);
+  }
+
+  /* add 1 to the total number of times the task has been ready */
+  t->total_ready_num[t->waiting_state]++;
+
+  if(t->total_ready_num[t->waiting_state] == SLIDING_WINDOW_STEPS) {
+    /* reset current state and use the other state for timing */
+    LpelTimingZero(&t->total_time_ready[t->waiting_state]);
+    t->total_ready_num[t->waiting_state] = 0;
+    t->waiting_state = !t->waiting_state;
+  }
+
+  pthread_mutex_unlock(&t->t_mu);
+}
+
+double LpelTaskGetPercentageReady( lpel_task_t *t)
+{
+  lpel_timing_t total_time;
+  int num = 0;
+  double ready_ratio;
+  int index = t->waiting_state;
+  pthread_mutex_lock(&t->t_mu);
+
+  total_time = t->total_time_ready[index];
+
+  if(LpelTimingToNSec(&t->last_measurement_start) > 0) {
+    lpel_timing_t time_difference;
+    time_difference = t->last_measurement_start;
+    LpelTimingEnd(&time_difference);
+    num++;
+    LpelTimingAdd(&total_time, &time_difference);
+  }
+
+  num += t->total_ready_num[index];
+
+
+  ready_ratio = LpelTimingToNSec(&total_time)/num;
+  pthread_mutex_unlock(&t->t_mu);
+  return ready_ratio;
+}
+#endif
 
 /******************************************************************************/
 /* PRIVATE FUNCTIONS                                                          */
@@ -327,6 +452,9 @@ static void TaskStart( lpel_task_t *t)
 #endif
 
   t->state = TASK_RUNNING;
+#ifdef WAITING
+  LpelTaskStopTiming(t);
+#endif
 }
 
 
