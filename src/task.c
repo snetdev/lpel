@@ -92,7 +92,7 @@ static void TaskResetState( lpel_task_t *t)
 /* Called by TaskCreate */
 static void TaskSetIdentity( lpel_task_t *t, lpel_taskfunc_t func, void *inarg)
 {
-  t->uid = fetch_and_inc( &taskseq);  /* obtain a unique task id */
+  t->uid = atomic_fetch_add( &taskseq, 1);  /* obtain a unique task id */
   t->func = func;
   t->inarg = inarg;
 }
