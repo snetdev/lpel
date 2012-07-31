@@ -21,7 +21,10 @@ static atomic_int taskseq = ATOMIC_VAR_INIT(0);
 static void TaskStartup( void *arg);
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
-
+static void TaskPrepareContext( lpel_task_t *t, int size);
+static void TaskResetState( lpel_task_t *t);
+static void TaskSetIdentity( lpel_task_t *t, lpel_taskfunc_t func, void *inarg);
+static void TaskDropContext( lpel_task_t *t);
 
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096
@@ -40,69 +43,94 @@ static void TaskStop( lpel_task_t *t);
  *
  * TODO reuse task contexts from the worker
  */
-lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
-    void *inarg, int size)
+lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func, 
+                             void *inarg, int size)
 {
-  lpel_task_t *t;
-  char *stackaddr;
-  int offset;
-
   workerctx_t *wc = LpelWorkerGetContext(worker);
-  t = LpelTaskqueuePopFront(&wc->free_tasks);
+
+  lpel_task_t *t = LpelTaskqueuePopFront(&wc->free_tasks);
+
   if (t == NULL) {
-    if (size <= 0) {
-      size = LPEL_TASK_SIZE_DEFAULT;
-    }
-    assert( size >= TASK_MINSIZE );
+      t = malloc(sizeof(lpel_task_t));
 
-    /* aligned to page boundary */
-    t = valloc( size );
+      t->worker_context = wc;
 
-    /* calc stackaddr */
-    offset = (sizeof(lpel_task_t) + TASK_STACK_ALIGN-1) & ~(TASK_STACK_ALIGN-1);
-    stackaddr = (char *) t + offset;
-    t->size = size;
-
-
-    /* obtain a usable worker context */
-    t->worker_context = wc;
-
-    /* function, argument (data), stack base address, stacksize */
-    mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
-#ifdef USE_MCTX_PCL
-    assert(t->mctx != NULL);
-#endif
+      /* initialize poll token to 0 */
+      atomic_init( &t->poll_token, 0);
+  }
+  else {
+      assert( t->stack == NULL);
+      assert( t->state == TASK_ZOMBIE);
   }
 
-  t->sched_info.prio = 0;
+  TaskResetState( t);
 
-  t->uid = atomic_fetch_add( &taskseq, 1);  /* obtain a unique task id */
-  t->func = func;
-  t->inarg = inarg;
-  t->terminate = 1;
+  TaskSetIdentity( t, func, inarg);
 
-  /* initialize poll token to 0 */
-  atomic_init( &t->poll_token, 0);
-
-  t->state = TASK_CREATED;
-
-  t->prev = t->next = NULL;
-
-  t->mon = NULL;
-  t->usrdata = NULL;
-  t->usrdt_destr = NULL;
+  TaskPrepareContext( t, size);
 
   return t;
 }
 
+/* Called by TaskCreate */
+static void TaskResetState( lpel_task_t *t)
+{
+  t->sched_info.prio = 0;
+
+  t->state = TASK_CREATED;
+
+  t->terminate = 1;
+
+  t->prev = t->next = NULL;
+
+  t->mon = NULL;
+
+  t->usrdata = NULL;
+  t->usrdt_destr = NULL;
+}
+
+/* Called by TaskCreate */
+static void TaskSetIdentity( lpel_task_t *t, lpel_taskfunc_t func, void *inarg)
+{
+  t->uid = fetch_and_inc( &taskseq);  /* obtain a unique task id */
+  t->func = func;
+  t->inarg = inarg;
+}
+
+/* Called by TaskCreate */
+static void TaskPrepareContext( lpel_task_t *t, int size)
+{
+    if (size <= 0) {
+        size = LPEL_TASK_SIZE_DEFAULT;
+    }
+    if (size <= TASK_MINSIZE) {
+        size = TASK_MINSIZE;
+    }
+    
+    /* aligned to page boundary */
+    t->stack = valloc( size );
+
+    assert(t->stack != NULL);
+
+    /* function, argument (data), stack base address, stacksize */
+    mctx_create( &t->mctx, TaskStartup, (void*)t, t->stack, size);
+
+#ifdef USE_MCTX_PCL
+    assert(t->mctx != NULL);
+#endif
+}
 
 /**
- * Destroy a task
+ * Destroy a task:
  * - completely free the memory for that task
  */
 void LpelTaskDestroy( lpel_task_t *t)
 {
+  // the task must have exited already.
   assert( t->state == TASK_ZOMBIE);
+
+  // the context must have been dropped already.
+  assert( t->stack == NULL);
 
 #ifdef USE_TASK_EVENT_LOGGING
   /* if task had a monitoring object, destroy it */
@@ -111,14 +139,10 @@ void LpelTaskDestroy( lpel_task_t *t)
   }
 #endif
 
+  // Unwind the remaining allocation steps from TaskCreate.
+  mctx_destroy( &t->mctx);
+
   atomic_destroy( &t->poll_token);
-
-//FIXME
-#ifdef USE_MCTX_PCL
-  co_delete(t->mctx);
-#endif
-
-  /* free the TCB itself*/
   free(t);
 }
 
@@ -187,6 +211,8 @@ void LpelTaskExit(void)
     t->usrdt_destr (t, t->usrdata);
   }
 
+  TaskDropContext( t); 
+    
   LpelTaskqueuePushFront(&wc->free_tasks, t);
   wc->num_tasks--;
   /* wrappers can terminate if their task terminates */
@@ -197,6 +223,16 @@ void LpelTaskExit(void)
   LpelWorkerDispatcher( t);
 }
 
+static void TaskDropContext(lpel_task_t *t)
+{
+    assert( t->stack != NULL);
+    
+    free(t->stack);
+
+    t->stack = NULL;
+
+    // The mctx is only destroyed upon deallocation.
+}
 
 /**
  * Yield execution back to scheduler voluntarily
@@ -239,6 +275,11 @@ void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
 }
 
 
+/** 
+ * Prepare for respawning the current task,
+ * possibly with a different function
+ * (continuation)
+ */
 void LpelTaskRespawn(lpel_taskfunc_t f)
 {
   lpel_task_t *t = LpelTaskSelf();
@@ -336,6 +377,7 @@ static void TaskStop( lpel_task_t *t)
 #endif
 
 }
+
 void LpelTaskBlock( lpel_task_t *t )
 {
   assert( t->state != TASK_RUNNING);

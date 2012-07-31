@@ -48,8 +48,8 @@ struct lpel_task_t {
   struct mon_task_t *mon;
 
   /* CODE */
-  int size;             /** complete size of the task, incl stack */
   mctx_t mctx;          /** machine context of the task*/
+  void *stack;          /** allocated stack */
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
   int terminate;

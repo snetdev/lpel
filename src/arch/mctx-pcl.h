@@ -14,6 +14,15 @@ static inline int mctx_create(mctx_t *mctx, void *func, void *arg, char *sk_addr
   return (*mctx != NULL);
 }
 
+static inline void mctx_destroy(mctx_t *mctx)
+{
+    assert(*mctx != NULL);
+
+    co_delete(*mctx);
+
+    *mctx = NULL;
+}
+
 static inline void mctx_switch(mctx_t *octx, mctx_t *nctx)
 {
   (void) co_call(*nctx);
