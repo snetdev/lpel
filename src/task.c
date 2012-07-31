@@ -18,13 +18,9 @@ static atomic_int taskseq = ATOMIC_VAR_INIT(0);
 
 
 /* declaration of startup function */
-//static void TaskStartup( unsigned int y, unsigned int x);
 static void TaskStartup( void *arg);
-
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
-
-static void FinishOffCurrentTask(lpel_task_t *ct);
 
 
 #define TASK_STACK_ALIGN  256
@@ -51,22 +47,32 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   char *stackaddr;
   int offset;
 
-  if (size <= 0) {
-    size = LPEL_TASK_SIZE_DEFAULT;
+  workerctx_t *wc = LpelWorkerGetContext(worker);
+  t = LpelTaskqueuePopFront(&wc->free_tasks);
+  if (t == NULL) {
+    if (size <= 0) {
+      size = LPEL_TASK_SIZE_DEFAULT;
+    }
+    assert( size >= TASK_MINSIZE );
+
+    /* aligned to page boundary */
+    t = valloc( size );
+
+    /* calc stackaddr */
+    offset = (sizeof(lpel_task_t) + TASK_STACK_ALIGN-1) & ~(TASK_STACK_ALIGN-1);
+    stackaddr = (char *) t + offset;
+    t->size = size;
+
+
+    /* obtain a usable worker context */
+    t->worker_context = wc;
+
+    /* function, argument (data), stack base address, stacksize */
+    mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
+#ifdef USE_MCTX_PCL
+    assert(t->mctx != NULL);
+#endif
   }
-  assert( size >= TASK_MINSIZE );
-
-  /* aligned to page boundary */
-  t = valloc( size );
-
-  /* calc stackaddr */
-  offset = (sizeof(lpel_task_t) + TASK_STACK_ALIGN-1) & ~(TASK_STACK_ALIGN-1);
-  stackaddr = (char *) t + offset;
-  t->size = size;
-
-
-  /* obtain a usable worker context */
-  t->worker_context = LpelWorkerGetContext(worker);
 
   t->sched_info.prio = 0;
 
@@ -85,12 +91,6 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->mon = NULL;
   t->usrdata = NULL;
   t->usrdt_destr = NULL;
-
-  /* function, argument (data), stack base address, stacksize */
-  mctx_create( &t->mctx, TaskStartup, (void*)t, stackaddr, t->size - offset);
-#ifdef USE_MCTX_PCL
-  assert(t->mctx != NULL);
-#endif
 
   return t;
 }
@@ -176,10 +176,25 @@ lpel_task_t *LpelTaskSelf(void)
  */
 void LpelTaskExit(void)
 {
-  lpel_task_t *ct = LpelTaskSelf();
-  assert( ct->state == TASK_RUNNING );
+  lpel_task_t *t = LpelTaskSelf();
+  workerctx_t *wc = t->worker_context;
 
-  FinishOffCurrentTask(ct);
+  assert( t->state == TASK_RUNNING );
+  t->state = TASK_ZOMBIE;
+  TaskStop( t);
+
+  if (t->usrdt_destr && t->usrdata) {
+    t->usrdt_destr (t, t->usrdata);
+  }
+
+  LpelTaskqueuePushFront(&wc->free_tasks, t);
+  wc->num_tasks--;
+  /* wrappers can terminate if their task terminates */
+  if (wc->wid < 0) {
+    wc->terminate = 1;
+  }
+
+  LpelWorkerDispatcher( t);
 }
 
 
@@ -271,48 +286,27 @@ void LpelTaskEnterSPMD( lpel_spmdfunc_t fun, void *arg)
  */
 static void TaskStartup( void *data)
 {
-  lpel_task_t *t = (lpel_task_t *)data;
+  lpel_task_t *t = data;
 
-#if 0
-  unsigned long z;
+  for (;;) {
+    TaskStart( t);
+    /* call the task function with inarg as parameter */
+    t->func(t->inarg);
 
-  z = x<<16;
-  z <<= 16;
-  z |= y;
-  t = (lpel_task_t *)z;
-#endif
-  TaskStart( t);
-  /* call the task function with inarg as parameter */
-  t->func(t->inarg);
+    while (!t->terminate) {
+      t->state = TASK_ZOMBIE;
+      TaskStop( t);
+      t->state = TASK_READY;
 
-   while (!t->terminate) {
-     t->state = TASK_ZOMBIE;
-     TaskStop( t);
-     t->state = TASK_READY;
+      t->terminate = 1;
+      TaskStart( t);
+      /* call the task function with inarg as parameter */
+      t->func(t->inarg);
+    }
 
-     t->terminate = 1;
-     TaskStart( t);
-     /* call the task function with inarg as parameter */
-     t->func(t->inarg);
-   }
-
-  /* if task function returns, exit properly */
-  FinishOffCurrentTask(t);
-}
-
-static void FinishOffCurrentTask(lpel_task_t *ct)
-{
-  /* call the destructor for the Task Local Data */
-  if (ct->usrdt_destr && ct->usrdata) {
-    ct->usrdt_destr (ct, ct->usrdata);
+    /* if task function returns, exit properly */
+    LpelTaskExit();
   }
-
-  /* context switch happens, this task is cleaned up then */
-  ct->state = TASK_ZOMBIE;
-  LpelWorkerSelfTaskExit(ct);
-  LpelTaskBlock( ct );
-  /* execution never comes back here */
-  assert(0);
 }
 
 static void TaskStart( lpel_task_t *t)
@@ -332,7 +326,6 @@ static void TaskStart( lpel_task_t *t)
 
 static void TaskStop( lpel_task_t *t)
 {
-  //workerctx_t *wc = t->worker_context;
   assert( t->state != TASK_RUNNING);
 
   /* MONITORING CALLBACK */
@@ -343,8 +336,6 @@ static void TaskStop( lpel_task_t *t)
 #endif
 
 }
-
-
 void LpelTaskBlock( lpel_task_t *t )
 {
   assert( t->state != TASK_RUNNING);

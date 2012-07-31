@@ -49,7 +49,6 @@ static void *WorkerThread( void *arg);
 
 
 static void FetchAllMessages( workerctx_t *wc);
-static void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t);
 
 
 
@@ -123,14 +122,9 @@ void LpelWorkerInit(int size)
 
   /* allocate worker context table */
   workers = (workerctx_t **) malloc( num_workers * sizeof(workerctx_t*) );
-  /* allocate worker contexts */
-  for (i=0; i<num_workers; i++) {
-    workers[i] = (workerctx_t *) malloc( sizeof(workerctx_t) );
-  }
-
-  /* prepare data structures */
+  /* allocate worker contexts and prepare data structures */
   for( i=0; i<num_workers; i++) {
-    workerctx_t *wc = WORKER_PTR(i);
+    workerctx_t *wc = workers[i] = malloc(sizeof(workerctx_t));
     wc->wid = i;
     wc->num_tasks = 0;
     wc->terminate = 0;
@@ -153,7 +147,7 @@ void LpelWorkerInit(int size)
     wc->mailbox = LpelMailboxCreate();
 
     /* taskqueue of free tasks */
-    //LpelTaskqueueInit( &wc->free_tasks);
+    LpelTaskqueueInit( &wc->free_tasks);
   }
 
   assert(res==0);
@@ -381,7 +375,7 @@ workerctx_t *LpelWorkerGetContext(int id) {
     /* mailbox */
     wc->mailbox = LpelMailboxCreate();
     /* taskqueue of free tasks */
-    //LpelTaskqueueInit( &wc->free_tasks);
+    LpelTaskqueueInit( &wc->free_tasks);
     (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
     (void) pthread_detach( wc->thread);
   }
@@ -390,19 +384,6 @@ workerctx_t *LpelWorkerGetContext(int id) {
   return wc;
 }
 
-
-
-void LpelWorkerSelfTaskExit(lpel_task_t *t)
-{
-  workerctx_t *wc = t->worker_context;
-
-  CleanupTaskContext(wc,t);
-  wc->num_tasks--;
-  /* wrappers can terminate if their task terminates */
-  if (wc->wid < 0) {
-    wc->terminate = 1;
-  }
-}
 
 
 void LpelWorkerSelfTaskYield(lpel_task_t *t)
@@ -422,26 +403,6 @@ void LpelWorkerSelfTaskYield(lpel_task_t *t)
 /******************************************************************************/
 /*  PRIVATE FUNCTIONS                                                         */
 /******************************************************************************/
-
-/**
- * Deferred deletion of a task
- */
-static void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t)
-{
-  /* delete task marked before */
-  if (wc->marked_del != NULL) {
-    //LpelMonDebug( wc->mon, "Destroy task %d\n", wc->marked_del->uid);
-    LpelTaskDestroy( wc->marked_del);
-    wc->marked_del = NULL;
-  }
-  /* place a new task (if any) */
-  if (t != NULL) {
-    wc->marked_del = t;
-  }
-}
-
-
-
 
 static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 {
@@ -573,9 +534,6 @@ static void WorkerLoop( workerctx_t *wc)
       mctx_switch(&wc->mctx, &t->mctx);
 
       WORKER_DBGMSG(wc, "Back on worker %d context.\n", wc->wid);
-
-      /* cleanup task context marked for deletion */
-      CleanupTaskContext(wc, NULL);
     } else {
       /* no ready tasks */
       WaitForNewMessage( wc);
@@ -607,9 +565,6 @@ static void WrapperLoop( workerctx_t *wc)
     /* fetch (remaining) messages */
     FetchAllMessages( wc);
   } while ( !wc->terminate);
-
-  /* cleanup task context marked for deletion */
-  CleanupTaskContext(wc, NULL);
 }
 
 
@@ -659,12 +614,10 @@ static void *WorkerThread( void *arg)
 #endif
 
   /* destroy all the free tasks */
-  /*
   while( wc->free_tasks.count > 0) {
     lpel_task_t *t = LpelTaskqueuePopFront( &wc->free_tasks);
-    free( t);
+    LpelTaskDestroy(t);
   }
-  */
 
   /* on a wrapper, we also can cleanup more*/
   if (wc->wid < 0) {

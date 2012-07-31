@@ -17,7 +17,7 @@ typedef struct workerctx_t {
   mctx_t        mctx;
   int           terminate;
   unsigned int  num_tasks;
-  //taskqueue_t   free_tasks;
+  taskqueue_t   free_tasks;
   lpel_task_t  *current_task;
   lpel_task_t  *marked_del;
   mon_worker_t *mon;
