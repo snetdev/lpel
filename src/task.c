@@ -140,8 +140,6 @@ void LpelTaskDestroy( lpel_task_t *t)
 #endif
 
   // Unwind the remaining allocation steps from TaskCreate.
-  mctx_destroy( &t->mctx);
-
   atomic_destroy( &t->poll_token);
   free(t);
 }
