@@ -48,7 +48,9 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 {
   workerctx_t *wc = LpelWorkerGetContext(worker);
 
+  pthread_mutex_lock(&wc->free_mtx);
   lpel_task_t *t = LpelTaskqueuePopFront(&wc->free_tasks);
+  pthread_mutex_unlock(&wc->free_mtx);
 
   if (t == NULL) {
       t = malloc(sizeof(lpel_task_t));
@@ -233,7 +235,9 @@ void LpelCollectTask(workerctx_t *wc, lpel_task_t* t)
 
         TaskDropContext(wc->marked_del); 
 
+        pthread_mutex_lock(&wc->free_mtx);
         LpelTaskqueuePushFront(&wc->free_tasks, wc->marked_del);
+        pthread_mutex_unlock(&wc->free_mtx);
 
         wc->marked_del = NULL;
     }

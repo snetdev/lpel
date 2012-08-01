@@ -25,6 +25,8 @@ typedef struct workerctx_t {
   schedctx_t   *sched;
   lpel_task_t  *wraptask;
   char          padding[64];
+
+  pthread_mutex_t free_mtx;
 } workerctx_t;
 
 
