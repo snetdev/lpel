@@ -60,6 +60,7 @@ workerctx_t *LpelWorkerGetContext(int id);
 workerctx_t *LpelWorkerSelf(void);
 lpel_task_t *LpelWorkerCurrentTask(void);
 
+void LpelCollectTask(workerctx_t* wc, lpel_task_t* t);
 void LpelWorkerSelfTaskExit(lpel_task_t *t);
 void LpelWorkerSelfTaskYield(lpel_task_t *t);
 

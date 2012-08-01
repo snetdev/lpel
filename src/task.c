@@ -209,9 +209,11 @@ void LpelTaskExit(void)
     t->usrdt_destr (t, t->usrdata);
   }
 
-  TaskDropContext( t); 
-    
-  LpelTaskqueuePushFront(&wc->free_tasks, t);
+
+  // NB: can't deallocate stack here, because
+  // the task is still executing; so defer deallocation
+  LpelCollectTask(wc, t);
+
   wc->num_tasks--;
   /* wrappers can terminate if their task terminates */
   if (wc->wid < 0) {
@@ -219,6 +221,26 @@ void LpelTaskExit(void)
   }
 
   LpelWorkerDispatcher( t);
+}
+
+/**
+ * Delayed task deallocation.
+ */
+void LpelCollectTask(workerctx_t *wc, lpel_task_t* t)
+{
+    /* delete task marked before */
+    if (wc->marked_del != NULL) {
+
+        TaskDropContext(wc->marked_del); 
+
+        LpelTaskqueuePushFront(&wc->free_tasks, wc->marked_del);
+
+        wc->marked_del = NULL;
+    }
+    /* place a new task (if any) */
+    if (t != NULL) {
+        wc->marked_del = t;
+    }    
 }
 
 static void TaskDropContext(lpel_task_t *t)

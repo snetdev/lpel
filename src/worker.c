@@ -534,6 +534,10 @@ static void WorkerLoop( workerctx_t *wc)
       mctx_switch(&wc->mctx, &t->mctx);
 
       WORKER_DBGMSG(wc, "Back on worker %d context.\n", wc->wid);
+
+      /* check if there are any contexts marked for deletion. */
+      LpelCollectTask(wc, NULL);
+
     } else {
       /* no ready tasks */
       WaitForNewMessage( wc);
