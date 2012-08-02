@@ -64,6 +64,8 @@ struct lpel_task_t {
 
 
 void LpelTaskDestroy( lpel_task_t *t);
+void LpelPushFreeTask(atomic_voidptr *top, lpel_task_t* t);
+lpel_task_t* LpelPopFreeTask(atomic_voidptr *top);
 
 
 void LpelTaskBlock( lpel_task_t *t );

@@ -29,6 +29,34 @@ static void TaskDropContext( lpel_task_t *t);
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096
 
+/**
+ * A quick and dirty (but working) lock-free LIFO for
+ * the task free list.
+ * inspired from:
+ * http://www.research.ibm.com/people/m/michael/RC23089.pdf
+ */
+void LpelPushFreeTask(atomic_voidptr *top, lpel_task_t* t)
+{
+    lpel_task_t *tmp;
+    do {
+        tmp = (lpel_task_t*) atomic_load(top);
+        t->next = tmp;
+    } while (!atomic_test_and_set(top, tmp, t));
+}
+
+lpel_task_t* LpelPopFreeTask(atomic_voidptr *top)
+{
+    lpel_task_t *tmp;
+    lpel_task_t *next;
+    do {
+        tmp = (lpel_task_t*) atomic_load(top);
+        if (tmp == NULL)
+            return tmp;
+        next = tmp->next;
+    } while (!atomic_test_and_set(top, tmp, next));
+    return tmp;
+}
+
 
 /**
  * Create a task.
@@ -48,9 +76,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 {
   workerctx_t *wc = LpelWorkerGetContext(worker);
 
-  pthread_mutex_lock(&wc->free_mtx);
-  lpel_task_t *t = LpelTaskqueuePopFront(&wc->free_tasks);
-  pthread_mutex_unlock(&wc->free_mtx);
+  lpel_task_t *t = LpelPopFreeTask(&wc->free_tasks);
 
   if (t == NULL) {
       t = malloc(sizeof(lpel_task_t));
@@ -235,9 +261,7 @@ void LpelCollectTask(workerctx_t *wc, lpel_task_t* t)
 
         TaskDropContext(wc->marked_del); 
 
-        pthread_mutex_lock(&wc->free_mtx);
-        LpelTaskqueuePushFront(&wc->free_tasks, wc->marked_del);
-        pthread_mutex_unlock(&wc->free_mtx);
+        LpelPushFreeTask(&wc->free_tasks, wc->marked_del);
 
         wc->marked_del = NULL;
     }

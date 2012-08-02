@@ -5,6 +5,7 @@
 #include <lpel.h>
 
 #include "arch/mctx.h"
+#include "arch/atomic.h"
 #include "task.h"
 #include "scheduler.h"
 #include "mailbox.h"
@@ -17,16 +18,13 @@ typedef struct workerctx_t {
   mctx_t        mctx;
   int           terminate;
   unsigned int  num_tasks;
-  taskqueue_t   free_tasks;
   lpel_task_t  *current_task;
   lpel_task_t  *marked_del;
   mon_worker_t *mon;
   mailbox_t    *mailbox;
   schedctx_t   *sched;
   lpel_task_t  *wraptask;
-  char          padding[64];
-
-  pthread_mutex_t free_mtx;
+  atomic_voidptr free_tasks;
 } workerctx_t;
 
 

@@ -132,8 +132,6 @@ void LpelWorkerInit(int size)
     wc->sched = LpelSchedCreate( i);
     wc->wraptask = NULL;
 
-    pthread_mutex_init(&wc->free_mtx, 0);
-
 #ifdef USE_LOGGING
 
     if (MON_CB(worker_create)) {
@@ -148,8 +146,8 @@ void LpelWorkerInit(int size)
     /* mailbox */
     wc->mailbox = LpelMailboxCreate();
 
-    /* taskqueue of free tasks */
-    LpelTaskqueueInit( &wc->free_tasks);
+    /* LIFO of free tasks */
+    atomic_init( &wc->free_tasks, NULL);
   }
 
   assert(res==0);
@@ -376,8 +374,9 @@ workerctx_t *LpelWorkerGetContext(int id) {
     wc->mon = NULL;
     /* mailbox */
     wc->mailbox = LpelMailboxCreate();
-    /* taskqueue of free tasks */
-    LpelTaskqueueInit( &wc->free_tasks);
+    /* LIFO of free tasks */
+    atomic_init( &wc->free_tasks, NULL);
+
     (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
     (void) pthread_detach( wc->thread);
   }
@@ -580,6 +579,7 @@ static void WrapperLoop( workerctx_t *wc)
 static void *WorkerThread( void *arg)
 {
   workerctx_t *wc = (workerctx_t *)arg;
+  lpel_task_t *t;
 
 #ifdef HAVE___THREAD
   workerctx_cur = wc;
@@ -620,12 +620,9 @@ static void *WorkerThread( void *arg)
 #endif
 
   /* destroy all the free tasks */
-  pthread_mutex_lock(&wc->free_mtx);
-  while( wc->free_tasks.count > 0) {
-    lpel_task_t *t = LpelTaskqueuePopFront( &wc->free_tasks);
-    LpelTaskDestroy(t);
+  while( t = LpelPopFreeTask( &wc->free_tasks)) {
+      LpelTaskDestroy(t);
   }
-  pthread_mutex_unlock(&wc->free_mtx);
 
   /* on a wrapper, we also can cleanup more*/
   if (wc->wid < 0) {
