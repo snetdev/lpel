@@ -2,57 +2,33 @@
  * THIS FILE MUST NOT BE INCLUDED DIRECTLY
  */
 
-/**
- * Atomic variables and
- * TODO pointer swap and membars
- *
- */
+#define __do_typedef(T, name) \
+typedef struct { volatile T val; char padding[64-sizeof(T)]; } atomic_##name
 
-typedef int bool;
-
-typedef struct {
-  volatile int counter;
-  unsigned char padding[64-sizeof(int)];
-} atomic_int;
+__do_typedef(int, int);
+__do_typedef(unsigned int, uint);
+__do_typedef(long, long);
+__do_typedef(unsigned long, ulong);
+__do_typedef(long long, llong);
+__do_typedef(unsigned long long, ullong);
+__do_typedef(char*, charptr);
+__do_typedef(void*, voidptr);
+#undef __do_typedef
 
 #define ATOMIC_VAR_INIT(i) { (i) }
 
-/**
- * Initialize atomic variable dynamically
- */
-#define atomic_init(v,i)  atomic_store((v),(i))
+#define atomic_init(v,i)  atomic_store(v, i)
 
-/**
- * Destroy atomic variable
- */
-#define atomic_destroy(v)  /*NOP*/
+#define atomic_destroy(v) ((void)0) /*NOP*/
 
-/**
- * Read atomic variable
- * @param v pointer of type atomic_t
- *
- * Atomically reads the value of @v.
- */
-#define atomic_load(v) ((v)->counter)
+#define atomic_load(v) ((v)->val)
 
+#define atomic_store(v,i) do { (v)->val = (i); } while(0)
 
-/**
- * Set atomic variable
- * @param v pointer of type atomic_t
- * @param i required value
- */
-#define atomic_store(v,i) (((v)->counter) = (i))
+#define atomic_exchange(v, i) __sync_lock_test_and_set(&(v)->val, (i))
 
+#define atomic_test_and_set(v, e, d)  __sync_bool_compare_and_swap(&(v)->val, (e), (d))
 
-static inline int atomic_fetch_add(atomic_int *v, int i)
-{ return __sync_fetch_and_add(&v->counter, i); }
+#define atomic_fetch_add(v, i) __sync_fetch_and_add(&(v)->val, (i))
+#define atomic_fetch_sub(v, i) __sync_fetch_and_sub(&(v)->val, (i))
 
-static inline int atomic_fetch_sub(atomic_int *v, int i)
-{ return __sync_fetch_and_sub(&v->counter, i); }
-
-static inline int atomic_exchange(atomic_int *v, int value)
-{ return __sync_lock_test_and_set(&v->counter, value); }
-
-static inline bool atomic_compare_exchange_strong(atomic_int *v, int *oldval,
-                                                  int newval)
-{ return __sync_bool_compare_and_swap(&v->counter, *oldval, newval); }
