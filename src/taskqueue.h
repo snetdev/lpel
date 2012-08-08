@@ -1,13 +1,14 @@
 #ifndef _TASKQUEUE_H_
 #define _TASKQUEUE_H_
 
+#include <lpel.h>
 #include "task.h"
 
 
-typedef struct {
+struct taskqueue {
   lpel_task_t *head, *tail;
   unsigned int count;
-} taskqueue_t;
+};
 
 void LpelTaskqueueInit( taskqueue_t *tq);
 

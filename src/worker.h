@@ -4,6 +4,10 @@
 #include <pthread.h>
 #include <lpel.h>
 
+#ifdef WAITING
+#include "lpel/timing.h"
+#endif
+
 #include "arch/mctx.h"
 #include "arch/atomic.h"
 #include "task.h"
@@ -25,6 +29,12 @@ typedef struct workerctx_t {
   schedctx_t   *sched;
   lpel_task_t  *wraptask;
   atomic_voidptr free_tasks;
+#ifdef WAITING
+  int           waiting;
+#endif
+#ifdef TASK_SEGMENTATION
+  int           task_type;
+#endif
 } workerctx_t;
 
 
@@ -63,5 +73,13 @@ lpel_task_t *LpelWorkerCurrentTask(void);
 void LpelCollectTask(workerctx_t* wc, lpel_task_t* t);
 void LpelWorkerSelfTaskExit(lpel_task_t *t);
 void LpelWorkerSelfTaskYield(lpel_task_t *t);
+
+int LpelWorkerNumber();
+workerctx_t **LpelWorkerGetWorkers();
+pthread_mutex_t *LpelWorkerGetMutexes();
+
+#ifdef TASK_SEGMENTATION
+void LpelWorkerSetTaskType(int wid, int type);
+#endif
 
 #endif /* _WORKER_H_ */
