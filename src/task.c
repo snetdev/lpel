@@ -22,9 +22,6 @@ static atomic_int taskseq = ATOMIC_VAR_INIT(0);
 static void TaskStartup( void *arg);
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
-static void TaskPrepareContext( lpel_task_t *t, int size);
-static void TaskResetState( lpel_task_t *t);
-static void TaskSetIdentity( lpel_task_t *t, lpel_taskfunc_t func, void *inarg);
 static void TaskDropContext( lpel_task_t *t);
 
 #define TASK_STACK_ALIGN  256
@@ -78,15 +75,7 @@ lpel_task_t* LpelPopFreeTask(atomic_voidptr *top)
 lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
                              void *inarg, int size)
 {
-#ifdef MEASUREMENTS
-  struct timespec start_time;
-  if(worker != -1) {
-    clock_gettime(CLOCK_ID, &start_time);
-  }
-#endif
-
   workerctx_t *wc = LpelWorkerGetContext(worker);
-
   lpel_task_t *t = LpelPopFreeTask(&wc->free_tasks);
 
   if (t == NULL) {
@@ -101,54 +90,26 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
       assert( t->state == TASK_ZOMBIE);
   }
 
-  TaskResetState( t);
-
-  TaskSetIdentity( t, func, inarg);
-
-  TaskPrepareContext( t, size);
-
-  return t;
-}
-
-/* Called by TaskCreate */
-static void TaskResetState( lpel_task_t *t)
-{
   t->sched_info.prio = 0;
-
   t->state = TASK_CREATED;
-
   t->terminate = 1;
-
   t->prev = t->next = NULL;
-
   t->mon = NULL;
 
   t->usrdata = NULL;
   t->usrdt_destr = NULL;
-}
 
-/* Called by TaskCreate */
-static void TaskSetIdentity( lpel_task_t *t, lpel_taskfunc_t func, void *inarg)
-{
   t->uid = atomic_fetch_add( &taskseq, 1);  /* obtain a unique task id */
   t->func = func;
   t->inarg = inarg;
-}
 
-/* Called by TaskCreate */
-static void TaskPrepareContext( lpel_task_t *t, int size)
-{
-    if (size <= 0) {
-        size = LPEL_TASK_SIZE_DEFAULT;
-    }
-    if (size <= TASK_MINSIZE) {
-        size = TASK_MINSIZE;
-    }
+  if (size <= 0) size = LPEL_TASK_SIZE_DEFAULT;
+  else if (size <= TASK_MINSIZE) size = TASK_MINSIZE;
 
-    /* aligned to page boundary */
-    t->stack = valloc( size );
+  /* aligned to page boundary */
+  t->stack = valloc( size );
 
-    assert(t->stack != NULL);
+  assert(t->stack != NULL);
 
 #ifdef WAITING
   LpelTimingZero(&t->total_time_ready[0]);
@@ -167,12 +128,14 @@ static void TaskPrepareContext( lpel_task_t *t, int size)
   if (worker != -1) LpelTimingStart(&t->start_time);
 #endif
 
-    /* function, argument (data), stack base address, stacksize */
-    mctx_create( &t->mctx, TaskStartup, (void*)t, t->stack, size);
+  /* function, argument (data), stack base address, stacksize */
+  mctx_create( &t->mctx, TaskStartup, (void*)t, t->stack, size);
 
 #ifdef USE_MCTX_PCL
-    assert(t->mctx != NULL);
+  assert(t->mctx != NULL);
 #endif
+
+  return t;
 }
 
 /**
