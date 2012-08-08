@@ -367,5 +367,6 @@ lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t)
 
 int LpelTaskGetWorkerId(lpel_task_t *t)
 {
+  assert(t);
   return t->worker_context->wid;
 }
