@@ -2,94 +2,33 @@
  * THIS FILE MUST NOT BE INCLUDED DIRECTLY
  */
 
-/**
- * Atomic variables and
- * TODO pointer swap and membars
- *
- */
+#define __do_typedef(T, name) \
+typedef struct { volatile T val; char padding[64-sizeof(T)]; } atomic_##name
 
+__do_typedef(int, int);
+__do_typedef(unsigned int, uint);
+__do_typedef(long, long);
+__do_typedef(unsigned long, ulong);
+__do_typedef(long long, llong);
+__do_typedef(unsigned long long, ullong);
+__do_typedef(char*, charptr);
+__do_typedef(void*, voidptr);
+#undef __do_typedef
 
-typedef struct {
-  volatile int counter;
-  unsigned char padding[64-sizeof(int)];
-} atomic_t;
+#define ATOMIC_VAR_INIT(i) { (i) }
 
-#define ATOMIC_INIT(i) { (i) }
+#define atomic_init(v,i)  atomic_store(v, i)
 
-/**
- * Initialize atomic variable dynamically
- */
-#define atomic_init(v,i)  atomic_set((v),(i))
+#define atomic_destroy(v) ((void)0) /*NOP*/
 
-/**
- * Destroy atomic variable
- */
-#define atomic_destroy(v)  /*NOP*/
+#define atomic_load(v) ((v)->val)
 
-/**
- * Read atomic variable
- * @param v pointer of type atomic_t
- *
- * Atomically reads the value of @v.
- */
-#define atomic_read(v) ((v)->counter)
+#define atomic_store(v,i) do { (v)->val = (i); } while(0)
 
+#define atomic_exchange(v, i) __sync_lock_test_and_set(&(v)->val, (i))
 
-/**
- * Set atomic variable
- * @param v pointer of type atomic_t
- * @param i required value
- */
-#define atomic_set(v,i) (((v)->counter) = (i))
+#define atomic_test_and_set(v, e, d)  __sync_bool_compare_and_swap(&(v)->val, (e), (d))
 
-
-static inline void atomic_inc( atomic_t *v )
-{
-  (void)__sync_fetch_and_add(&v->counter, 1);
-}
-
-static inline int atomic_dec( atomic_t *v )
-{
-  return ( __sync_sub_and_fetch(&v->counter, 1)==0 ) ? 0 : 1;
-}
-
-static inline int atomic_swap( atomic_t *v, int value )
-{
-  return __sync_lock_test_and_set(&v->counter, value);
-}
-
-static inline int fetch_and_inc( atomic_t *v )
-{
-  return __sync_fetch_and_add(&v->counter, 1);
-}
-
-static inline int fetch_and_dec( atomic_t *v )
-{
-  return __sync_fetch_and_sub(&v->counter, 1);
-}
-
-static inline int compare_and_swap( void**ptr, void* oldval, void* newval)
-{
-  return __sync_bool_compare_and_swap (ptr, oldval, newval);
-}
-
-
-static inline char CAS2 (volatile void * addr,
-    volatile void * v1, volatile long v2,
-    void * n1, long n2)
-{
-        register char ret;
-        __asm__ __volatile__ (
-                "# CAS2 \n\t"
-#ifdef __x86_64__
-                "lock; cmpxchg16b (%1) \n\t"
-#else
-                "lock; cmpxchg8b (%1) \n\t"
-#endif
-                "sete %0               \n\t"
-                :"=a" (ret)
-                :"D" (addr), "d" (v2), "a" (v1), "b" (n1), "c" (n2)
-        );
-        return ret;
-}
+#define atomic_fetch_add(v, i) __sync_fetch_and_add(&(v)->val, (i))
+#define atomic_fetch_sub(v, i) __sync_fetch_and_sub(&(v)->val, (i))
 

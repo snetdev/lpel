@@ -2,187 +2,93 @@
  * THIS FILE MUST NOT BE INCLUDED DIRECTLY
  */
 
-/**
- * Atomic variables and
- * TODO pointer swap and membars
- *
- */
-
 #include <pthread.h>
 
 #ifdef HAVE_PTHREAD_SPIN_INIT
 #define ATOMIC_PTHREAD_USE_SPINLOCK
 #endif
 
-typedef struct {
-  int counter;
 #ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  pthread_spinlock_t lock;
+#  define ATOMIC_VAR_INIT(i) { (i), 1 }
+#  define __lock_type pthread_spinlock_t
+#  define __lock_init(v) (void) pthread_spin_init( &(v)->lock, PTHREAD_PROCESS_PRIVATE)
+#  define __lock_destroy(v) (void) pthread_spin_destroy( &(v)->lock)
+#  define __lock_get(v) (void) pthread_spin_lock( &(v)->lock)
+#  define __lock_release(v) (void) pthread_spin_unlock( &(v)->lock)
 #else
-  pthread_mutex_t lock;
+#  define ATOMIC_VAR_INIT(i) { (i), PTHREAD_MUTEX_INITIALIZER }
+#  define __lock_type pthread_mutex_t
+#  define __lock_init(v) (void) pthread_mutex_init( &(v)->lock, NULL)
+#  define __lock_destroy(v) (void) pthread_mutex_destroy( &(v)->lock)
+#  define __lock_get(v) (void) pthread_mutex_lock( &(v)->lock)
+#  define __lock_release(v) (void) pthread_mutex_unlock( &(v)->lock)
 #endif
-} atomic_t;
+    
+#define __do_typedef(T, name) \
+typedef struct { T val; __lock_type lock; } atomic_##name
 
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-#  define ATOMIC_INIT(i) { (i), 1 }
-#else
-#  define ATOMIC_INIT(i) { (i), PTHREAD_MUTEX_INITIALIZER }
-#endif
+__do_typedef(int, int);
+__do_typedef(unsigned int, uint);
+__do_typedef(long, long);
+__do_typedef(unsigned long, ulong);
+__do_typedef(long long, llong);
+__do_typedef(unsigned long long, ullong);
+__do_typedef(char*, charptr);
+__do_typedef(void*, voidptr);
+#undef __do_typedef
 
-/**
- * Initialize atomic variable dynamically
- */
-static inline void atomic_init( atomic_t *v, int i )
-{
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_init( &v->lock, PTHREAD_PROCESS_PRIVATE);
-#else
-  (void) pthread_mutex_init( &v->lock, NULL);
-#endif
-  v->counter = i;
-}
+#define atomic_init(V, I)                                \
+    do {                                                 \
+        __lock_init(V);                                  \
+        (V)->val = (I);                                  \
+    } while(0)
 
-/**
- * Destroy atomic variable
- */
-static inline void atomic_destroy( atomic_t *v )
-{
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_destroy( &v->lock);
-#else
-  (void) pthread_mutex_destroy( &v->lock);
-#endif
-}
+#define atomic_destroy(V) do { __lock_destroy(V); } while(0)
 
+#define atomic_load(V)                                                  \
+    ({                                                                  \
+        __typeof__((V)->val)  tmp;                                       \
+        __lock_get(V);                                                  \
+        tmp = (V)->val;                                                  \
+        __lock_release(V);                                              \
+        tmp;                                                            \
+    })
 
-/**
- * Read atomic variable
- * @param v pointer of type atomic_t
- *
- * Atomically reads the value of @v.
- */
-static inline int atomic_read( atomic_t *v )
-{
-  int tmp;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_lock( &v->lock);
-#else
-  (void) pthread_mutex_lock( &v->lock);
-#endif
-  tmp = v->counter;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_unlock( &v->lock);
-#else
-  (void) pthread_mutex_unlock( &v->lock);
-#endif
-  return tmp;
-}
+#define atomic_store(V, I)                               \
+    do {                                                 \
+        __lock_get(V);                                   \
+        (V)->val = (I);                                  \
+        __lock_release(V);                               \
+    } while(0)
 
+#define atomic_exchange(V, I)                                           \
+    ({                                                                  \
+    __typeof__((V)->val) tmp;                                            \
+    __lock_get(V);                                                      \
+    tmp = (V)->val;                                                     \
+    (V)->val = (I);                                                     \
+    __lock_release(V);                                                  \
+    tmp;                                                                \
+    })
 
-/**
- * Set atomic variable
- * @param v pointer of type atomic_t
- * @param i required value
- */
-static inline void atomic_set( atomic_t *v, int i )
-{
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_lock( &v->lock);
-#else
-  (void) pthread_mutex_lock( &v->lock);
-#endif
-  v->counter = i;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_unlock( &v->lock);
-#else
-  (void) pthread_mutex_unlock( &v->lock);
-#endif
-}
+#define __atomic_fetch_X(V, I, Op)                                      \
+    ({                                                                  \
+    __typeof__((V)->val) tmp;                                           \
+    __lock_get(V);                                                      \
+    tmp = (V)->val;                                                     \
+    (V)->val = (V)->val Op (I);                                         \
+    __lock_release(V);                                                  \
+    tmp;                                                                \
+    })
 
-static inline void atomic_inc( atomic_t *v )
-{
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_lock( &v->lock);
-#else
-  (void) pthread_mutex_lock( &v->lock);
-#endif
-  v->counter++;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_unlock( &v->lock);
-#else
-  (void) pthread_mutex_unlock( &v->lock);
-#endif
-}
+#define atomic_fetch_add(V, I) __atomic_fetch_X(V, I, +) 
+#define atomic_fetch_sub(V, I) __atomic_fetch_X(V, I, -) 
 
-static inline int atomic_dec( atomic_t *v )
-{
-  int tmp;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_lock( &v->lock);
-#else
-  (void) pthread_mutex_lock( &v->lock);
-#endif
-  v->counter -= 1;
-  tmp = v->counter;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_unlock( &v->lock);
-#else
-  (void) pthread_mutex_unlock( &v->lock);
-#endif
-  return ( tmp == 0 ) ? 0 : 1;
-}
-
-static inline int atomic_swap( atomic_t *v, int value )
-{
-  int tmp;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_lock( &v->lock);
-#else
-  (void) pthread_mutex_lock( &v->lock);
-#endif
-  tmp = v->counter;
-  v->counter = value;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_unlock( &v->lock);
-#else
-  (void) pthread_mutex_unlock( &v->lock);
-#endif
-  return tmp;
-}
-
-static inline int fetch_and_inc( atomic_t *v )
-{
-  int tmp;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_lock( &v->lock);
-#else
-  (void) pthread_mutex_lock( &v->lock);
-#endif
-  tmp = v->counter;
-  v->counter += 1;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_unlock( &v->lock);
-#else
-  (void) pthread_mutex_unlock( &v->lock);
-#endif
-  return tmp;
-}
-
-static inline int fetch_and_dec( atomic_t *v )
-{
-  int tmp;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_lock( &v->lock);
-#else
-  (void) pthread_mutex_lock( &v->lock);
-#endif
-  tmp = v->counter;
-  v->counter -= 1;
-#ifdef ATOMIC_PTHREAD_USE_SPINLOCK
-  (void) pthread_spin_unlock( &v->lock);
-#else
-  (void) pthread_mutex_unlock( &v->lock);
-#endif
-  return tmp;
-}
-
+#define atomic_test_and_set(V, E, D)                                    \
+            ({                                                          \
+                bool cmpres;                                            \
+                __lock_get(V);                                          \
+                if (cmpres = ((V)->val == (E))) (V)->val = (D);         \
+                __lock_release(V);                                      \
+                cmpres;                                                 \
+            })

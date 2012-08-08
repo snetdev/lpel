@@ -54,8 +54,8 @@ static spmd_worker_t *worker_data = NULL;
  */
 static spmdreq_t *req_queue = NULL;
 
-static atomic_t qhead = ATOMIC_INIT(0);
-static atomic_t qtail = ATOMIC_INIT(0);
+static atomic_int qhead = ATOMIC_VAR_INIT(0);
+static atomic_int qtail = ATOMIC_VAR_INIT(0);
 
 
 
@@ -112,7 +112,7 @@ void LpelSpmdHandleRequests(int worker_id)
   assert(worker_id >= 0 && worker_id < num_workers);
 
   while (1) {
-    head = atomic_read(&qhead);
+    head = atomic_load(&qhead);
     /* local copy of current request */
     curreq = req_queue[head];
 
@@ -145,11 +145,11 @@ void LpelSpmdHandleRequests(int worker_id)
         req_queue[head].wctx = NULL;
         /* move head */
         head = (head+1) % num_workers;
-        atomic_set(&qhead, head);
+        atomic_store(&qhead, head);
         /* correct tail */
-        tail = atomic_read(&qtail);
+        tail = atomic_load(&qtail);
         if (tail >= num_workers) tail %= num_workers;
-        atomic_set(&qtail, tail);
+        atomic_store(&qtail, tail);
       } /* CRITICAL SECTION */
 
       /* signal the other threads */
@@ -223,7 +223,7 @@ void LpelSpmdRequest(lpel_task_t *task, lpel_spmdfunc_t fun, void *arg)
   worker_data[wc->wid].pending = 1;
 
   /* append */
-  tail = fetch_and_inc(&qtail) % num_workers;
+  tail = atomic_fetch_add(&qtail, 1) % num_workers;
   req = &req_queue[tail];
   req->wctx = wc;
   req->func = fun;
