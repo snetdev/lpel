@@ -28,6 +28,8 @@
 #include "mailbox.h"
 #include "lpel/monitor.h"
 
+#include "lpel/timing.h"
+
 #define WORKER_PTR(i) (workers[(i)])
 
 
@@ -184,9 +186,6 @@ void LpelWorkerCleanup(void)
 {
   int i;
   workerctx_t *wc;
-#ifdef MEASUREMENTS
-  struct timespec res_spec;
-#endif
 
   /* wait on workers */
   for( i=0; i<num_workers; i++) {
@@ -213,11 +212,9 @@ void LpelWorkerCleanup(void)
   free(mutex_workers);
 
 #ifdef MEASUREMENTS
-  clock_getres(CLOCK_ID, &res_spec);
   pthread_mutex_destroy(&measure_mutex);
 
   printf("WORKER STATISTICS:\n");
-  printf("RESOLUTION:\t%ld.%ld\n", res_spec.tv_sec, res_spec.tv_nsec);
   printf("MINIMUM TIME:\t%lf\n", (double)min_time / (double)1000000000);
   printf("MAXIMUM TIME:\t%lf\n", (double)max_time / (double)1000000000);
   printf("TOTAL NUMBER OF TASKS:\t%ld\n", total_tasks);
@@ -549,15 +546,10 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
         }
 #endif
       } else {
-#ifdef MEASUREMENTS
-        struct timespec stop_time;
-        long time;
-#endif
         LpelSchedMakeReady( wc->sched, t);
 #ifdef MEASUREMENTS
-        clock_gettime(CLOCK_ID, &stop_time);
-        time = (stop_time.tv_sec - t->start_time.tv_sec) * 1000000000 +
-               (stop_time.tv_nsec - t->start_time.tv_nsec);
+        LpelTimingEnd(&t->start_time);
+        long time = LpelTimingToNSec(&t->start_time);
         pthread_mutex_lock(&measure_mutex);
         max_time = (time > max_time) ? time : max_time;
         min_time = (time < min_time || min_time == 0) ? time : max_time;

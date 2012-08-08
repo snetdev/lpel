@@ -13,6 +13,7 @@
 #include "stream.h"
 #include "lpel/monitor.h"
 #include "placementscheduler.h"
+#include "lpel/timing.h"
 
 static atomic_int taskseq = ATOMIC_VAR_INIT(0);
 
@@ -160,6 +161,10 @@ static void TaskPrepareContext( lpel_task_t *t, int size)
   t->waiting_state = 0;
   LpelTimingStart(&t->total_time[t->waiting_state]);
   pthread_mutex_init(&t->t_mu, NULL);
+#endif
+
+#ifdef MEASUREMENTS
+  if (worker != -1) LpelTimingStart(&t->start_time);
 #endif
 
     /* function, argument (data), stack base address, stacksize */
