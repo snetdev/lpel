@@ -408,7 +408,7 @@ workerctx_t *LpelWorkerGetContext(int id) {
     (void) pthread_detach( wc->thread);
   }
 
-  assert(wc != NULL);
+  assert((wc != NULL) && "The worker of the requested id does not exist.");
   return wc;
 }
 
