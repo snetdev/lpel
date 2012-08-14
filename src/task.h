@@ -60,6 +60,7 @@ struct lpel_task_t {
   lpel_taskfunc_t func; /** function of the task */
   void *inarg;          /** input argument  */
   int terminate;
+  int size;             /** stack size */
 
   int current_worker;   /** The current worker id */
 

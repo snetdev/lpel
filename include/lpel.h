@@ -194,12 +194,6 @@ void LpelTaskExit(void);
 void LpelTaskRespawn(lpel_taskfunc_t);
 void LpelTaskYield(void);
 
-/** return the worker id to which the task is assigned */
-int LpelTaskWorkerId();
-
-/** return the worker id to which worker it should migrate */
-int LpelTaskMigrationWorkerId();
-
 /**
  * Task Local Data
  */

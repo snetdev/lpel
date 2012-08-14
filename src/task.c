@@ -102,9 +102,13 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->uid = atomic_fetch_add( &taskseq, 1);  /* obtain a unique task id */
   t->func = func;
   t->inarg = inarg;
+  t->current_worker = worker;
+  t->new_worker = worker;
 
   if (size <= 0) size = LPEL_TASK_SIZE_DEFAULT;
   else if (size <= TASK_MINSIZE) size = TASK_MINSIZE;
+
+  t->size = size;
 
   /* aligned to page boundary */
   t->stack = valloc( size );
@@ -227,14 +231,14 @@ void LpelTaskExit(void)
   lpel_task_t *t = LpelTaskSelf();
   workerctx_t *wc = t->worker_context;
 
-  assert( t->state == TASK_RUNNING );
-  t->state = TASK_ZOMBIE;
-  TaskStop( t);
+  if (t->state == TASK_RUNNING) {
+    t->state = TASK_ZOMBIE;
+    TaskStop( t);
+  }
 
   if (t->usrdt_destr && t->usrdata) {
     t->usrdt_destr (t, t->usrdata);
   }
-
 
   // NB: can't deallocate stack here, because
   // the task is still executing; so defer deallocation
@@ -363,25 +367,6 @@ void LpelTaskEnterSPMD( lpel_spmdfunc_t fun, void *arg)
 
 
 
-/**
- * return the worker id to which the task is assigned
- */
-int LpelTaskWorkerId()
-{
-  lpel_task_t *t = LpelTaskSelf();
-  return t->current_worker;
-}
-
-/**
- * return the worker id to which worker it should migrate
- */
-int LpelTaskMigrationWorkerId()
-{
-  lpel_task_t *t = LpelTaskSelf();
-  return t->new_worker;
-}
-
-
 #ifdef WAITING
 /**
  * The task is not ready anymore, stop the timing and update the statistics
@@ -465,19 +450,25 @@ static void TaskStartup( void *data)
   lpel_task_t *t = data;
 
   for (;;) {
-    TaskStart( t);
-    /* call the task function with inarg as parameter */
-    t->func(t->inarg);
-
-    while (!t->terminate) {
-      t->state = TASK_ZOMBIE;
-      TaskStop( t);
+    for (;;) {
       t->state = TASK_READY;
-
       t->terminate = 1;
+
       TaskStart( t);
       /* call the task function with inarg as parameter */
       t->func(t->inarg);
+      t->state = TASK_ZOMBIE;
+      TaskStop( t);
+
+      if (t->terminate) break;
+
+      if (t->new_worker != t->current_worker) {
+        lpel_task_t *new;
+        new  = LpelTaskCreate(t->new_worker, t->func, t->inarg, t->size);
+        new->sched_info.prio = t->sched_info.prio;
+        LpelTaskRun(new);
+        break;
+      }
     }
 
     /* if task function returns, exit properly */

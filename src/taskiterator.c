@@ -3,7 +3,7 @@
 
 static void FindNext(lpel_task_iterator_t *iter) {
   iter->next = (iter->current != NULL) ? iter->current->next : NULL;
-  while( iter->next == NULL && iter->index-- >= 0) {
+  while( iter->next == NULL && --iter->index >= 0) {
     iter->next = iter->queue[iter->index].head;
   }
 }
@@ -23,7 +23,7 @@ lpel_task_iterator_t * LpelTaskIterCreate(taskqueue_t *queue,
 
   do {
     iter->current = queue[iter->index].head;
-  } while(iter->current == NULL && iter->index-- >= 0);
+  } while(iter->current == NULL && --iter->index >= 0);
 
 
 

@@ -361,7 +361,7 @@ void LpelPlacementSchedulerInit()
   int i;
   lpel_task_t *t;
   int number_workers = LpelWorkerNumber();
-  threshold = (config->threshold > 0) ? config->threshold : 1;
+  threshold = (config->threshold >= 0) ? config->threshold : 1;
 
 #ifdef WAITING
   worker_percentages = malloc(number_workers * sizeof(double));
