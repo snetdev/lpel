@@ -9,6 +9,10 @@
 #include <assert.h>
 #include <errno.h>
 
+#ifdef MEASUREMENTS
+#include <time.h>
+#endif
+
 #include <pthread.h>
 #include "arch/mctx.h"
 
@@ -24,6 +28,8 @@
 #include "mailbox.h"
 #include "lpel/monitor.h"
 
+#include "lpel/timing.h"
+
 #define WORKER_PTR(i) (workers[(i)])
 
 
@@ -31,14 +37,21 @@
 
 /******************************************************************************/
 
+#ifdef MEASUREMENTS
+static pthread_mutex_t measure_mutex;
+static long max_time;
+static long min_time;
+static long total_tasks;
+#endif
 
 static int num_workers = -1;
 static workerctx_t **workers;
 
+static pthread_mutex_t *mutex_workers;
 
 
 #ifdef HAVE___THREAD
-static __thread workerctx_t *workerctx_cur;
+static TLSSPEC workerctx_t *workerctx_cur;
 #else /* HAVE___THREAD */
 static pthread_key_t workerctx_key;
 #endif /* HAVE___THREAD */
@@ -49,7 +62,6 @@ static void *WorkerThread( void *arg);
 
 
 static void FetchAllMessages( workerctx_t *wc);
-static void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t);
 
 
 
@@ -118,19 +130,22 @@ void LpelWorkerInit(int size)
   pthread_key_create(&workerctx_key, NULL);
 #endif /* HAVE___THREAD */
 
+#ifdef MEASUREMENTS
+  pthread_mutex_init(&measure_mutex, NULL);
+  max_time = 0;
+  min_time = 0;
+#endif
+
   /* initialize spmdext module */
   res = LpelSpmdInit(num_workers);
 
   /* allocate worker context table */
   workers = (workerctx_t **) malloc( num_workers * sizeof(workerctx_t*) );
-  /* allocate worker contexts */
-  for (i=0; i<num_workers; i++) {
-    workers[i] = (workerctx_t *) malloc( sizeof(workerctx_t) );
-  }
-
-  /* prepare data structures */
+  mutex_workers = malloc(num_workers * sizeof(pthread_mutex_t));
+  /* allocate worker contexts and prepare data structures */
   for( i=0; i<num_workers; i++) {
-    workerctx_t *wc = WORKER_PTR(i);
+    workerctx_t *wc = workers[i] = malloc(sizeof(workerctx_t));
+    pthread_mutex_init(&mutex_workers[i], NULL);
     wc->wid = i;
     wc->num_tasks = 0;
     wc->terminate = 0;
@@ -152,9 +167,12 @@ void LpelWorkerInit(int size)
     /* mailbox */
     wc->mailbox = LpelMailboxCreate();
 
-    /* taskqueue of free tasks */
-    //LpelTaskqueueInit( &wc->free_tasks);
+    /* LIFO of free tasks */
+    atomic_init( &wc->free_tasks, NULL);
   }
+
+  /* Initialize placement scheduler */
+  LpelPlacementSchedulerInit();
 
   assert(res==0);
 }
@@ -177,14 +195,33 @@ void LpelWorkerCleanup(void)
   }
   /* cleanup the data structures */
   for( i=0; i<num_workers; i++) {
+    pthread_mutex_lock(&mutex_workers[i]);
     wc = WORKER_PTR(i);
     LpelMailboxDestroy(wc->mailbox);
     LpelSchedDestroy( wc->sched);
     free(wc);
+    pthread_mutex_unlock(&mutex_workers[i]);
+
+    pthread_mutex_destroy(&mutex_workers[i]);
   }
 
   /* free workers table */
   free( workers);
+
+  /* free mutex table */
+  free(mutex_workers);
+
+#ifdef MEASUREMENTS
+  pthread_mutex_destroy(&measure_mutex);
+
+  printf("WORKER STATISTICS:\n");
+  printf("MINIMUM TIME:\t%lf\n", (double)min_time / (double)1000000000);
+  printf("MAXIMUM TIME:\t%lf\n", (double)max_time / (double)1000000000);
+  printf("TOTAL NUMBER OF TASKS:\t%ld\n", total_tasks);
+#endif
+
+  /* destroy placement scheduler */
+  LpelPlacementSchedulerDestroy();
 
   /* cleanup spmdext module */
   LpelSpmdCleanup();
@@ -361,7 +398,8 @@ void LpelWorkerTerminate(void)
 /**
  * Get a worker context from the worker id
  */
-workerctx_t *LpelWorkerGetContext(int id) {
+workerctx_t *LpelWorkerGetContext(int id)
+{
 
   workerctx_t *wc = NULL;
 
@@ -380,8 +418,9 @@ workerctx_t *LpelWorkerGetContext(int id) {
     wc->mon = NULL;
     /* mailbox */
     wc->mailbox = LpelMailboxCreate();
-    /* taskqueue of free tasks */
-    //LpelTaskqueueInit( &wc->free_tasks);
+    /* LIFO of free tasks */
+    atomic_init( &wc->free_tasks, NULL);
+
     (void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
     (void) pthread_detach( wc->thread);
   }
@@ -390,19 +429,6 @@ workerctx_t *LpelWorkerGetContext(int id) {
   return wc;
 }
 
-
-
-void LpelWorkerSelfTaskExit(lpel_task_t *t)
-{
-  workerctx_t *wc = t->worker_context;
-
-  CleanupTaskContext(wc,t);
-  wc->num_tasks--;
-  /* wrappers can terminate if their task terminates */
-  if (wc->wid < 0) {
-    wc->terminate = 1;
-  }
-}
 
 
 void LpelWorkerSelfTaskYield(lpel_task_t *t)
@@ -416,32 +442,48 @@ void LpelWorkerSelfTaskYield(lpel_task_t *t)
   }
 }
 
+/**
+ * Returns the number of workers excluding the worker which runs
+ * the placement scheduler.
+ */
+int LpelWorkerNumber()
+{
+#ifdef SCHEDULER_CONCURRENT_PLACEMENT
+  return num_workers-1;
+#else
+  return num_workers;
+#endif
+}
 
+workerctx_t **LpelWorkerGetWorkers()
+{
+  return workers;
+}
 
+pthread_mutex_t *LpelWorkerGetMutexes()
+{
+  return mutex_workers;
+}
+
+#ifdef TASK_SEGMENTATION
+void LpelWorkerSetTaskType(int wid, int type)
+{
+  workers[wid]->task_type = type;
+}
+#endif
+
+#ifdef MEASUREMENTS
+void LpelWorkerAddTask()
+{
+  pthread_mutex_lock(&measure_mutex);
+  total_tasks++;
+  pthread_mutex_unlock(&measure_mutex);
+}
+#endif
 
 /******************************************************************************/
 /*  PRIVATE FUNCTIONS                                                         */
 /******************************************************************************/
-
-/**
- * Deferred deletion of a task
- */
-static void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t)
-{
-  /* delete task marked before */
-  if (wc->marked_del != NULL) {
-    //LpelMonDebug( wc->mon, "Destroy task %d\n", wc->marked_del->uid);
-    LpelTaskDestroy( wc->marked_del);
-    wc->marked_del = NULL;
-  }
-  /* place a new task (if any) */
-  if (t != NULL) {
-    wc->marked_del = t;
-  }
-}
-
-
-
 
 static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 {
@@ -456,6 +498,9 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
        */
       t = msg->body.task;
       assert(t->state != TASK_READY);
+#ifdef WAITING
+      LpelTimingStart(&t->last_measurement_start);
+#endif
       t->state = TASK_READY;
 
       WORKER_DBGMSG(wc, "Received wakeup for %d.\n", t->uid);
@@ -468,13 +513,18 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       break;
 
     case WORKER_MSG_TERMINATE:
+      pthread_mutex_lock(&mutex_workers[wc->wid]);
       wc->terminate = 1;
+      pthread_mutex_unlock(&mutex_workers[wc->wid]);
       break;
 
     case WORKER_MSG_ASSIGN:
       t = msg->body.task;
 
       assert(t->state == TASK_CREATED);
+#ifdef WAITING
+      LpelTimingStart(&t->last_measurement_start);
+#endif
       t->state = TASK_READY;
 
       wc->num_tasks++;
@@ -497,6 +547,15 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 #endif
       } else {
         LpelSchedMakeReady( wc->sched, t);
+#ifdef MEASUREMENTS
+        LpelTimingEnd(&t->start_time);
+        long time = LpelTimingToNSec(&t->start_time);
+        pthread_mutex_lock(&measure_mutex);
+        max_time = (time > max_time) ? time : max_time;
+        min_time = (time < min_time || min_time == 0) ? time : max_time;
+        total_tasks++;
+        pthread_mutex_unlock(&measure_mutex);
+#endif
       }
 
 #ifdef USE_LOGGING
@@ -574,9 +633,15 @@ static void WorkerLoop( workerctx_t *wc)
 
       WORKER_DBGMSG(wc, "Back on worker %d context.\n", wc->wid);
 
-      /* cleanup task context marked for deletion */
-      CleanupTaskContext(wc, NULL);
+      /* check if there are any contexts marked for deletion. */
+      LpelCollectTask(wc, NULL);
+
     } else {
+#ifdef WAITING
+      pthread_mutex_lock(&mutex_workers[wc->wid]);
+      wc->waiting = 1;
+      pthread_mutex_unlock(&mutex_workers[wc->wid]);
+#endif
       /* no ready tasks */
       WaitForNewMessage( wc);
     }
@@ -607,9 +672,6 @@ static void WrapperLoop( workerctx_t *wc)
     /* fetch (remaining) messages */
     FetchAllMessages( wc);
   } while ( !wc->terminate);
-
-  /* cleanup task context marked for deletion */
-  CleanupTaskContext(wc, NULL);
 }
 
 
@@ -619,6 +681,7 @@ static void WrapperLoop( workerctx_t *wc)
 static void *WorkerThread( void *arg)
 {
   workerctx_t *wc = (workerctx_t *)arg;
+  lpel_task_t *t;
 
 #ifdef HAVE___THREAD
   workerctx_cur = wc;
@@ -659,12 +722,9 @@ static void *WorkerThread( void *arg)
 #endif
 
   /* destroy all the free tasks */
-  /*
-  while( wc->free_tasks.count > 0) {
-    lpel_task_t *t = LpelTaskqueuePopFront( &wc->free_tasks);
-    free( t);
+  while( t = LpelPopFreeTask( &wc->free_tasks)) {
+      LpelTaskDestroy(t);
   }
-  */
 
   /* on a wrapper, we also can cleanup more*/
   if (wc->wid < 0) {

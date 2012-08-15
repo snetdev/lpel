@@ -49,7 +49,7 @@
 AC_DEFUN([AX_TLS], [
   AC_MSG_CHECKING(for thread local storage (TLS) class)
   AC_CACHE_VAL(ac_cv_tls, [
-    ax_tls_keywords="__thread __declspec(thread) none"
+    ax_tls_keywords="__thread __declspec(thread) _Thread_local none"
     for ax_tls_keyword in $ax_tls_keywords; do
        AS_CASE([$ax_tls_keyword],
           [none], [ac_cv_tls=none ; break],
@@ -69,7 +69,7 @@ AC_DEFUN([AX_TLS], [
   AC_MSG_RESULT($ac_cv_tls)
 
   AS_IF([test "$ac_cv_tls" != "none"],
-    AC_DEFINE_UNQUOTED([TLS], $ac_cv_tls, [If the compiler supports a TLS storage class define it to that here])
+    AC_DEFINE_UNQUOTED([TLSSPEC], $ac_cv_tls, [If the compiler supports a TLS storage class define it to that here])
       m4_ifnblank([$1], [$1]),
     m4_ifnblank([$2], [$2])
   )

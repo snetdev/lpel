@@ -4,7 +4,12 @@
 #include <pthread.h>
 #include <lpel.h>
 
+#ifdef WAITING
+#include "lpel/timing.h"
+#endif
+
 #include "arch/mctx.h"
+#include "arch/atomic.h"
 #include "task.h"
 #include "scheduler.h"
 #include "mailbox.h"
@@ -17,14 +22,19 @@ typedef struct workerctx_t {
   mctx_t        mctx;
   int           terminate;
   unsigned int  num_tasks;
-  //taskqueue_t   free_tasks;
   lpel_task_t  *current_task;
   lpel_task_t  *marked_del;
   mon_worker_t *mon;
   mailbox_t    *mailbox;
   schedctx_t   *sched;
   lpel_task_t  *wraptask;
-  char          padding[64];
+  atomic_voidptr free_tasks;
+#ifdef WAITING
+  int           waiting;
+#endif
+#ifdef TASK_SEGMENTATION
+  int           task_type;
+#endif
 } workerctx_t;
 
 
@@ -60,7 +70,16 @@ workerctx_t *LpelWorkerGetContext(int id);
 workerctx_t *LpelWorkerSelf(void);
 lpel_task_t *LpelWorkerCurrentTask(void);
 
+void LpelCollectTask(workerctx_t* wc, lpel_task_t* t);
 void LpelWorkerSelfTaskExit(lpel_task_t *t);
 void LpelWorkerSelfTaskYield(lpel_task_t *t);
+
+int LpelWorkerNumber();
+workerctx_t **LpelWorkerGetWorkers();
+pthread_mutex_t *LpelWorkerGetMutexes();
+
+#ifdef TASK_SEGMENTATION
+void LpelWorkerSetTaskType(int wid, int type);
+#endif
 
 #endif /* _WORKER_H_ */

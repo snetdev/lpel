@@ -87,12 +87,12 @@ struct lpel_stream_t {
                                 is_poll is protected by the prod_lock */
   lpel_stream_desc_t *prod_sd;   /** points to the sd of the producer */
   lpel_stream_desc_t *cons_sd;   /** points to the sd of the consumer */
-  atomic_t n_sem;           /** counter for elements in the stream */
-  atomic_t e_sem;           /** counter for empty space in the stream */
+  atomic_int n_sem;           /** counter for elements in the stream */
+  atomic_int e_sem;           /** counter for empty space in the stream */
   void *usr_data;           /** arbitrary user data */
 };
 
-static atomic_t stream_seq = ATOMIC_INIT(0);
+static atomic_int stream_seq = ATOMIC_VAR_INIT(0);
 
 
 
@@ -114,7 +114,7 @@ lpel_stream_t *LpelStreamCreate(int size)
   /* reset buffer (including buffer area) */
   LpelBufferInit( &s->buffer, size);
 
-  s->uid = fetch_and_inc( &stream_seq);
+  s->uid = atomic_fetch_add( &stream_seq, 1);
   PRODLOCK_INIT( &s->prod_lock );
   atomic_init( &s->n_sem, 0);
   atomic_init( &s->e_sem, size);
@@ -174,12 +174,10 @@ void *LpelStreamGetUsrData(lpel_stream_t *s)
  */
 lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
 {
+  lpel_task_t *ct = NULL;
   lpel_stream_desc_t *sd;
-  lpel_task_t *ct = LpelTaskSelf();
-
   assert( mode == 'r' || mode == 'w' );
-  sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
-  sd->task = ct;
+  sd = malloc( sizeof( lpel_stream_desc_t));
   sd->stream = s;
   sd->mode = mode;
   sd->next  = NULL;
@@ -188,7 +186,7 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   /* create monitoring object, or NULL if stream
    * is not going to be monitored (depends on ct->mon)
    */
-  if (ct->mon && MON_CB(stream_open)) {
+  if (ct && ct->mon && MON_CB(stream_open)) {
     sd->mon = MON_CB(stream_open)( ct->mon, s->uid, mode);
   } else {
     sd->mon = NULL;
@@ -295,7 +293,7 @@ void *LpelStreamPeek( lpel_stream_desc_t *sd)
 void *LpelStreamRead( lpel_stream_desc_t *sd)
 {
   void *item;
-  lpel_task_t *self = sd->task;
+  sd->task = LpelTaskSelf();
 
   assert( sd->mode == 'r');
 
@@ -307,7 +305,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
 #endif
 
   /* quasi P(n_sem) */
-  if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
+  if ( atomic_fetch_sub( &sd->stream->n_sem, 1) == 0) {
 
 #ifdef USE_TASK_EVENT_LOGGING
     /* MONITORING CALLBACK */
@@ -317,7 +315,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
 #endif
 
     /* wait on stream: */
-    LpelTaskBlockStream( self);
+    LpelTaskBlockStream( sd->task);
   }
 
 
@@ -329,11 +327,11 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
 
 
   /* quasi V(e_sem) */
-  if ( fetch_and_inc( &sd->stream->e_sem) < 0) {
+  if ( atomic_fetch_add( &sd->stream->e_sem, 1) < 0) {
     /* e_sem was -1 */
     lpel_task_t *prod = sd->stream->prod_sd->task;
     /* wakeup producer: make ready */
-    LpelTaskUnblock( self, prod);
+    LpelTaskUnblock( LpelTaskSelf(), prod);
 
     /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -368,8 +366,8 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
  */
 void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 {
-  lpel_task_t *self = sd->task;
   int poll_wakeup = 0;
+  sd->task = LpelTaskSelf();
 
   /* check if opened for writing */
   assert( sd->mode == 'w' );
@@ -383,7 +381,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 #endif
 
   /* quasi P(e_sem) */
-  if ( fetch_and_dec( &sd->stream->e_sem)== 0) {
+  if ( atomic_fetch_sub( &sd->stream->e_sem, 1)== 0) {
 
 	/* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -393,7 +391,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 #endif
 
     /* wait on stream: */
-    LpelTaskBlockStream( self);
+    LpelTaskBlockStream( sd->task);
   }
 
   /* writing to the buffer and checking if consumer polls must be atomic */
@@ -406,7 +404,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 
     if ( sd->stream->is_poll) {
       /* get consumer's poll token */
-      poll_wakeup = atomic_swap( &sd->stream->cons_sd->task->poll_token, 0);
+      poll_wakeup = atomic_exchange( &sd->stream->cons_sd->task->poll_token, 0);
       sd->stream->is_poll = 0;
     }
   }
@@ -415,11 +413,11 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 
 
   /* quasi V(n_sem) */
-  if ( fetch_and_inc( &sd->stream->n_sem) < 0) {
+  if ( atomic_fetch_add( &sd->stream->n_sem, 1) < 0) {
     /* n_sem was -1 */
     lpel_task_t *cons = sd->stream->cons_sd->task;
     /* wakeup consumer: make ready */
-    LpelTaskUnblock( self, cons);
+    LpelTaskUnblock( LpelTaskSelf(), cons);
 
     /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -433,7 +431,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
       lpel_task_t *cons = sd->stream->cons_sd->task;
       cons->wakeup_sd = sd->stream->cons_sd;
 
-      LpelTaskUnblock( self, cons);
+      LpelTaskUnblock( LpelTaskSelf(), cons);
 
       /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -498,6 +496,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   assert( *set != NULL);
 
   /* get 'self', i.e. the task calling LpelStreamPoll() */
+  (*set)->task = LpelTaskSelf();
   self = (*set)->task;
 
   iter = LpelStreamIterCreate( set);
@@ -515,12 +514,13 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
 
 
   /* place a poll token */
-  atomic_set( &self->poll_token, 1);
+  atomic_store( &self->poll_token, 1);
 
   /* for each stream in the set */
   LpelStreamIterReset(iter, set);
   while( LpelStreamIterHasNext( iter)) {
     lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
+    sd->task = LpelTaskSelf();
     lpel_stream_t *s = sd->stream;
     /* lock stream (prod-side) */
     PRODLOCK_LOCK( &s->prod_lock);
@@ -530,7 +530,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
         /* yes, we can stop iterating through streams.
          * determine, if we have been woken up by another producer:
          */
-        int tok = atomic_swap( &self->poll_token, 0);
+        int tok = atomic_exchange( &self->poll_token, 0);
         if (tok) {
           /* we have not been woken yet, no need for ctx switch */
           do_ctx_switch = 0;
@@ -561,7 +561,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
     /* set task as blocked */
     LpelTaskBlockStream( self);
   }
-  assert( atomic_read( &self->poll_token) == 0);
+  assert( atomic_load( &self->poll_token) == 0);
 
   /* unregister activators
    * - would only be necessary, if the consumer task closes the stream
