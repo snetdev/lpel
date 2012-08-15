@@ -19,9 +19,6 @@ static inline int mctx_create(mctx_t *mctx, void *func, void *arg, char *sk_addr
   return 0;
 }
 
-
-
-
 static inline void mctx_switch(mctx_t *octx, mctx_t *nctx)
 {
   ctx_swap_internal(octx->regs, nctx->regs);
