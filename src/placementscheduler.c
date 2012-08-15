@@ -338,7 +338,7 @@ static void RandomPlacement(workerctx_t *wc)
 }
 #endif
 
-void LpelPlacementSchedulerDestroy()
+void LpelPlacementSchedulerDestroy(void)
 {
   int i;
   for(i = 0; i<SCHED_NUM_PRIO; i++) {
@@ -355,7 +355,7 @@ void LpelPlacementSchedulerDestroy()
 #endif
 }
 
-void LpelPlacementSchedulerInit()
+void LpelPlacementSchedulerInit(void)
 {
   lpel_config_t *config = &_lpel_global_config;
   int i;

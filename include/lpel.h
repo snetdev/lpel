@@ -219,13 +219,13 @@ lpel_task_iterator_t *LpelTaskIterCreate(taskqueue_t *queue, int length);
 /*  PLACEMENT SCHEDULER FUNCTIONS                                             */
 /******************************************************************************/
 
-void LpelPlacementSchedulerInit();
+void LpelPlacementSchedulerInit(void);
 
 void LpelPlacementSchedulerWorkerIndices(int prio, int **workers, int *n);
 
 void LpelPlacementSchedulerRun(void *args);
 
-void LpelPlacementSchedulerDestroy();
+void LpelPlacementSchedulerDestroy(void);
 
 int LpelPlacementSchedulerGetWorker(int prio, int i);
 
