@@ -36,8 +36,6 @@ liblpel_la_SOURCES = \
 	src/lpel_main.h \
 	src/placementscheduler.c \
 	src/placementscheduler.h \
-	src/taskiterator.h \
-	src/taskiterator.c \
 	src/worker.c \
 	src/worker.h \
 	src/workermsg.h
