@@ -331,7 +331,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
     /* e_sem was -1 */
     lpel_task_t *prod = sd->stream->prod_sd->task;
     /* wakeup producer: make ready */
-    LpelTaskUnblock( LpelTaskSelf(), prod);
+    LpelTaskUnblock( sd->task, prod);
 
     /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -417,7 +417,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     /* n_sem was -1 */
     lpel_task_t *cons = sd->stream->cons_sd->task;
     /* wakeup consumer: make ready */
-    LpelTaskUnblock( LpelTaskSelf(), cons);
+    LpelTaskUnblock( sd->task, cons);
 
     /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -431,7 +431,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
       lpel_task_t *cons = sd->stream->cons_sd->task;
       cons->wakeup_sd = sd->stream->cons_sd;
 
-      LpelTaskUnblock( LpelTaskSelf(), cons);
+      LpelTaskUnblock( sd->task, cons);
 
       /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
