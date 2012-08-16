@@ -8,16 +8,6 @@
 #define _LPEL_H_
 
 /******************************************************************************/
-/*  DEFINE MEASUREMENTS                                                       */
-/******************************************************************************/
-
-
-#ifdef MEASUREMENTS
-#include <time.h>
-#define CLOCK_ID CLOCK_REALTIME
-#endif
-
-/******************************************************************************/
 /*  RETURN VALUES OF LPEL FUNCTIONS                                           */
 /******************************************************************************/
 
@@ -100,7 +90,6 @@ typedef struct {
   int flags;
   struct lpel_monitoring_cb_t mon;
   float threshold;
-  int segmentation;
 } lpel_config_t;
 
 
@@ -219,32 +208,7 @@ lpel_task_iterator_t *LpelTaskIterCreate(taskqueue_t *queue, int length);
 /*  PLACEMENT SCHEDULER FUNCTIONS                                             */
 /******************************************************************************/
 
-void LpelPlacementSchedulerInit();
-
-void LpelPlacementSchedulerWorkerIndices(int prio, int **workers, int *n);
-
-void LpelPlacementSchedulerRun(void *args);
-
-void LpelPlacementSchedulerDestroy();
-
-int LpelPlacementSchedulerGetWorker(int prio, int i);
-
-int LpelPlacementSchedulerNumWorkers(int prio);
-
-int LpelPlacementSchedulerGetIndexWorker(int prio, int worker);
-
-#ifdef MEASUREMENTS
-/******************************************************************************/
-/*  WORKER MEASUREMENTS FUNCTIONS                                             */
-/******************************************************************************/
-void LpelWorkerAddTask();
-#endif
-/** return the current worker index of the given task */
-int LpelTaskGetWorkerId(lpel_task_t *t);
-
-/** return the total number of workers */
-int LpelWorkerCount(void);
-
+void LpelPlacementSchedulerInit(void);
 
 /******************************************************************************/
 /*  STREAM FUNCTIONS                                                          */
