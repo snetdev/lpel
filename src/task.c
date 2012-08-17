@@ -68,6 +68,9 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
   t->usrdata = NULL;
   t->usrdt_destr = NULL;
 
+  t->name = NULL;
+  t->name_destr = NULL;
+
   t->uid = atomic_fetch_add( &taskseq, 1);  /* obtain a unique task id */
   t->func = func;
   t->inarg = inarg;
@@ -191,6 +194,10 @@ void LpelTaskExit(void)
 
   if (t->usrdt_destr && t->usrdata) {
     t->usrdt_destr (t, t->usrdata);
+  }
+
+  if (t->name_destr && t->name) {
+    t->name_destr(t->name);
   }
 
   // NB: can't deallocate stack here, because
@@ -420,6 +427,14 @@ lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t)
   assert(t);
   return t->usrdt_destr;
 }
+
+void LpelSetName(lpel_task_t *t, const char *name) { t->name = name; }
+
+const char *LpelGetName(lpel_task_t *t) { return t->name; }
+
+void LpelSetNameDestructor(lpel_task_t *t, void (*f)(void *))
+{ t->name_destr = f; }
+
 
 int LpelTaskGetWorkerId(lpel_task_t *t)
 {

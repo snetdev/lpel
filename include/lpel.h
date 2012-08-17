@@ -198,6 +198,10 @@ void LpelSetUserDataDestructor(lpel_task_t *t, lpel_usrdata_destructor_t destr);
 lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t);
 
 
+void LpelSetName(lpel_task_t *t, const char *name);
+const char *LpelGetName(lpel_task_t *t);
+void LpelSetNameDestructor(lpel_task_t *t, void (*f)(void *));
+
 /** enter SPMD request */
 void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
