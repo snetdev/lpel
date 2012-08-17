@@ -5,10 +5,6 @@
 #include <lpel.h>
 #include <pthread.h>
 
-#ifdef MEASUREMENTS
-#include "lpel/timing.h"
-#endif
-
 #include "arch/mctx.h"
 #include "placementscheduler.h"
 
@@ -70,14 +66,12 @@ struct lpel_task_t {
 
   task_placement_t *placement_data;
 
-#ifdef MEASUREMENTS
-  lpel_timing_t start_time;
-#endif
-
   /* user data */
   void *usrdata;
+  const char *name;
   /* destructor for user data */
   lpel_usrdata_destructor_t usrdt_destr;
+  void (*name_destr)(void *);
 };
 
 
