@@ -172,6 +172,7 @@ void LpelSpmdHandleRequests(int worker_id)
     /* EXECUTE THE REQUESTED FUNCTION */
     {
       workerctx_t *wc = LpelWorkerGetContext(worker_id);
+      (void) wc; // Silence compiler warning
       WORKER_DBGMSG(wc,
           "Enter spmd req'd by task %u on worker %d (VId=%d).\n",
           curreq.task->uid, cur_worker_id,
