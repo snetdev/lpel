@@ -5,10 +5,6 @@
 #include <lpel.h>
 #include <pthread.h>
 
-#ifdef MEASUREMENTS
-#include "lpel/timing.h"
-#endif
-
 #include "arch/mctx.h"
 #include "placementscheduler.h"
 
@@ -69,10 +65,6 @@ struct lpel_task_t {
   int new_worker;
 
   task_placement_t *placement_data;
-
-#ifdef MEASUREMENTS
-  lpel_timing_t start_time;
-#endif
 
   /* user data */
   void *usrdata;

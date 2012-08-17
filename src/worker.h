@@ -25,11 +25,6 @@ typedef struct workerctx_t {
   lpel_task_t  *wraptask;
   atomic_voidptr free_tasks;
   worker_placement_t *placement_data;
-#ifdef MEASUREMENTS
-  long max_time;
-  long min_time;
-  long total_tasks;
-#endif
 } workerctx_t;
 
 extern workerctx_t **workers;

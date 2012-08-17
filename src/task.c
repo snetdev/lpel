@@ -86,10 +86,6 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 
   t->placement_data = PlacementInitTask();
 
-#ifdef MEASUREMENTS
-  if (worker != -1) LpelTimingStart(&t->start_time);
-#endif
-
   /* function, argument (data), stack base address, stacksize */
   mctx_create( &t->mctx, TaskStartup, (void*)t, t->stack, size);
 

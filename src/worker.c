@@ -130,11 +130,6 @@ void LpelWorkerInit(int size)
     wc->wid = i;
     wc->num_tasks = 0;
     wc->terminate = 0;
-#ifdef MEASUREMENTS
-    wc->max_time = 0;
-    wc->min_time = 0;
-    wc->total_tasks = 0;
-#endif
 
     wc->sched = LpelSchedCreate( i);
     wc->wraptask = NULL;
@@ -172,9 +167,6 @@ void LpelWorkerInit(int size)
  */
 void LpelWorkerCleanup(void)
 {
-#ifdef MEASUREMENTS
-  long min_time = 0, max_time = 0, total_tasks = 0;
-#endif
   workerctx_t *wc;
 
   /* wait on workers */
@@ -187,12 +179,6 @@ void LpelWorkerCleanup(void)
   for(int i = 0; i < num_workers; i++) {
     wc = WORKER_PTR(i);
 
-#ifdef MEASUREMENTS
-    min_time += wc->min_time;
-    max_time += wc->max_time;
-    total_tasks += wc->total_tasks;
-#endif
-
     LpelMailboxDestroy(wc->mailbox);
     LpelSchedDestroy( wc->sched);
     PlacementDestroyWorker(wc->placement_data);
@@ -201,18 +187,6 @@ void LpelWorkerCleanup(void)
 
   /* free workers table */
   free( workers);
-
-  /* free mutex table */
-
-#ifdef MEASUREMENTS
-  min_time /= num_workers;
-  max_time /= num_workers;
-
-  printf("WORKER STATISTICS:\n");
-  printf("MINIMUM TIME:\t%lf\n", (double)min_time / (double)1000000000);
-  printf("MAXIMUM TIME:\t%lf\n", (double)max_time / (double)1000000000);
-  printf("TOTAL NUMBER OF TASKS:\t%ld\n", total_tasks);
-#endif
 
   /* cleanup spmdext module */
   LpelSpmdCleanup();
@@ -491,13 +465,6 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 #endif
       } else {
         LpelSchedMakeReady( wc->sched, t);
-#ifdef MEASUREMENTS
-        LpelTimingEnd(&t->start_time);
-        long time = LpelTimingToNSec(&t->start_time);
-        wc->max_time = (time > wc->max_time) ? time : wc->max_time;
-        wc->min_time = (time < wc->min_time || wc->min_time == 0) ? time : wc->min_time;
-        wc->total_tasks++;
-#endif
       }
 
 #ifdef USE_LOGGING
