@@ -136,6 +136,20 @@ if test $have___thread = yes; then
   AC_DEFINE([HAVE___THREAD], [1], [Define to 1 if compiler supports the __thread storage class.])
 fi
 
+
+AC_ARG_ENABLE([hwloc], [AS_HELP_STRING([--disable-hwloc], [disable support for hwloc (default is try to enable)])])
+
+if test "x$enable_hwloc" != xno; then
+  AC_CHECK_LIB([hwloc], [hwloc_set_cpubind], [], [enable_hwloc=no])
+  AC_CHECK_HEADER([hwloc.h], [], [enable_hwloc=no])
+fi
+
+if test x"$enable_hwloc" != xno; then
+  AC_DEFINE([HAVE_HWLOC], [1], [Define to 1 if hwloc is available.])
+fi
+
+
+
 AC_LANG_POP([C])
 
 
