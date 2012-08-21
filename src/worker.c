@@ -594,9 +594,9 @@ static void *WorkerThread( void *arg)
 #endif /* HAVE___THREAD */
 
 
-//FIXME
 #ifdef USE_MCTX_PCL
-  assert( 0 == co_thread_init());
+  int res = co_thread_init();
+  assert( 0 == res);
   wc->mctx = co_current();
 #endif
 

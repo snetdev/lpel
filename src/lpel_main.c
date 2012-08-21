@@ -195,8 +195,9 @@ int LpelInit(lpel_config_t *cfg)
   CreateCpusets();
 
 #ifdef USE_MCTX_PCL
+  res = co_thread_init();
   /* initialize machine context for main thread */
-  assert( 0 == co_thread_init());
+  assert( 0 == res);
 #endif
 
 
