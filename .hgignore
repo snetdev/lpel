@@ -14,3 +14,23 @@ syntax: glob
 
 # svn files
 .svn*
+
+.libs
+*autom4te*
+.deps
+build-aux
+config.status
+configure
+Makefile
+Makefile.in
+libtool
+aclocal.m4
+.dirstamp
+pipetest
+ringtest
+pthr_pipetest
+pthr_ringtest
+tests/lpel
+tests/lpel2
+m4/libtool.m4
+m4/lt*.m4

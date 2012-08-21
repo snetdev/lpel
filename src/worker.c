@@ -18,7 +18,6 @@
 #include "spmdext.h"
 
 #include "task.h"
-#include "lpel_main.h"
 #include "lpelcfg.h"
 
 #include "mailbox.h"
@@ -27,6 +26,8 @@
 #include "lpel/timing.h"
 #include "taskqueue.h"
 #include "placementscheduler.h"
+
+#include "lpel_hwloc.h"
 
 #define WORKER_PTR(i) (workers[(i)])
 
@@ -153,9 +154,6 @@ void LpelWorkerInit(int size)
 
     wc->placement_data = PlacementInitWorker();
   }
-
-  /* Initialize placement scheduler */
-  LpelPlacementSchedulerInit();
 
   assert(res==0);
 }
@@ -594,9 +592,9 @@ static void *WorkerThread( void *arg)
 #endif /* HAVE___THREAD */
 
 
-//FIXME
 #ifdef USE_MCTX_PCL
-  assert( 0 == co_thread_init());
+  int res = co_thread_init();
+  assert( 0 == res);
   wc->mctx = co_current();
 #endif
 

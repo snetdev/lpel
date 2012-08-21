@@ -167,7 +167,7 @@ static void testBasic(void)
 
   LpelInit(&cfg);
 
-  LpelStart();
+  LpelStart(&cfg);
   CreateRing();
   LpelStop();
   LpelCleanup();
