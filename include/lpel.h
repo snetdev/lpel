@@ -102,14 +102,11 @@ typedef struct {
 
 
 
-int LpelInit( lpel_config_t *cfg);
+void LpelInit( lpel_config_t *cfg);
 void LpelCleanup( void);
 
-void LpelStart(void);
+int LpelStart( lpel_config_t *cfg);
 void LpelStop(void);
-
-int LpelGetNumCores( int *result);
-int LpelCanSetExclusive( int *result);
 
 
 

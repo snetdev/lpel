@@ -18,7 +18,6 @@
 #include "spmdext.h"
 
 #include "task.h"
-#include "lpel_main.h"
 #include "lpelcfg.h"
 
 #include "mailbox.h"
@@ -27,6 +26,8 @@
 #include "lpel/timing.h"
 #include "taskqueue.h"
 #include "placementscheduler.h"
+
+#include "lpel_hwloc.h"
 
 #define WORKER_PTR(i) (workers[(i)])
 
