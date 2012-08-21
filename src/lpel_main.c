@@ -68,6 +68,11 @@ int LpelStart(lpel_config_t *cfg)
 
   LpelWorkerSpawn();
 
+  if (cfg->placement) {
+    /* Initialize placement scheduler */
+    LpelPlacementSchedulerInit();
+  }
+
   return 0;
 }
 

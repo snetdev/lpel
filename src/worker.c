@@ -155,9 +155,6 @@ void LpelWorkerInit(int size)
     wc->placement_data = PlacementInitWorker();
   }
 
-  /* Initialize placement scheduler */
-  LpelPlacementSchedulerInit();
-
   assert(res==0);
 }
 
