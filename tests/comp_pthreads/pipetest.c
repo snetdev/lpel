@@ -191,7 +191,7 @@ static void testBasic(void)
 
   LpelInit(&cfg);
 
-  LpelStart();
+  LpelStart(&cfg);
   CreatePipe();
 
   LpelStop();

@@ -145,7 +145,7 @@ static void testBasic(void)
   LpelTaskMonitor(intask, mt);
   LpelTaskRun(intask);
 
-  LpelStart();
+  LpelStart(&cfg);
   LpelCleanup();
   LpelMonCleanup();
 }

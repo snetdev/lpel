@@ -33,7 +33,8 @@ liblpel_la_SOURCES = \
 	src/lpelcfg.c \
 	src/lpelcfg.h \
 	src/lpel_main.c \
-	src/lpel_main.h \
+	src/lpel_hwloc.c \
+	src/lpel_hwloc.h \
 	src/placementscheduler.c \
 	src/placementscheduler.h \
 	src/worker.c \

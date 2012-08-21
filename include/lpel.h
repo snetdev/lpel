@@ -80,8 +80,6 @@ typedef struct lpel_monitoring_cb_t {
  *              there is a 1:1 mapping of workers to procs,
  *              proc_others > 0 and the process has needed privileges.
  * threshold is a variable used for the placement scheduler
- * segmentation is a variable used when there is task segmentation
- * segmentation gives the number of workers assigned to tasks with priority 1
  */
 typedef struct {
   int num_workers;
@@ -90,6 +88,7 @@ typedef struct {
   int flags;
   struct lpel_monitoring_cb_t mon;
   float threshold;
+  int placement;
 } lpel_config_t;
 
 
@@ -104,14 +103,11 @@ typedef struct {
 
 
 
-int LpelInit( lpel_config_t *cfg);
+void LpelInit( lpel_config_t *cfg);
 void LpelCleanup( void);
 
-void LpelStart(void);
+int LpelStart( lpel_config_t *cfg);
 void LpelStop(void);
-
-int LpelGetNumCores( int *result);
-int LpelCanSetExclusive( int *result);
 
 
 
