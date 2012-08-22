@@ -211,6 +211,16 @@ lpel_task_iterator_t *LpelTaskIterCreate(taskqueue_t *queue, int length);
 void LpelPlacementSchedulerInit(void);
 
 /******************************************************************************/
+/*  WORKER FUNCTIONS                                                          */
+/******************************************************************************/
+
+/** return the current worker index of the given task */
+int LpelTaskGetWorkerId(lpel_task_t *t);
+
+/** return the total number of workers */
+int LpelWorkerCount(void);
+
+/******************************************************************************/
 /*  STREAM FUNCTIONS                                                          */
 /******************************************************************************/
 
