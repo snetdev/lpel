@@ -34,7 +34,7 @@ static int LpelCanSetExclusive(void)
   cap_flag_value_t cap;
   /* obtain caps of process */
   caps = cap_get_proc();
-  if (caps == NULL) return 0
+  if (caps == NULL) return 0;
   cap_get_flag(caps, CAP_SYS_NICE, CAP_EFFECTIVE, &cap);
   return cap == CAP_SET;
 #else
