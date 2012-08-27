@@ -138,6 +138,7 @@ static inline void PrintTimingUs( const lpel_timing_t *t, FILE *file)
   if (t->tv_sec == 0) {
     (void) fprintf( file, "%lu ", t->tv_nsec / 1000);
   } else {
+    assert((t->tv_nsec / 1000) >= 0 && (t->tv_nsec / 1000) < 1000000);
     (void) fprintf( file, "%lu%06lu ",
         (unsigned long) t->tv_sec, (t->tv_nsec / 1000)
         );
@@ -152,6 +153,7 @@ static inline void PrintTimingNs( const lpel_timing_t *t, FILE *file)
   if (t->tv_sec == 0) {
     (void) fprintf( file, "%lu ", t->tv_nsec);
   } else {
+    assert(t->tv_nsec >= 0 && t->tv_nsec < 1000000000);
     (void) fprintf( file, "%lu%09lu ",
         (unsigned long) t->tv_sec, (t->tv_nsec)
         );
@@ -166,6 +168,7 @@ static inline void PrintNormTSus( const lpel_timing_t *t, FILE *file)
   lpel_timing_t norm_ts;
 
   LpelTimingDiff(&norm_ts, &monitoring_begin, t);
+  assert(norm_ts.tv_nsec >= 0 && (norm_ts.tv_nsec / 1000) < 1000000);
   (void) fprintf( file,
       "%lu.%06lu ",
       (unsigned long) norm_ts.tv_sec,
@@ -181,6 +184,7 @@ static inline void PrintNormTSns( const lpel_timing_t *t, FILE *file)
   lpel_timing_t norm_ts;
 
   LpelTimingDiff(&norm_ts, &monitoring_begin, t);
+  assert(norm_ts.tv_nsec >= 0 && norm_ts.tv_nsec < 1000000000);
   (void) fprintf( file,
       "%lu.%09lu ",
       (unsigned long) norm_ts.tv_sec,
