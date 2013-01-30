@@ -591,4 +591,10 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   return self->wakeup_sd;
 }
 
+int LpelStreamGetId(lpel_stream_desc_t *sd) {
+	if (sd)
+		if (sd->stream)
+			return sd->stream->uid;
+	return -1;
+}
 
