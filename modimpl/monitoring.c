@@ -1,6 +1,3 @@
-
-
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -8,21 +5,32 @@
 #include <assert.h>
 
 #include <lpel/timing.h>
+#include <lpel/monitor.h>
 
 #include "monitoring.h"
 
 
-#define MON_TASKNAME_MAXLEN  64
-
 #define PrintTiming(t, file)  PrintTimingNs((t),(file))
 #define PrintNormTS(t, file)  PrintNormTSns((t),(file))
 
+static int mon_node = -1;
+static int mon_flags = 0;
 
 
 static const char *prefix = "mon_";
 static const char *suffix = ".log";
 
+static const char end_entry = END_LOG_ENTRY;
+//static const char message_trace_sep = MESSAGE_TRACE_SEPARATOR;
+static const char worker_start = WORKER_START_EVENT;
+static const char worker_end = WORKER_END_EVENT;
+static const char worker_wait = WORKER_WAIT_EVENT;
 
+#define MON_USREVT_BUFSIZE_DELTA 64
+#define MON_TASKNAME_MAXLEN  64
+#define MON_FNAME_MAXLEN  31
+
+typedef struct mon_usrevt_t mon_usrevt_t;
 
 
 /**
@@ -30,12 +38,18 @@ static const char *suffix = ".log";
  * the log-file handle contains wait-times (idle-time)
  */
 struct mon_worker_t {
-  int           wid;         /** worker id */
-  FILE         *outfile;     /** where to write the monitoring data to */
-  unsigned int  disp;        /** count how often a task has been dispatched */
-  unsigned int  wait_cnt;
-  lpel_timing_t      wait_total;
-  lpel_timing_t      wait_current;
+	int           wid;         /** worker id */
+	FILE         *outfile;     /** where to write the monitoring data to */
+	unsigned int  disp;        /** count how often a task has been dispatched */
+	lpel_timing_t      wait_current;
+	unsigned int wait_cnt;
+	lpel_timing_t wait_time;
+	lpel_timing_t exec_time;
+	struct {
+		int cnt, size;
+		mon_usrevt_t *buffer;
+	} events;         /** user-defined events */
+	int flags;
 };
 
 
@@ -48,19 +62,19 @@ struct mon_worker_t {
  * the task_assign() handler MonCbTaskAssign().
  */
 struct mon_task_t {
-  char name[MON_TASKNAME_MAXLEN];
-  mon_worker_t *mw;
-  unsigned long tid;
-  unsigned long flags; /** monitoring flags */
-  unsigned long disp;  /** dispatch counter */
-  struct {
-    lpel_timing_t creat; /** task creation time */
-    lpel_timing_t total; /** total execution time of the task */
-    lpel_timing_t start; /** start time of last dispatch */
-    lpel_timing_t stop;  /** stop time of last dispatch */
-  } times;
-  mon_stream_t *dirty_list; /** head of dirty stream list */
-  char blockon;     /** for convenience: tracking if blocked
+	char name[MON_TASKNAME_MAXLEN];
+	mon_worker_t *mw;
+	unsigned long tid;
+	unsigned long flags; /** monitoring flags */
+	struct {
+		lpel_timing_t creat; /** task creation time */
+		lpel_timing_t start; /** start time of last dispatch */
+		lpel_timing_t stop;  /** stop time of last dispatch */
+	} times;
+	mon_stream_t *dirty_list; /** head of dirty stream list */
+	unsigned long last_in_cnt;  /** last counter of an input stream */
+	unsigned long last_out_cnt; /** last counter of an output stream */
+	char blockon;     /** for convenience: tracking if blocked
                         on read or write or any */
 };
 
@@ -71,16 +85,25 @@ struct mon_task_t {
   callbacks upon stream procedures.
  */
 struct mon_stream_t {
-  mon_task_t   *montask;     /** Invariant: != NULL */
-  mon_stream_t *dirty;       /** for maintaining a dirty stream list */
-  char          mode;        /** either 'r' or 'w' */
-  char          state;       /** one if IOCR */
-  unsigned int  sid;         /** copy of the stream uid */
-  unsigned long counter;     /** number of items processed */
-  unsigned int  strevt_flags;/** events "?!*" */
+	mon_task_t   *montask;     /** Invariant: != NULL */
+	mon_stream_t *dirty;       /** for maintaining a dirty stream list */
+	char          mode;        /** either 'r' or 'w' */
+	char          state;       /** one if IOCR */
+	unsigned int  sid;         /** copy of the stream uid */
+	unsigned long counter;     /** number of items processed */
+	unsigned int  strevt_flags;/** events "?!*" */
 };
 
 
+/**
+ * Item to log the possible user events of the treading interface
+ */
+struct mon_usrevt_t {
+	lpel_timing_t ts;
+	//snet_moninfo_t *moninfo; // to be implemented in snet-rts
+	unsigned long in_cnt;
+	unsigned long out_cnt;
+};
 
 
 /**
@@ -91,12 +114,13 @@ struct mon_stream_t {
 #define ST_CLOSED   'C'
 #define ST_REPLACED 'R'
 
-/**
+/*
  * The strevt_flags of a stream descriptor
  */
 #define ST_MOVED    (1<<0)
 #define ST_WAKEUP   (1<<1)
 #define ST_BLOCKON  (1<<2)
+
 
 /**
  * This special value indicates the end of the dirty list chain.
@@ -105,9 +129,6 @@ struct mon_stream_t {
 #define ST_DIRTY_END   ((mon_stream_t *)-1)
 
 
-
-
-#define MON_FNAME_MAXLEN  31
 
 
 /**
@@ -126,22 +147,25 @@ static lpel_timing_t monitoring_begin = LPEL_TIMING_INITIALIZER;
 /**
  * Macros for checking flags
  */
-#define FLAG_TIMES(mt)    (mt->flags & LPEL_MON_TASK_TIMES)
-#define FLAG_STREAMS(mt)  (mt->flags & LPEL_MON_TASK_STREAMS)
-#define FLAG_EVENTS(mt)   (mt->flags & LPEL_MON_TASK_USREVT)
+#define FLAG_TIMES(mt)    (mt->flags & LPEL_MON_TIME)
+#define FLAG_STREAMS(mt)  (mt->flags & LPEL_MON_STREAM)
+#define FLAG_MESSAGE(mt)   (mt->flags & LPEL_MON_MESSAGE)
+#define FLAG_TASK(mt)  (mt->flags & LPEL_MON_TASK)
+#define FLAG_WORKER(mt)  (mt->flags & LPEL_MON_WORKER)
+#define FLAG_LOAD(mt)	(mt->flags & LPEL_MON_LOAD)
 
 /**
  * Print a time in usec
  */
 static inline void PrintTimingUs( const lpel_timing_t *t, FILE *file)
 {
-  if (t->tv_sec == 0) {
-    (void) fprintf( file, "%lu ", t->tv_nsec / 1000);
-  } else {
-    (void) fprintf( file, "%lu%06lu ",
-        (unsigned long) t->tv_sec, (t->tv_nsec / 1000)
-        );
-  }
+	if (t->tv_sec == 0) {
+		(void) fprintf( file, "%lu ", t->tv_nsec / 1000);
+	} else {
+		(void) fprintf( file, "%lu%06lu ",
+				(unsigned long) t->tv_sec, (t->tv_nsec / 1000)
+		);
+	}
 }
 
 /**
@@ -149,13 +173,13 @@ static inline void PrintTimingUs( const lpel_timing_t *t, FILE *file)
  */
 static inline void PrintTimingNs( const lpel_timing_t *t, FILE *file)
 {
-  if (t->tv_sec == 0) {
-    (void) fprintf( file, "%lu ", t->tv_nsec);
-  } else {
-    (void) fprintf( file, "%lu%09lu ",
-        (unsigned long) t->tv_sec, (t->tv_nsec)
-        );
-  }
+	if (t->tv_sec == 0) {
+		(void) fprintf( file, "%lu", t->tv_nsec);
+	} else {
+		(void) fprintf( file, "%lu%09lu",
+				(unsigned long) t->tv_sec, (t->tv_nsec)
+		);
+	}
 }
 
 /**
@@ -163,14 +187,14 @@ static inline void PrintTimingNs( const lpel_timing_t *t, FILE *file)
  */
 static inline void PrintNormTSus( const lpel_timing_t *t, FILE *file)
 {
-  lpel_timing_t norm_ts;
+	lpel_timing_t norm_ts;
 
-  LpelTimingDiff(&norm_ts, &monitoring_begin, t);
-  (void) fprintf( file,
-      "%lu.%06lu ",
-      (unsigned long) norm_ts.tv_sec,
-      (norm_ts.tv_nsec / 1000)
-      );
+	LpelTimingDiff(&norm_ts, &monitoring_begin, t);
+	(void) fprintf( file,
+			"%lu%06lu",
+			(unsigned long) norm_ts.tv_sec,
+			(norm_ts.tv_nsec / 1000)
+	);
 }
 
 /**
@@ -178,14 +202,26 @@ static inline void PrintNormTSus( const lpel_timing_t *t, FILE *file)
  */
 static inline void PrintNormTSns( const lpel_timing_t *t, FILE *file)
 {
-  lpel_timing_t norm_ts;
+	lpel_timing_t norm_ts;
 
-  LpelTimingDiff(&norm_ts, &monitoring_begin, t);
-  (void) fprintf( file,
-      "%lu.%09lu ",
-      (unsigned long) norm_ts.tv_sec,
-      (norm_ts.tv_nsec)
-      );
+	LpelTimingDiff(&norm_ts, &monitoring_begin, t);
+	// to shorten the timestamp
+	if (norm_ts.tv_sec == 0) {
+		(void) fprintf( file, "%lu", norm_ts.tv_nsec);
+	} else {
+		(void) fprintf( file, "%lu%09lu",
+				(unsigned long) norm_ts.tv_sec, (norm_ts.tv_nsec)
+		);
+	}
+
+	/*
+	 // full timestamp
+	 (void) fprintf( file,
+			"%lu%09lu ",
+			(unsigned long) norm_ts.tv_sec,
+			(norm_ts.tv_nsec)
+	);*/
+
 }
 
 
@@ -195,79 +231,92 @@ static inline void PrintNormTSns( const lpel_timing_t *t, FILE *file)
  */
 static inline void MarkDirty( mon_stream_t *ms)
 {
-  mon_task_t *mt = ms->montask;
-  /*
-   * only add if not dirty yet
-   */
-  if ( ms->dirty == NULL ) {
-    /*
-     * Set the dirty ptr of ms to the dirty_list ptr of montask
-     * and the dirty_list ptr of montask to ms, i.e.,
-     * insert the ms at the front of the dirty_list.
-     * Initially, dirty_list of montask is empty (ST_DIRTY_END, != NULL)
-     */
-    ms->dirty = mt->dirty_list;
-    mt->dirty_list = ms;
-  }
+	mon_task_t *mt = ms->montask;
+	/*
+	 * only add if not dirty yet
+	 */
+	if ( ms->dirty == NULL ) {
+		/*
+		 * Set the dirty ptr of ms to the dirty_list ptr of montask
+		 * and the dirty_list ptr of montask to ms, i.e.,
+		 * insert the ms at the front of the dirty_list.
+		 * Initially, dirty_list of montask is empty (ST_DIRTY_END, != NULL)
+		 */
+		ms->dirty = mt->dirty_list;
+		mt->dirty_list = ms;
+	}
+	/* in every case, copy the counter value */
+	switch(ms->mode) {
+	case 'r': mt->last_in_cnt  = ms->counter; break;
+	case 'w': mt->last_out_cnt = ms->counter; break;
+	default: assert(0);
+	}
 }
 
 
 /**
- * Print the dirty list of the task
+ * Print the dirty list of the task: stream trace
  */
 static void PrintDirtyList(mon_task_t *mt)
 {
-  mon_stream_t *ms, *next;
-  FILE *file = mt->mw->outfile;
+	mon_stream_t *ms, *next;
+	FILE *file = mt->mw->outfile;
 
-  fprintf( file,"[" );
+	ms = mt->dirty_list;
 
-  ms = mt->dirty_list;
+	while (ms != ST_DIRTY_END) {
+		/* all elements in the dirty list must belong to same task */
+		assert( ms->montask == mt );
 
-  while (ms != ST_DIRTY_END) {
-    /* all elements in the dirty list must belong to same task */
-    assert( ms->montask == mt );
+		/* now print */
 
-    /* now print */
-    (void) fprintf( file,
-        "%u,%c,%c,%lu,%c%c%c;",
-        ms->sid, ms->mode, ms->state, ms->counter,
-        ( ms->strevt_flags & ST_BLOCKON) ? '?':'-',
-        ( ms->strevt_flags & ST_WAKEUP) ? '!':'-',
-        ( ms->strevt_flags & ST_MOVED ) ? '*':'-'
-        );
+		(void) fprintf( file,
+				"%u%c%c%lu%c%c%c",
+				ms->sid, ms->mode, ms->state, ms->counter,
+				( ms->strevt_flags & ST_BLOCKON) ? '?':'-',
+						( ms->strevt_flags & ST_WAKEUP) ? '!':'-',
+								( ms->strevt_flags & ST_MOVED ) ? '*':'-'
+		);
 
 
-    /* get the next dirty entry, and clear the link in the current entry */
-    next = ms->dirty;
+		/* get the next dirty entry, and clear the link in the current entry */
+		ms->counter = 0;	//reset for stream counter
+		next = ms->dirty;
 
-    /* update/reset states */
-    switch (ms->state) {
-      case ST_OPENED:
-      case ST_REPLACED:
-        ms->state = ST_INUSE;
-        /* fall-through */
-      case ST_INUSE:
-        ms->dirty = NULL;
-        ms->strevt_flags = 0;
-        break;
+		/* update/reset states */
+		switch (ms->state) {
+		case ST_OPENED:
+		case ST_REPLACED:
+			ms->state = ST_INUSE;
+			/* fall-through */
+		case ST_INUSE:
+			ms->dirty = NULL;
+			ms->strevt_flags = 0;
+			break;
 
-      case ST_CLOSED:
-        /* eventually free the mon_stream_t of the closed stream */
-        free(ms);
-        break;
+		case ST_CLOSED:
+			/* eventually free the mon_stream_t of the closed stream */
+			free(ms);
+			break;
 
-      default: assert(0);
-    }
-    ms = next;
-  }
+		default: assert(0);
+		}
+		ms = next;
+	}
 
-  /* dirty list of task is empty */
-  mt->dirty_list = ST_DIRTY_END;
 
-  fprintf( file,"] " );
+	/* dirty list of task is empty */
+	mt->dirty_list = ST_DIRTY_END;
 }
 
+
+/**
+ * Print the user events of a task
+ */
+static void PrintUsrEvt(mon_task_t *mt)
+{
+	// implement in snet rts
+}
 
 
 
@@ -276,162 +325,193 @@ static void PrintDirtyList(mon_task_t *mt)
  ****************************************************************************/
 
 
-
-
-static void MonCbDebug( mon_worker_t *mon, const char *fmt, ...)
-{
-  lpel_timing_t tnow;
-  va_list ap;
-
-  if (!mon) return;
-
-  /* print current timestamp */
-  //TODO check if timestamping required
-  LpelTimingNow(&tnow);
-  PrintNormTS(&tnow, mon->outfile);
-  fprintf( mon->outfile, "*** ");
-
-  va_start(ap, fmt);
-  vfprintf( mon->outfile, fmt, ap);
-  //fflush(mon->outfile);
-  va_end(ap);
-}
-
 /**
  * Create a monitoring context (for a worker)
  *
  * @param wid   worker id
- * @param name  name of monitoring context,
- *              filename where the information is logged
- * @pre         name != NULL && strlen(name) <= MON_NAME_LEN
- *
  * @return a newly created monitoring context
  */
-//mon_worker_t *MonCbWorkerCreate(int wid, const char *name, int dbglvl)
-static mon_worker_t *MonCbWorkerCreate(int wid)
+static mon_worker_t *MonCbWorkerCreate( int wid)
 {
-  char fname[MON_FNAME_MAXLEN+1];
+	char fname[MON_FNAME_MAXLEN+1];
 
-  mon_worker_t *mon = (mon_worker_t *) malloc( sizeof(mon_worker_t));
+	mon_worker_t *mon = (mon_worker_t *) malloc( sizeof(mon_worker_t));
+	mon->flags = mon_flags;
 
-  mon->wid = wid;
-
-  /* build filename */
-  memset(fname, 0, MON_FNAME_MAXLEN+1);
-  snprintf( fname, MON_FNAME_MAXLEN,
-    "%sworker%02d%s", prefix, wid, suffix);
+	mon->wid = wid;
 
 
-  /* open logfile */
-  mon->outfile = fopen(fname, "w");
-  assert( mon->outfile != NULL);
 
-  /* default values */
-  mon->disp = 0;
-  mon->wait_cnt = 0;
-  LpelTimingZero(&mon->wait_total);
-  LpelTimingZero(&mon->wait_current);
+	/* build filename */
+	memset(fname, 0, MON_FNAME_MAXLEN+1);
+	snprintf( fname, MON_FNAME_MAXLEN,
+			"%sn%02d_worker%02d%s", prefix, mon_node, wid, suffix);
 
 
-  /* start message */
-  MonCbDebug( mon, "Worker %d started.\n", mon->wid);
+	/* open logfile */
+	mon->outfile = fopen(fname, "w");
+	assert( mon->outfile != NULL);
+	(void) fprintf(mon->outfile, "%s%c", LOG_FORMAT_VERSION, END_LOG_ENTRY);
 
-  return mon;
+	/* default values */
+	mon->disp = 0;
+	LpelTimingZero(&mon->wait_current);
+
+	/* statistic info */
+	mon->wait_cnt = 0;
+	LpelTimingZero(&mon->wait_time);
+
+	/* user events */
+	mon->events.cnt = 0;
+	mon->events.size = MON_USREVT_BUFSIZE_DELTA;
+	mon->events.buffer = malloc( mon->events.size * sizeof(mon_usrevt_t));
+
+	/* start message */
+	if ((FLAG_WORKER(mon) && FLAG_TIMES(mon))
+			|| FLAG_LOAD(mon)){
+		lpel_timing_t tnow;
+		LpelTimingNow(&tnow);
+		PrintNormTS(&tnow, mon->outfile);
+	}
+
+	if ((FLAG_WORKER(mon) || FLAG_LOAD(mon)))
+		fprintf( mon->outfile, "%c%c", worker_start, end_entry);
+
+
+	return mon;
 }
 
 
 
-static mon_worker_t *MonCbWrapperCreate(mon_task_t *mt)
+static mon_worker_t *MonCbWrapperCreate( mon_task_t *mt)
 {
-  char fname[MON_FNAME_MAXLEN+1];
+	char fname[MON_FNAME_MAXLEN+1];
 
-  mon_worker_t *mon = (mon_worker_t *) malloc( sizeof(mon_worker_t));
-  mon->wid = -1;
+	mon_worker_t *mon = (mon_worker_t *) malloc( sizeof(mon_worker_t));
+	mon->wid = -1;
+	mon->flags = mon_flags;
 
-  /* build filename */
-  memset(fname, 0, MON_FNAME_MAXLEN+1);
-  if (strlen(mt->name)>0) {
-    snprintf( fname, MON_FNAME_MAXLEN,
-      "%s%s%s", prefix, mt->name, suffix);
-  } else {
-    snprintf( fname, MON_FNAME_MAXLEN,
-      "%swrapper%02lu%s", prefix, mt->tid, suffix);
-  }
+	/* build filename */
+	memset(fname, 0, MON_FNAME_MAXLEN+1);
+	if (strlen(mt->name)>0) {
+		snprintf( fname, MON_FNAME_MAXLEN,
+				"%sn%02d_%s%s", prefix, mon_node, mt->name, suffix);
+	} else {
+		snprintf( fname, MON_FNAME_MAXLEN,
+				"%swrapper%02lu%s", prefix, mt->tid, suffix);
+	}
 
-  /* open logfile */
-  mon->outfile = fopen(fname, "w");
-  assert( mon->outfile != NULL);
+	/* open logfile */
+	mon->outfile = fopen(fname, "w");
+	assert( mon->outfile != NULL);
 
-  /* default values */
-  mon->disp = 0;
-  mon->wait_cnt = 0;
-  LpelTimingZero(&mon->wait_total);
-  LpelTimingZero(&mon->wait_current);
+	/* default values */
+	mon->disp = 0;
+	LpelTimingZero(&mon->wait_current);
 
-  /* start message */
-  MonCbDebug( mon, "Wrapper %s started.\n", fname);
+	/* user events */
+	mon->events.size = 0;
+	mon->events.cnt = 0;
+	mon->events.buffer = NULL;
 
-  return mon;
+	/* start message */
+	if (FLAG_WORKER(mon)){
+		if (FLAG_TIMES(mon)) {
+			lpel_timing_t tnow;
+			LpelTimingNow(&tnow);
+			PrintNormTS(&tnow, mon->outfile);
+		}
+
+
+		fprintf(mon->outfile, "%c%c", worker_start, end_entry);
+	}
+	return mon;
 }
 
 
 
+static void printStatistic(mon_worker_t *mon){
+	fprintf(mon->outfile, "WC%dWT", mon->wait_cnt);
+	PrintTiming( &mon->wait_time, mon->outfile);
+
+}
 /**
  * Destroy a monitoring context
  *
  * @param mon the monitoring context to destroy
  */
-static void MonCbWorkerDestroy(mon_worker_t *mon)
+static void MonCbWorkerDestroy( mon_worker_t *mon)
 {
-  if (mon->wid < 0) {
-    MonCbDebug( mon,
-        "Wrapper exited. wait_cnt %u, wait_time %lu.%06lu sec\n",
-        mon->wait_cnt,
-        (unsigned long) mon->wait_total.tv_sec, (mon->wait_total.tv_nsec / 1000)
-        );
-  } else {
-    MonCbDebug( mon,
-        "Worker %d exited. wait_cnt %u, wait_time %lu.%06lu sec\n",
-        mon->wid, mon->wait_cnt,
-        (unsigned long) mon->wait_total.tv_sec, (mon->wait_total.tv_nsec / 1000)
-        );
-  }
 
-  if ( mon->outfile != NULL) {
-    int ret;
-    ret = fclose( mon->outfile);
-    assert(ret == 0);
-  }
+	if ((FLAG_WORKER(mon) && FLAG_TIMES(mon)) || FLAG_LOAD(mon)) {
+		/* write message */
+		lpel_timing_t tnow;
+		LpelTimingNow( &tnow);
+		PrintNormTS( &tnow, mon->outfile);
+	}
 
-  free( mon);
+	if (FLAG_WORKER(mon) || FLAG_LOAD(mon)) {
+		fprintf( mon->outfile, "%c%c", worker_end, end_entry);
+
+		if (FLAG_LOAD(mon))
+			printStatistic(mon);
+	}
+
+
+	if ( mon->outfile != NULL) {
+		int ret;
+		ret = fclose( mon->outfile);
+		assert(ret == 0);
+	}
+
+	if ( mon->events.buffer != NULL) {
+		free(mon->events.buffer);
+	}
+
+	free( mon);
 }
 
 
 
 
-
-
-
-
-
-
-static void MonCbWorkerWaitStart(mon_worker_t *mon)
+static void MonCbWorkerWaitStart( mon_worker_t *mon)
 {
-  mon->wait_cnt++;
-  LpelTimingStart(&mon->wait_current);
+	LpelTimingStart(&mon->wait_current);
+	if (FLAG_LOAD(mon))
+		mon->wait_cnt++;		// cheaper than without conditional check?
 }
 
 
 static void MonCbWorkerWaitStop(mon_worker_t *mon)
 {
-  LpelTimingEnd(&mon->wait_current);
-  LpelTimingAdd(&mon->wait_total, &mon->wait_current);
+	if (FLAG_WORKER(mon) || FLAG_LOAD(mon)) {
+		LpelTimingEnd(&mon->wait_current);
+	}
 
-  MonCbDebug( mon,
-      "worker %d waited (%u) for %lu.%09lu\n",
-      mon->wid, mon->wait_cnt,
-      (unsigned long) mon->wait_current.tv_sec, (mon->wait_current.tv_nsec)
-      );
+
+	if (FLAG_WORKER(mon)) {
+		if (FLAG_TIMES(mon)) {
+			lpel_timing_t tnow;
+			LpelTimingNow(&tnow);
+			PrintNormTS(&tnow, mon->outfile);
+		}
+
+
+		// waiting time in second
+		//		  fprintf(mon->outfile, "%c %lu.%09lu %c", worker_wait,
+		//				(unsigned long) mon->wait_current.tv_sec, (unsigned long)mon->wait_current.tv_nsec, end_entry
+		//		);
+
+
+		/* waiting time in nanosecond */
+		fprintf( mon->outfile, "%c", worker_wait);
+		PrintTiming( &mon->wait_current, mon->outfile);
+		fprintf( mon->outfile, "%c", end_entry);
+	}
+
+	if (FLAG_LOAD(mon))
+		LpelTimingAdd(&mon->wait_time, &mon->wait_current);
+
 }
 
 
@@ -439,8 +519,8 @@ static void MonCbWorkerWaitStop(mon_worker_t *mon)
 
 static void MonCbTaskDestroy(mon_task_t *mt)
 {
-  assert( mt != NULL );
-  free(mt);
+	assert( mt != NULL );
+	free(mt);
 }
 
 
@@ -451,83 +531,104 @@ static void MonCbTaskDestroy(mon_task_t *mt)
  */
 static void MonCbTaskAssign(mon_task_t *mt, mon_worker_t *mw)
 {
-  assert( mt != NULL );
-  assert( mt->mw == NULL );
-  mt->mw = mw;
+	assert( mt != NULL );
+	//assert( mt->mw == NULL ); // not applied for hrc_lpel
+	mt->mw = mw;
 }
 
+mon_task_t *LpelMonTaskCreate(unsigned long tid, const char *name)
+{
+	mon_task_t *mt = malloc( sizeof(mon_task_t) );
+
+	/* zero out everything */
+	memset(mt, 0, sizeof(mon_task_t));
+
+	/* copy name and 0-terminate */
+	if ( name != NULL ) {
+		(void) strncpy(mt->name, name, MON_TASKNAME_MAXLEN);
+		mt->name[MON_TASKNAME_MAXLEN-1] = '\0';
+	}
+
+	mt->mw = NULL;
+	mt->tid = tid;
+	mt->flags = mon_flags;
+
+	mt->dirty_list = ST_DIRTY_END;
+
+	if FLAG_TIMES(mt) {
+		lpel_timing_t tnow;
+		LpelTimingNow(&tnow);
+		LpelTimingDiff(&mt->times.creat, &monitoring_begin, &tnow);
+	}
+
+	return mt;
+}
 
 
 static void MonCbTaskStart(mon_task_t *mt)
 {
-  assert( mt != NULL );
-  if FLAG_TIMES(mt) {
-    LpelTimingNow(&mt->times.start);
-  }
+	assert( mt != NULL );
+	if FLAG_TIMES(mt) {
+		LpelTimingNow(&mt->times.start);
+	}
 
-  /* set blockon to any */
-  mt->blockon = 'A';
-
-  /* increment dispatch counter of task */
-  mt->disp++;
-  /* increment task dispatched counter of monitoring context */
-  if (mt->mw) mt->mw->disp++;
+	/* set blockon to any */
+	mt->blockon = 'A';
 }
 
 
 
 
-static void MonCbTaskStop(mon_task_t *mt, lpel_taskstate_t state)
+static void MonCbTaskStop( mon_task_t *mt, lpel_taskstate_t state)
 {
-  if (mt->mw==NULL) return;
+	if ( mt->mw==NULL) return;
 
-  FILE *file = mt->mw->outfile;
-  lpel_timing_t et;
-  assert( mt != NULL );
+	FILE *file = mt->mw->outfile;
+	lpel_timing_t et;
+	assert( mt != NULL );
 
 
-  if FLAG_TIMES(mt) {
-    LpelTimingNow(&mt->times.stop);
-    PrintNormTS(&mt->times.stop, file);
-  }
+	if FLAG_TIMES(mt) {
+		LpelTimingNow(&mt->times.stop);
+		PrintNormTS(&mt->times.stop, file);
+	}
 
-  /* print general info: tid, disp.cnt, state */
-  fprintf( file, "%lu disp %lu ", mt->tid, mt->disp);
+	/* print general info: status, id */
 
-  if ( state==TASK_BLOCKED) {
-    fprintf( file, "st %c ", mt->blockon);
-  } else {
-    fprintf( file, "st %c ", state);
-  }
+	if ( state==TASK_BLOCKED) {
+		fprintf( file, "%c", mt->blockon);
+	} else {
+		fprintf( file, "%c", state);
+	}
+	fprintf( file, "%lu ", mt->tid);
 
-  /* print times */
-  if FLAG_TIMES(mt) {
-    fprintf( file, "et ");
-    /* execution time */
-    LpelTimingDiff(&et, &mt->times.start, &mt->times.stop);
-    /* update total execution time */
-    LpelTimingAdd(&mt->times.total, &et);
+	/* print times */
+	if FLAG_TIMES(mt) {
+		/* execution time */
+		LpelTimingDiff(&et, &mt->times.start, &mt->times.stop);
+		PrintTiming( &et , file);
+		fprintf( file, " ");
+		if ( state == TASK_ZOMBIE) {	// task finish
+			PrintTiming( &mt->times.creat, file);
+			fprintf(file, " ");
+		}
+	}
 
-    PrintTiming( &et , file);
-    if ( state == TASK_ZOMBIE) {
-      fprintf( file, "creat ");
-      PrintTiming( &mt->times.creat, file);
-      if (strlen(mt->name) > 0) {
-        fprintf( file, "'%s' ", mt->name);
-      }
-    }
-  }
+	/* print stream info */
+	if FLAG_STREAMS(mt) {
+		/* print (and reset) dirty list */
+		PrintDirtyList(mt);
+	}
 
-  /* print stream info */
-  if FLAG_STREAMS(mt) {
-    /* print (and reset) dirty list */
-    PrintDirtyList(mt);
-  }
+	/* print user events */
+	if FLAG_MESSAGE(mt) {
+		PrintUsrEvt(mt);
+	}
 
-  fprintf( file, "\n");
+	fprintf( file, "%c", end_entry);
 
-//FIXME only for debugging purposes
-  //fflush( file);
+	//FIXME only for debugging purposes
+	//	fflush( file);
 }
 
 
@@ -535,21 +636,20 @@ static void MonCbTaskStop(mon_task_t *mt, lpel_taskstate_t state)
 
 static mon_stream_t *MonCbStreamOpen(mon_task_t *mt, unsigned int sid, char mode)
 {
-  if (mt && FLAG_STREAMS(mt)) {
-    mon_stream_t *ms = malloc(sizeof(mon_stream_t));
-    ms->sid = sid;
-    ms->montask = mt;
-    ms->mode = mode;
-    ms->state = ST_OPENED;
-    ms->counter = 0;
-    ms->strevt_flags = 0;
-    ms->dirty = NULL;
+	if (!mt || !(FLAG_STREAMS(mt) | FLAG_TASK(mt))) return NULL;
 
-    MarkDirty(ms);
+	mon_stream_t *ms = malloc(sizeof(mon_stream_t));
+	ms->sid = sid;
+	ms->montask = mt;
+	ms->mode = mode;
+	ms->state = ST_OPENED;
+	ms->counter = 0;
+	ms->strevt_flags = 0;
+	ms->dirty = NULL;
 
-    return ms;
-  }
-  return NULL;
+	MarkDirty(ms);
+
+	return ms;
 }
 
 /**
@@ -557,10 +657,10 @@ static mon_stream_t *MonCbStreamOpen(mon_task_t *mt, unsigned int sid, char mode
  */
 static void MonCbStreamClose(mon_stream_t *ms)
 {
-  assert( ms != NULL );
-  ms->state = ST_CLOSED;
-  MarkDirty(ms);
-  /* do not free ms, as it will be kept until its monintoring
+	assert( ms != NULL );
+	ms->state = ST_CLOSED;
+	MarkDirty(ms);
+	/* do not free ms, as it will be kept until its monintoring
      information has been output via dirty list upon TaskStop() */
 }
 
@@ -568,46 +668,54 @@ static void MonCbStreamClose(mon_stream_t *ms)
 
 static void MonCbStreamReplace(mon_stream_t *ms, unsigned int new_sid)
 {
-  assert( ms != NULL );
-  ms->state = ST_REPLACED;
-  ms->sid = new_sid;
-  MarkDirty(ms);
+	assert( ms != NULL );
+	ms->state = ST_REPLACED;
+	ms->sid = new_sid;
+	MarkDirty(ms);
 }
 
 /**
  * @pre ms != NULL
  */
 static void MonCbStreamReadPrepare(mon_stream_t *ms)
-{ return; }
+{
+	(void) ms; /* NOT USED */
+	return;
+}
 
 /**
  * @pre ms != NULL
  */
 static void MonCbStreamReadFinish(mon_stream_t *ms, void *item)
 {
-  assert( ms != NULL );
+	(void) item; /* NOT USED */
+	assert( ms != NULL );
 
-  ms->counter++;
-  ms->strevt_flags |= ST_MOVED;
-  MarkDirty(ms);
+	ms->counter++;
+	ms->strevt_flags |= ST_MOVED;
+	MarkDirty(ms);
 }
 
 /**
  * @pre ms != NULL
  */
 static void MonCbStreamWritePrepare(mon_stream_t *ms, void *item)
-{ return; }
+{
+	(void) ms; /* NOT USED */
+	(void) item; /* NOT USED */
+	return;
+}
 
 /**
  * @pre ms != NULL
  */
 static void MonCbStreamWriteFinish(mon_stream_t *ms)
 {
-  assert( ms != NULL );
+	assert( ms != NULL );
 
-  ms->counter++;
-  ms->strevt_flags |= ST_MOVED;
-  MarkDirty(ms);
+	ms->counter++;
+	ms->strevt_flags |= ST_MOVED;
+	MarkDirty(ms);
 }
 
 
@@ -618,16 +726,16 @@ static void MonCbStreamWriteFinish(mon_stream_t *ms)
  */
 static void MonCbStreamBlockon(mon_stream_t *ms)
 {
-  assert( ms != NULL );
-  ms->strevt_flags |= ST_BLOCKON;
-  MarkDirty(ms);
+	assert( ms != NULL );
+	ms->strevt_flags |= ST_BLOCKON;
+	MarkDirty(ms);
 
-  /* track if blocked on reading or writing */
-  switch(ms->mode) {
-  case 'r': ms->montask->blockon = 'I'; break;
-  case 'w': ms->montask->blockon = 'O'; break;
-  default: assert(0);
-  }
+	/* track if blocked on reading or writing */
+	switch(ms->mode) {
+	case 'r': ms->montask->blockon = 'I'; break;
+	case 'w': ms->montask->blockon = 'O'; break;
+	default: assert(0);
+	}
 }
 
 
@@ -636,13 +744,13 @@ static void MonCbStreamBlockon(mon_stream_t *ms)
  */
 static void MonCbStreamWakeup(mon_stream_t *ms)
 {
-  assert( ms != NULL );
-  ms->strevt_flags |= ST_WAKEUP;
+	assert( ms != NULL );
+	ms->strevt_flags |= ST_WAKEUP;
 
-  /* MarkDirty() not needed, as Moved()
-   * event is called anyway
-   */
-  //MarkDirty(ms);
+	/* MarkDirty() not needed, as Moved()
+	 * event is called anyway
+	 */
+	//MarkDirty(ms);
 }
 
 
@@ -662,9 +770,9 @@ static void MonCbStreamWakeup(mon_stream_t *ms)
  * @pre             prefix == NULL  ||  strlen(prefix)  <= MON_PFIX_LEN
  * @pre             postfix == NULL ||  strlen(postfix) <= MON_PFIX_LEN
  */
-void LpelMonInit(lpel_monitoring_cb_t *cb)
+void LpelMonInit(lpel_monitoring_cb_t *cb, unsigned long flags)
 {
-
+	mon_flags = flags;
   /* register callbacks */
   cb->worker_create         = MonCbWorkerCreate;
   cb->worker_create_wrapper = MonCbWrapperCreate;
@@ -694,41 +802,13 @@ void LpelMonInit(lpel_monitoring_cb_t *cb)
 
 
 /**
- * Cleanup the monitoring module 
+ * Cleanup the monitoring module
  */
 void LpelMonCleanup(void)
 {
-  /* NOP */
+	/* NOP */
 }
 
 
 
-mon_task_t *LpelMonTaskCreate(unsigned long tid, const char *name, unsigned long flags)
-{
-  mon_task_t *mt = malloc( sizeof(mon_task_t) );
-
-  /* zero out everything */
-  memset(mt, 0, sizeof(mon_task_t));
-
-  /* copy name and 0-terminate */
-  if ( name != NULL ) {
-    (void) strncpy(mt->name, name, MON_TASKNAME_MAXLEN);
-    mt->name[MON_TASKNAME_MAXLEN-1] = '\0';
-  }
-
-  mt->mw = NULL;
-  mt->tid = tid;
-  mt->flags = flags;
-  mt->disp = 0;
-
-  mt->dirty_list = ST_DIRTY_END;
-
-  if FLAG_TIMES(mt) {
-    lpel_timing_t tnow;
-    LpelTimingNow(&tnow);
-    LpelTimingDiff(&mt->times.creat, &monitoring_begin, &tnow);
-  }
-
-  return mt;
-}
 

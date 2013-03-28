@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
-#include "lpel.h"
+#include <hrc_lpel.h>
 
 #define NUM_COLL    (4*10+1)
 lpel_stream_t *sinp;
@@ -140,8 +140,8 @@ static void testBasic(void)
   lpel_task_t *trelay, *tcons, *intask;
 
   memset(&cfg, 0, sizeof(lpel_config_t));
-  cfg.num_workers = 2;
-  cfg.proc_workers = 2;
+  cfg.num_workers = 3;
+  cfg.proc_workers = 3;
   cfg.proc_others = 0;
   cfg.flags = 0;
 
@@ -155,14 +155,14 @@ static void testBasic(void)
 
   /* create tasks */
   trelay = LpelTaskCreate( 0, Relay, NULL, 8192);
-  LpelTaskRun(trelay);
+  LpelTaskStart(trelay);
 
-  tcons = LpelTaskCreate( 1, Consumer, NULL, 8192);
-  LpelTaskRun(tcons);
+  tcons = LpelTaskCreate( 0, Consumer, NULL, 8192);
+  LpelTaskStart(tcons);
 
 
-  intask = LpelTaskCreate( -1, Inputter, sinp, 8192);
-  LpelTaskRun(intask);
+  intask = LpelTaskCreate( 0, Inputter, sinp, 8192);
+  LpelTaskStart(intask);
 
   LpelStart();
 

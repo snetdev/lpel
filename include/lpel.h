@@ -24,21 +24,19 @@
 /******************************************************************************/
 /*  GENERAL CONFIGURATION AND SETUP                                           */
 /******************************************************************************/
+typedef char lpel_taskstate_t;
 
-enum lpel_taskstate_t {
-  TASK_CREATED = 'C',
-  TASK_RUNNING = 'U',
-  TASK_READY   = 'R',
-  TASK_BLOCKED = 'B',
-  TASK_MUTEX   = 'X',
-  TASK_ZOMBIE  = 'Z'
-};
+#define  TASK_CREATED             'C'
+#define  TASK_RUNNING             'U'
+#define  TASK_READY               'R'
+#define  TASK_BLOCKED             'B'
+#define  TASK_MUTEX               'X'
+#define  TASK_ZOMBIE              'Z'
 
 
 typedef struct mon_worker_t mon_worker_t;
 typedef struct mon_task_t   mon_task_t;
 typedef struct mon_stream_t mon_stream_t;
-typedef enum lpel_taskstate_t lpel_taskstate_t;
 
 typedef struct lpel_monitoring_cb_t {
   /* worker callbacks*/
@@ -55,7 +53,7 @@ typedef struct lpel_monitoring_cb_t {
   void (*task_destroy)(mon_task_t*);
   void (*task_assign)(mon_task_t*, mon_worker_t*);
   void (*task_start)(mon_task_t*);
-  void (*task_stop)(mon_task_t*, enum lpel_taskstate_t);
+  void (*task_stop)(mon_task_t*, lpel_taskstate_t);
   /* stream callbacks */
   mon_stream_t *(*stream_open)(mon_task_t*, unsigned int, char);
   void (*stream_close)(mon_stream_t*);
@@ -68,6 +66,11 @@ typedef struct lpel_monitoring_cb_t {
   void (*stream_wakeup)(mon_stream_t*);
 } lpel_monitoring_cb_t;
 
+
+typedef enum {
+	DECEN_LPEL,
+	HRC_LPEL
+} lpel_backend_type;
 
 /**
  * Specification for configuration:
@@ -87,12 +90,9 @@ typedef struct {
   int proc_workers;
   int proc_others;
   int flags;
-  struct lpel_monitoring_cb_t mon;
+  lpel_monitoring_cb_t mon;
+  lpel_backend_type type;
 } lpel_config_t;
-
-
-
-
 
 
 
@@ -143,17 +143,6 @@ typedef lpel_stream_desc_t          *lpel_streamset_t;
 typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 
 
-/** spmd function */
-typedef void (*lpel_spmdfunc_t)(void *);
-
-
-
-/******************************************************************************/
-/*  SPMD FUNCTIONS                                                            */
-/******************************************************************************/
-
-int LpelSpmdVId(void);
-
 
 /******************************************************************************/
 /*  TASK FUNCTIONS                                                            */
@@ -165,22 +154,17 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 /** monitor a task */
 void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
 
-void LpelTaskPrio(lpel_task_t *t, int prio);
-
-unsigned int LpelTaskGetID( lpel_task_t *t );
+unsigned int LpelTaskGetId( lpel_task_t *t );
 mon_task_t *LpelTaskGetMon( lpel_task_t *t );
 
 /** let the previously created task run */
-void LpelTaskRun( lpel_task_t *t );
+void LpelTaskStart( lpel_task_t *t );
 
 
 /** to be called from within a task: */
 lpel_task_t *LpelTaskSelf(void);
 void LpelTaskExit(void *outarg);
 void LpelTaskYield(void);
-
-/** enter SPMD request */
-void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
 
 
 /******************************************************************************/

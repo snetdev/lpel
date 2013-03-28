@@ -9,20 +9,19 @@
 
 #include "arch/atomic.h"
 
-#include "scheduler.h"
-
-
 /**
  * If a task size <= 0 is specified,
  * use the default size
  */
 #define LPEL_TASK_SIZE_DEFAULT  8192  /* 8k */
 
+#define TASK_STACK_ALIGN  256
+#define TASK_MINSIZE  4096
+
+
 struct workerctx_t;
 struct mon_task_t;
-
-
-
+typedef struct sched_task_t sched_task_t;
 
 /**
  * TASK CONTROL BLOCK
@@ -31,11 +30,11 @@ struct lpel_task_t {
   /** intrinsic pointers for organizing tasks in a list*/
   struct lpel_task_t *prev, *next;
   unsigned int uid;    /** unique identifier */
-  enum lpel_taskstate_t state;   /** state */
+  lpel_taskstate_t state;   /** state */
 
   struct workerctx_t *worker_context;  /** worker context for this task */
 
-  sched_task_t sched_info;
+  sched_task_t *sched_info;
 
   /**
    * indicates the SD which points to the stream which has new data
@@ -59,11 +58,17 @@ struct lpel_task_t {
 
 
 void LpelTaskDestroy( lpel_task_t *t);
-
-
-void LpelTaskBlock( lpel_task_t *t );
 void LpelTaskBlockStream( lpel_task_t *ct);
 void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
+
+void LpelTaskCheckYield(lpel_task_t *t);
+void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
+void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
+
+/* local functions */
+void TaskStartup( void *data);
+void TaskStart( lpel_task_t *t);
+void TaskStop( lpel_task_t *t);
 
 
 #endif /* _TASK_H_ */

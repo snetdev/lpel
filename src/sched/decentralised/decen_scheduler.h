@@ -1,16 +1,15 @@
 #ifndef _SCHEDULER_H_
 #define _SCHEDULER_H_
 
-
-struct lpel_task_t;
+#include "task.h"
 
 #define SCHED_NUM_PRIO  2
 
-typedef struct schedctx schedctx_t;
+typedef struct schedctx_t schedctx_t;
 
-typedef struct {
+struct sched_task_t {
   int prio;
-} sched_task_t;
+};
 
 
 schedctx_t *LpelSchedCreate( int wid);
