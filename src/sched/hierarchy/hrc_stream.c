@@ -9,38 +9,10 @@
 #include "lpelcfg.h"
 #include "buffer.h"
 #include "task.h"
+#include "hrc_task.h"
 
 #include "stream.h"
 #include "lpel/monitor.h"
-
-static atomic_t stream_seq = ATOMIC_INIT(0);
-
-/**
- * Create a stream
- *
- * Allocate and initialize memory for a stream.
- *
- * @return pointer to the created stream
- */
-lpel_stream_t *LpelStreamCreate(int size)
-{
-  /* allocate memory for both the stream struct and the buffer area */
-  lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
-
-  /* reset buffer (including buffer area) */
-  s->buffer = LpelBufferInit( size);
-
-  s->uid = fetch_and_inc( &stream_seq);
-  PRODLOCK_INIT( &s->prod_lock );
-  atomic_init( &s->n_sem, 0);
-  s->is_poll = 0;
-  s->prod_sd = NULL;
-  s->cons_sd = NULL;
-  s->usr_data = NULL;
-  return s;
-}
-
-
 
 /**
  * Blocking write to a stream
@@ -61,8 +33,6 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   /* check if opened for writing */
   assert( sd->mode == 'w' );
   assert( item != NULL );
-
-  LpelTaskCheckYield(self);
 
   /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -127,4 +97,64 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   }
 #endif
 
+  /* check if a task should be yield after writing this output record */
+  LpelTaskCheckYield(self);
+
+}
+
+
+
+/**
+ * Blocking, consuming read from a stream
+ *
+ * If the stream is empty, the task is suspended until
+ * a producer writes an item to the stream.
+ *
+ * @param sd  stream descriptor
+ * @return    the next item of the stream
+ * @pre       current task is single reader
+ */
+void *LpelStreamRead( lpel_stream_desc_t *sd)
+{
+  void *item;
+  lpel_task_t *self = sd->task;
+
+  assert( sd->mode == 'r');
+
+  /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+  if (sd->mon && MON_CB(stream_readprepare)) {
+    MON_CB(stream_readprepare)(sd->mon);
+  }
+#endif
+
+  /* quasi P(n_sem) */
+  if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
+
+#ifdef USE_TASK_EVENT_LOGGING
+    /* MONITORING CALLBACK */
+    if (sd->mon && MON_CB(stream_blockon)) {
+      MON_CB(stream_blockon)(sd->mon);
+    }
+#endif
+
+    /* wait on stream: */
+    LpelTaskBlockStream( self);
+  }
+
+
+  /* read the top element */
+  item = LpelBufferTop( sd->stream->buffer);
+  assert( item != NULL);
+  /* pop off the top element */
+  LpelBufferPop( sd->stream->buffer);
+
+
+  /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+  if (sd->mon && MON_CB(stream_readfinish)) {
+    MON_CB(stream_readfinish)(sd->mon, item);
+  }
+#endif
+  return item;
 }

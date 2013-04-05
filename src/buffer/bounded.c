@@ -1,5 +1,5 @@
 /*
- * Buffer, implemented as Single-Writer Single-Reader circular buffer.
+ * Bounded buffer, implemented as Single-Writer Single-Reader circular buffer.
  *
  * It uses ideas from the FastForward queue implementation:
  * Synchronisation takes place with the content of the buffer, i.e., NULL indicates that
@@ -39,7 +39,6 @@ struct buffer_t {
 
 /**
  * Initialize a buffer.
- * Also allocates space for size void* items
  *
  * @param buf   pointer to buffer struct
  * @param size  number of void* elements in the buffer
@@ -59,7 +58,7 @@ buffer_t *LpelBufferInit(unsigned int size)
 
 /**
  * Cleanup the buffer.
- * Free the memory for the buffer items.
+ * Free the memory for the buffer items and the buffer itself.
  *
  * @param buf   pointer to buffer struct
  */
@@ -149,6 +148,14 @@ void LpelBufferPut( buffer_t *buf, void *item)
   buf->count++;
 }
 
+
+
+/**
+ * Return the number of data item in the buffer
+ *
+ * @param buf   buffer
+ * @pre         no concurrent calls
+ */
 int	LpelBufferCount(buffer_t *buf) {
 	return buf->count;
 }

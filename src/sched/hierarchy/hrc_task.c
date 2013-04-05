@@ -14,6 +14,9 @@ static atomic_t taskseq = ATOMIC_INIT(0);
 
 static double (*prior_cal) (int in, int out) = priorfunc1;
 
+
+int countRec(stream_elem_t *list);
+
 /**
  * Create a task.
  *
@@ -110,6 +113,7 @@ void LpelTaskDestroy( lpel_task_t *t)
 
 	assert(t->sched_info->in_streams == NULL);
 	assert(t->sched_info->out_streams == NULL);
+	free(t->sched_info);
 	/* free the TCB itself*/
 	free(t);
 }
@@ -129,7 +133,7 @@ void LpelTaskUnblock( lpel_task_t *by, lpel_task_t *t)
 
 
 /*
- * this will be called before 1 rec is processed
+ * this will be called after producing each record
  * increase the rec count by 1, if it reaches the limit then yield
  */
 void LpelTaskCheckYield(lpel_task_t *t) {
@@ -140,25 +144,32 @@ void LpelTaskCheckYield(lpel_task_t *t) {
 		return;
 	}
 
+	t->sched_info->rec_cnt ++;
 	if (t->sched_info->rec_cnt >= t->sched_info->rec_limit) {
 		t->state = TASK_READY;
 		TaskStop( t);
 		LpelWorkerSelfTaskYield(t);
 		TaskStart( t);
 	}
-	t->sched_info->rec_cnt ++;
-
 }
 
+/*
+ * set limit of produced records
+ */
 void LpelTaskSetRecLimit(lpel_task_t *t, int lim) {
 	t->sched_info->rec_limit = lim;
 }
 
-void LpelTaskSetPrior(lpel_task_t *t, double p) {
+void LpelTaskSetPriority(lpel_task_t *t, double p) {
 	t->sched_info->prior = p;
 }
 
-
+/*
+ * Add a tracked stream, used for calculate task priority
+ * @param t			task
+ * @param des		stream description
+ * @param mode	read/write mode
+ */
 void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 	stream_elem_t **list;
 	stream_elem_t *head;
@@ -180,7 +191,12 @@ void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 	*list = new;
 }
 
-
+/*
+ * Remove a tracked stream
+ * @param t			task
+ * @param des		stream description
+ * @param mode	read/write mode
+ */
 void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 	stream_elem_t **list;
 	stream_elem_t *head;
@@ -214,22 +230,9 @@ void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 
 
 
-/******************************************************************************/
-/* PRIVATE FUNCTIONS                                                          */
-/******************************************************************************/
-
-int countRec(stream_elem_t *list) {
-	if (list == NULL)
-		return -1;
-	int cnt = 0;
-	while (list != NULL) {
-		cnt += LpelStreamFillLevel(list->stream_desc->stream);
-		list = list->next;
-	}
-	return cnt;
-}
-
-
+/*
+ * Calculate dynamic priority for task
+ */
 double LpelTaskCalPriority(lpel_task_t *t) {
 	int in, out;
 	in = countRec(t->sched_info->in_streams);
@@ -239,7 +242,11 @@ double LpelTaskCalPriority(lpel_task_t *t) {
 
 }
 
-void LpelTaskSetPriorFunc(int func){
+
+/*
+ * Set function used to calculate task priority
+ */
+void LpelTaskSetPriorityFunc(int func){
 	switch (func){
 	case 1: prior_cal = priorfunc1;
 					break;
@@ -269,9 +276,47 @@ void LpelTaskSetPriorFunc(int func){
 	}
 }
 
+/*
+ * get WorkerId where task is currently running
+ * 		used for debugging
+ */
 int LpelTaskGetWorkerId(lpel_task_t *t) {
 	if (t->worker_context)
 		return t->worker_context->wid;
 	else
 		return -1;
 }
+
+
+/******************************************************************************/
+/* PRIVATE FUNCTIONS                                                          */
+/******************************************************************************/
+void TaskStart( lpel_task_t *t)
+{
+	assert( t->state == TASK_READY );
+
+	/* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+	if (t->mon && MON_CB(task_start)) {
+		MON_CB(task_start)(t->mon);
+	}
+#endif
+	t->sched_info->rec_cnt = 0;	// reset rec_cnt
+	t->state = TASK_RUNNING;
+}
+
+/*
+ * count records in the list of tracked stream
+ */
+int countRec(stream_elem_t *list) {
+	if (list == NULL)
+		return -1;
+	int cnt = 0;
+	while (list != NULL) {
+		cnt += LpelStreamFillLevel(list->stream_desc->stream);
+		list = list->next;
+	}
+	return cnt;
+}
+
+

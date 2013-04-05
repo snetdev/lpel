@@ -1,3 +1,13 @@
+/**********************************************************
+ * Author: 	Nga
+ *
+ * Desc:		Priority task queue
+ * 			Implemented by a heap structure
+ * 			Tasks are stored in an array initialsed with fix size.
+ * 			When the array is full, it is reallocated.
+ **********************************************************/
+
+
 #include <stdlib.h>
 #include <assert.h>
 
@@ -12,7 +22,7 @@ struct taskqueue_t{
   unsigned int alloc;
 };
 
-
+/******************** private functions ********************/
 void upHeap(taskqueue_t *tq, int pos) {
 	int parent;
 	lpel_task_t *t = tq->heap[pos];
@@ -53,6 +63,11 @@ int searchItem(taskqueue_t *tq, lpel_task_t *t) {
 	return -1;
 }
 
+/**************************************************************/
+
+/*
+ * Initialise a task queue
+ */
 taskqueue_t* LpelTaskqueueInit() {
   taskqueue_t *tq = (taskqueue_t *)malloc(sizeof(taskqueue_t));
   tq->alloc = BLOCKSIZE;
@@ -61,6 +76,9 @@ taskqueue_t* LpelTaskqueueInit() {
   return tq;
 }
 
+/*
+ * Add a task to the task queue
+ */
 void LpelTaskqueuePush( taskqueue_t *tq, lpel_task_t *t){
 
   //allocate more memory if needed
@@ -96,7 +114,9 @@ lpel_task_t *LpelTaskqueuePeek( taskqueue_t *tq){
 }
 
 
-
+/*
+ * pop the task with highest priority
+ */
 lpel_task_t *LpelTaskqueuePop( taskqueue_t *tq) {
   {
     if (tq->count == 1)
@@ -108,15 +128,24 @@ lpel_task_t *LpelTaskqueuePop( taskqueue_t *tq) {
   }
 }
 
+/*
+ * Get queue size
+ */
 int LpelTaskqueueSize(taskqueue_t *tq){
   return tq->count - 1;
 }
 
+/*
+ * Free memory of the task queue
+ */
 void LpelTaskqueueDestroy(taskqueue_t *tq){
   free (tq->heap);
   free(tq);
 }
 
+/*
+ * Update priority for a task in the queue
+ */
 void LpelTaskqueueUpdatePriority(taskqueue_t *tq, lpel_task_t *t, double np){
 	int pos = searchItem(tq, t);
 	assert(pos > 0);

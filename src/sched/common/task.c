@@ -1,3 +1,11 @@
+/**
+ * File: stream.c
+ * Auth: Daniel Prokesch <daniel.prokesch@gmail.com>
+ * Modified: Nga
+ *
+ * Desc: Common implementations of task for DECEN and HRC
+ *
+ */
 
 #include <stdlib.h>
 #include <assert.h>
@@ -11,18 +19,32 @@
 #include "stream.h"
 #include "lpel/monitor.h"
 
-
+/**
+ * Get Task Id
+ *		usually used for debugging
+ * @param t		task
+ */
 unsigned int LpelTaskGetId(lpel_task_t *t)
 {
   return t->uid;
 }
 
+/**
+ * Get Task Monitor
+ *
+ * @param t		task
+ */
 mon_task_t *LpelTaskGetMon( lpel_task_t *t )
 {
   return t->mon;
 }
 
-
+/**
+ * Set Task Monitor
+ *
+ * @param t		task
+ * @param mt	task monitor
+ */
 void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt)
 {
   t->mon = mt;
@@ -30,7 +52,7 @@ void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt)
 
 
 /**
- * Let the task run on the worker
+ * Let a task start
  */
 void LpelTaskStart( lpel_task_t *t)
 {
@@ -56,7 +78,7 @@ lpel_task_t *LpelTaskSelf(void)
  * Exit the current task
  *
  * @param outarg  output argument of the task
- * @pre This call must be made from within a LPEL task!
+ * @pre This call must be made within a LPEL task!
  */
 void LpelTaskExit(void *outarg)
 {
@@ -96,7 +118,7 @@ void LpelTaskYield(void)
 
 
 /**
- * Block a task
+ * Block a task by reading from/writing to a stream
  */
 void LpelTaskBlockStream(lpel_task_t *t)
 {
@@ -143,21 +165,6 @@ void TaskStartup( void *data)
   LpelWorkerDispatcher( t);
   /* execution never comes back here */
   assert(0);
-}
-
-
-void TaskStart( lpel_task_t *t)
-{
-  assert( t->state == TASK_READY );
-
-  /* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-  if (t->mon && MON_CB(task_start)) {
-    MON_CB(task_start)(t->mon);
-  }
-#endif
-
-  t->state = TASK_RUNNING;
 }
 
 

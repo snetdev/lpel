@@ -1,6 +1,7 @@
 /*
- * Buffer, implemented as Single-Writer Single-Reader, unbounded
- * Concurrent accessed by two threads
+ * Unbounded buffer, implemented as Single-Writer Single-Reader
+ * A linked-list is used to store data
+ * Concurrent accessed by two threads (reader and writer)
  *
  */
 
@@ -33,7 +34,6 @@ static entry *createEntry(void *data) {
 
 /**
  * Initialize a buffer.
- * Also allocates space for size void* items
  *
  * @param buf   pointer to buffer struct
  * @param size	unused (declared for same protocol with bounded buffer)
@@ -49,7 +49,7 @@ buffer_t *LpelBufferInit(unsigned int size)
 
 /**
  * Cleanup the buffer.
- * Free the memory for the head
+ * Free the memory for the head and the buffer itself.
  *
  * @param buf   pointer to buffer struct
  */
@@ -79,7 +79,7 @@ void *LpelBufferTop( buffer_t *buf)
  * Consuming read from a stream
  *
  * Implementation note:
- * - modifies only pread pointer (not pwrite)
+ * - modifies only head (not tail)
  *
  * @pre         no concurrent reads
  * @param buf   buffer to read from
@@ -114,14 +114,12 @@ int LpelBufferIsSpace( buffer_t *buf)
  * Precondition: item != NULL
  *
  * Implementation note:
- * - modifies only pwrite pointer (not pread)
+ * - modifies only tail pointer (not head)
  *
  * @param buf   buffer to write to
  * @param item  data item (a pointer) to write
  * @pre         no concurrent writes
  * @pre         item != NULL
- * @pre         there has to be space in the buffer
- *              (check with BufferIsSpace)
  */
 void LpelBufferPut( buffer_t *buf, void *item)
 {
@@ -141,6 +139,13 @@ void LpelBufferPut( buffer_t *buf, void *item)
   buf->count++;
 }
 
+
+/**
+ * Return the number of data item in the buffer
+ *
+ * @param buf   buffer
+ * @pre         no concurrent calls
+ */
 int LpelBufferCount(buffer_t *buf) {
 	return buf->count;
 }

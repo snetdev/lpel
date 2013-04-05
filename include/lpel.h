@@ -2,7 +2,9 @@
  * LPEL LIBRARY INTERFACE
  *
  * Author: Daniel Prokesch <dlp@snet-home.org>
+ * Modified: Nga
  *
+ * Common interface for DECEN and HRC
  *****************************************************************************/
 #ifndef _LPEL_H_
 #define _LPEL_H_
@@ -22,8 +24,9 @@
 
 
 /******************************************************************************/
-/*  GENERAL CONFIGURATION AND SETUP                                           */
+/*  LPEL TASK STATE									                                          */
 /******************************************************************************/
+
 typedef char lpel_taskstate_t;
 
 #define  TASK_CREATED             'C'
@@ -33,6 +36,16 @@ typedef char lpel_taskstate_t;
 #define  TASK_MUTEX               'X'
 #define  TASK_ZOMBIE              'Z'
 
+/******************************************************************************/
+/*  LPEL FLAGS											                                          */
+/******************************************************************************/
+#define LPEL_FLAG_NONE           (0)
+#define LPEL_FLAG_PINNED      (1<<0)
+#define LPEL_FLAG_EXCLUSIVE   (1<<1)
+
+/******************************************************************************/
+/*  GENERAL CONFIGURATION AND SETUP                                           */
+/******************************************************************************/
 
 typedef struct mon_worker_t mon_worker_t;
 typedef struct mon_task_t   mon_task_t;
@@ -93,12 +106,6 @@ typedef struct {
   lpel_monitoring_cb_t mon;
   lpel_backend_type type;
 } lpel_config_t;
-
-
-
-#define LPEL_FLAG_NONE           (0)
-#define LPEL_FLAG_PINNED      (1<<0)
-#define LPEL_FLAG_EXCLUSIVE   (1<<1)
 
 
 
@@ -213,8 +220,6 @@ int  LpelStreamIterHasNext( lpel_stream_iter_t *iter);
 lpel_stream_desc_t *LpelStreamIterNext( lpel_stream_iter_t *iter);
 void LpelStreamIterAppend(  lpel_stream_iter_t *iter, lpel_stream_desc_t *node);
 void LpelStreamIterRemove(  lpel_stream_iter_t *iter);
-
-
 
 
 #endif /* _LPEL_H_ */

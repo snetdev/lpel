@@ -36,5 +36,6 @@ struct sched_task_t{
 };
 
 double LpelTaskCalPriority(lpel_task_t *t);
+void LpelTaskCheckYield(lpel_task_t *t);
 
 #endif /* _HRC_TASK_H */

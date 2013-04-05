@@ -61,11 +61,12 @@ void LpelTaskDestroy( lpel_task_t *t);
 void LpelTaskBlockStream( lpel_task_t *ct);
 void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
 
-void LpelTaskCheckYield(lpel_task_t *t);
 void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
 void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
 
-/* local functions */
+/* local functions
+ * defined here to share the implementations for both HRC and DECEN
+ */
 void TaskStartup( void *data);
 void TaskStart( lpel_task_t *t);
 void TaskStop( lpel_task_t *t);

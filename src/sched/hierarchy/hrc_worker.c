@@ -45,6 +45,14 @@ static pthread_key_t workerctx_key;
 static pthread_key_t masterctx_key;
 #endif /* HAVE___THREAD */
 
+
+
+/**
+ * Initialise worker globally
+ *
+ *
+ * @param size    size of the worker set, i.e., the total number of workers including master
+ */
 void LpelWorkersInit( int size) {
 
 	int i;
@@ -99,7 +107,9 @@ void LpelWorkersInit( int size) {
 	}
 }
 
-// clean up for both worker and master
+/*
+ * clean up for both worker and master
+ */
 void LpelWorkersCleanup( void) {
 	int i;
 	workerctx_t *wc;
@@ -140,6 +150,9 @@ void LpelWorkersCleanup( void) {
 }
 
 
+/*
+ * Spawn master and workers
+ */
 void LpelWorkersSpawn( void) {
 	int i;
 	/* master */
@@ -153,6 +166,9 @@ void LpelWorkersSpawn( void) {
 }
 
 
+/*
+ * Terminate master and workers
+ */
 void LpelWorkersTerminate(void) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_TERMINATE;
@@ -160,6 +176,9 @@ void LpelWorkersTerminate(void) {
 	LpelWorkerBroadcast(&msg);
 }
 
+/**
+ * Assign a task to the worker by sending an assign message to that worker
+ */
 void LpelWorkerRunTask( lpel_task_t *t) {
 	 workermsg_t msg;
    msg.type = WORKER_MSG_ASSIGN;
@@ -173,8 +192,8 @@ void LpelWorkerRunTask( lpel_task_t *t) {
 	}
 }
 
-/*******************************************************************************
-*******************************************************************************/
+
+/************************ Private functions ***********************************/
 static void returnTask( lpel_task_t *t) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_RETURN;
