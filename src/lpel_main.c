@@ -161,11 +161,13 @@ static void CreateCpusets( void)
   /* create the cpu_set for other threads */
   CPU_ZERO( &cpuset_others );
   if (cfg->proc_others == 0) {
+    offset_others = 0;
     /* distribute on the workers */
     for (i=0; i<cfg->proc_workers; i++) {
       CPU_SET(i, &cpuset_others);
     }
   } else {
+    offset_others = cfg->proc_workers;
     /* set to proc_others */
     for( i=cfg->proc_workers;
         i<cfg->proc_workers+cfg->proc_others;
@@ -272,7 +274,7 @@ int LpelThreadAssign( int core)
 
    	default:	// workers
    		/* assign to specified core */
-   		assert( 0<=core && core<cfg->num_workers );
+   		assert( 0 <= core && core < cfg->num_workers );
    		CPU_SET( core % cfg->proc_workers, &cpuset);
    	}
   }
