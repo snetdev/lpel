@@ -35,7 +35,7 @@
  * is used if FLAG_EXCLUSIVE is set & FLAG_PINNED is not set
  * */
 static cpu_set_t cpuset_others;
-static int offset_others;
+static int offset_others = 0;
 static int rot_others;
 
 /*
@@ -260,6 +260,7 @@ int LpelThreadAssign( int core)
   lpel_config_t *cfg = &_lpel_global_config;
   pthread_t pt = pthread_self();
   int res;
+  cpu_set_t cpuset;
 
   if ( LPEL_ICFG(LPEL_FLAG_PINNED)) {
    	CPU_ZERO(&cpuset);
@@ -272,7 +273,7 @@ int LpelThreadAssign( int core)
    	default:	// workers
    		/* assign to specified core */
    		assert( 0<=core && core<cfg->num_workers );
-   		CPU_SET( core % cfg->proc_workers + offset_workers, &cpuset);
+   		CPU_SET( core % cfg->proc_workers, &cpuset);
    	}
   }
   else {
