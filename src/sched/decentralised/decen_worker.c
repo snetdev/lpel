@@ -14,7 +14,7 @@
 
 #include "arch/atomic.h"
 
-#include "worker.h"
+#include "decen_worker.h"
 #include "spmdext.h"
 
 #include "task.h"
@@ -23,6 +23,8 @@
 
 #include "mailbox.h"
 #include "lpel/monitor.h"
+#include "decen_scheduler.h"
+#include "workermsg.h"
 
 #define WORKER_PTR(i) (workers[(i)])
 
@@ -105,7 +107,7 @@ static inline workerctx_t *GetCurrentWorker(void)
  *
  * @param size    size of the worker set, i.e., the total number of workers
  */
-void LpelWorkerInit(int size)
+void LpelWorkersInit(int size)
 {
   int i, res;
 
@@ -164,7 +166,7 @@ void LpelWorkerInit(int size)
  * Cleanup worker contexts
  *
  */
-void LpelWorkerCleanup(void)
+void LpelWorkersCleanup(void)
 {
   int i;
   workerctx_t *wc;
@@ -240,7 +242,7 @@ void LpelWorkerDispatcher( lpel_task_t *t)
   workerctx_t *wc = t->worker_context;
 
   /* dependent of worker or wrapper */
-  if (wc->wid != -1) {
+  if (wc->wid != LPEL_MAP_OTHERS) {
     lpel_task_t *next;
 
     /* before picking the next task, process messages to consider
@@ -280,7 +282,7 @@ void LpelWorkerDispatcher( lpel_task_t *t)
 
 
 
-void LpelWorkerSpawn(void)
+void LpelWorkersSpawn(void)
 {
   int i;
   /* create worker threads */
@@ -343,7 +345,7 @@ void LpelWorkerBroadcast(workermsg_t *msg)
 /**
  * Broadcast a termination message
  */
-void LpelWorkerTerminate(void)
+void LpelWorkersTerminate(void)
 {
   workermsg_t msg;
 
@@ -366,9 +368,9 @@ workerctx_t *LpelWorkerGetContext(int id) {
   }
 
   /* create a new worker context for a wrapper */
-  if (id == -1) {
+  if (id == LPEL_MAP_OTHERS) {
     wc = (workerctx_t *) malloc( sizeof( workerctx_t));
-    wc->wid = -1;
+    wc->wid = LPEL_MAP_OTHERS;
     wc->terminate = 0;
     /* Wrapper is excluded from scheduling module */
     wc->sched = NULL;
@@ -413,7 +415,7 @@ void LpelWorkerSelfTaskYield(lpel_task_t *t)
 }
 
 
-
+void LpelWorkerTaskBlock(lpel_task_t *t) {}
 
 /******************************************************************************/
 /*  PRIVATE FUNCTIONS                                                         */
