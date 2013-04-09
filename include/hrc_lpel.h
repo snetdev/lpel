@@ -12,11 +12,6 @@
 #include <lpel.h>
 
 
-/* LPEL MAPPING LOCATION */
-#define LPEL_MAP_OTHERS		-1
-#define LPEL_MAP_MASTER		0
-
-
 /* extra task state in HRC */
 #define  TASK_INQUEUE							'Q'
 #define  TASK_RETURNED						'T'
