@@ -11,9 +11,6 @@
 
 #include <lpel.h>
 
-/* LPEL MAPPING LOCATION */
-#define LPEL_MAP_OTHERS		-1
-
 
 /* set priority for task
  * prio: integer as it is used as index of the task queue
