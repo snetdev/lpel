@@ -107,7 +107,7 @@ static int CheckConfig( void)
   	if ( cfg->num_workers <= 0 ||  cfg->proc_workers <= 0 )
   		return LPEL_ERR_INVAL;
   } else if (cfg->type == HRC_LPEL) {
-  	if ( cfg->num_workers <= 1 ||  cfg->proc_workers <= 1 )
+  	if ( cfg->num_workers <= 1 ||  cfg->proc_workers <= 0)
   	  return LPEL_ERR_INVAL;
   }
 
