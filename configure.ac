@@ -31,6 +31,8 @@ if test "x$with_pcl" != xcheck; then
     dnl library
     if test -r "$with_pcl/lib/libpcl.la"; then
       LIBPCL_LA=$with_pcl/lib/libpcl.la
+    elif test -r "$with_pcl/lib64/libpcl.la"; then
+      LIBPCL_LA=$with_pcl/lib64/libpcl.la
     elif test -r "$with_pcl/pcl/libpcl.la"; then
       LIBPCL_LA=$with_pcl/pcl/libpcl.la
     else
