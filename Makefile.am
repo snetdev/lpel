@@ -39,7 +39,7 @@ liblpel_hrc_la_SOURCES = \
 	src/sched/hierarchy/hrc_worker.h \
 	src/sched/hierarchy/hrc_taskqueue.c \
 	src/sched/hierarchy/taskpriority.h \
-	src/sched/hierarchy/taskpriority.c \ 
+	src/sched/hierarchy/taskpriority.c \
 	src/sched/hierarchy/hrc_stream.c
 
 liblpel_hrc_la_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/src/include

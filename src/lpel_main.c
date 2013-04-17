@@ -37,6 +37,7 @@
 static cpu_set_t cpuset_others;
 static int offset_others = 0;
 static int rot_others;
+static int proc_others;
 
 /*
  * cpuset for workers = [0,proc_workers-1]
@@ -44,6 +45,7 @@ static int rot_others;
  */
 static cpu_set_t cpuset_workers;
 static int rot_workers;
+static int proc_workers;
 //static int offset_workers = 0;
 #endif /* HAVE_PTHREAD_SETAFFINITY_NP */
 
@@ -153,8 +155,9 @@ static void CreateCpusets( void)
   int  i;
 
   /* create the cpu_set for worker threads */
+  proc_workers = cfg->proc_workers;
   CPU_ZERO( &cpuset_workers );
-  for (i=0; i<cfg->proc_workers; i++) {
+  for (i=0; i < proc_workers; i++) {
     CPU_SET(i, &cpuset_workers);
   }
 
@@ -162,15 +165,17 @@ static void CreateCpusets( void)
   CPU_ZERO( &cpuset_others );
   if (cfg->proc_others == 0) {
     offset_others = 0;
+    proc_others = proc_workers;
     /* distribute on the workers */
-    for (i=0; i<cfg->proc_workers; i++) {
+    for (i = 0; i< proc_workers; i++) {
       CPU_SET(i, &cpuset_others);
     }
   } else {
     offset_others = cfg->proc_workers;
+    proc_others = cfg->proc_others;
     /* set to proc_others */
-    for( i=cfg->proc_workers;
-        i<cfg->proc_workers+cfg->proc_others;
+    for( i = cfg->proc_workers;
+        i< cfg->proc_workers + cfg->proc_others;
         i++ ) {
       CPU_SET(i, &cpuset_others);
     }
@@ -269,13 +274,13 @@ int LpelThreadAssign( int core)
    	switch(core) {
    	case LPEL_MAP_OTHERS:	/* round robin pinned to cores in the set */
    		CPU_SET(rot_others + offset_others, &cpuset);
-   		rot_others = (rot_others + 1) % cfg->proc_others;
+   		rot_others = (rot_others + 1) % proc_others;
    		break;
 
    	default:	// workers
    		/* assign to specified core */
    		assert( 0 <= core && core < cfg->num_workers );
-   		CPU_SET( core % cfg->proc_workers, &cpuset);
+   		CPU_SET( core % proc_workers, &cpuset);
    	}
   }
   else {
