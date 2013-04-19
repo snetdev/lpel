@@ -18,7 +18,7 @@
 #include "spmdext.h"
 
 #include "task.h"
-#include "lpel_main.h"
+#include "lpel_hwloc.h"
 #include "lpelcfg.h"
 
 #include "mailbox.h"
@@ -41,7 +41,7 @@ static workerctx_t **workers;
 
 
 #ifdef HAVE___THREAD
-static __thread workerctx_t *workerctx_cur;
+static TLSSPEC workerctx_t *workerctx_cur;
 #else /* HAVE___THREAD */
 static pthread_key_t workerctx_key;
 #endif /* HAVE___THREAD */
@@ -457,6 +457,11 @@ void LpelWorkerSelfTaskMigrate(lpel_task_t *t, int target) {
 
 void LpelWorkerTaskBlock(lpel_task_t *t) {}
 
+/** return the total number of workers */
+int LpelWorkerCount(void)
+{
+  return num_workers;
+}
 /******************************************************************************/
 /*  PRIVATE FUNCTIONS                                                         */
 /******************************************************************************/
@@ -672,9 +677,9 @@ static void *WorkerThread( void *arg)
 #endif /* HAVE___THREAD */
 
 
-//FIXME
 #ifdef USE_MCTX_PCL
-  assert( 0 == co_thread_init());
+  int res = co_thread_init();
+  assert( 0 == res);
   wc->mctx = co_current();
 #endif
 

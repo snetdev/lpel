@@ -8,6 +8,7 @@ liblpel_la_SOURCES = \
 	src/timing.c \
 	src/lpelcfg.c \
 	src/lpel_main.c \
+	src/lpel_hwloc.c \
 	src/buffer/bounded.c \
 	src/sched/common/task.c \
 	src/sched/common/stream.c \
@@ -32,6 +33,7 @@ liblpel_hrc_la_SOURCES = \
 	src/timing.c \
 	src/lpelcfg.c \
 	src/lpel_main.c \
+	src/lpel_hwloc.c \
 	src/buffer/unbounded_ll.c \
 	src/sched/common/task.c \
 	src/sched/common/stream.c \

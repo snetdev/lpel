@@ -16,7 +16,7 @@
 
 #include "hrc_worker.h"
 #include "hrc_task.h"
-#include "lpel_main.h"
+#include "lpel_hwloc.h"
 #include "lpelcfg.h"
 #include "stream.h"
 #include "mailbox.h"
@@ -38,8 +38,8 @@ static masterctx_t *master;
 static int *waitworkers;	// table of waiting worker
 
 #ifdef HAVE___THREAD
-static __thread workerctx_t *workerctx_cur;
-static __thread masterctx_t *masterctx;
+static TLSSPEC workerctx_t *workerctx_cur;
+static TLSSPEC masterctx_t *masterctx;
 #else /* HAVE___THREAD */
 static pthread_key_t workerctx_key;
 static pthread_key_t masterctx_key;
@@ -518,7 +518,11 @@ workerctx_t *LpelCreateWrapperContext(int wid) {
 
 
 
-
+/** return the total number of workers, including master */
+int LpelWorkerCount(void)
+{
+  return num_workers;
+}
 
 
 /*******************************************************************************
