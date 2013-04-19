@@ -162,6 +162,13 @@ typedef lpel_stream_desc_t          *lpel_streamset_t;
 typedef struct lpel_stream_iter_t    lpel_stream_iter_t;
 
 
+/******************************************************************************/
+/*  WORKER FUNCTIONS                                                          */
+/******************************************************************************/
+
+/** return the total number of workers (including master if in lpel_hrc) */
+int LpelWorkerCount(void);
+
 
 /******************************************************************************/
 /*  TASK FUNCTIONS                                                            */

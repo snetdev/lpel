@@ -457,6 +457,11 @@ void LpelWorkerSelfTaskMigrate(lpel_task_t *t, int target) {
 
 void LpelWorkerTaskBlock(lpel_task_t *t) {}
 
+/** return the total number of workers */
+int LpelWorkerCount(void)
+{
+  return num_workers;
+}
 /******************************************************************************/
 /*  PRIVATE FUNCTIONS                                                         */
 /******************************************************************************/

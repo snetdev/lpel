@@ -518,7 +518,11 @@ workerctx_t *LpelCreateWrapperContext(int wid) {
 
 
 
-
+/** return the total number of workers, including master */
+int LpelWorkerCount(void)
+{
+  return num_workers;
+}
 
 
 /*******************************************************************************
