@@ -42,7 +42,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 #endif
 
   /* quasi P(e_sem) */
-  if ( fetch_and_dec( &sd->stream->e_sem)== 0) {
+  if ( atomic_fetch_sub( &sd->stream->e_sem, 1)== 0) {
 
 	/* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -65,7 +65,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 
     if ( sd->stream->is_poll) {
       /* get consumer's poll token */
-      poll_wakeup = atomic_swap( &sd->stream->cons_sd->task->poll_token, 0);
+      poll_wakeup = atomic_exchange( &sd->stream->cons_sd->task->poll_token, 0);
       sd->stream->is_poll = 0;
     }
   }
@@ -74,7 +74,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 
 
   /* quasi V(n_sem) */
-  if ( fetch_and_inc( &sd->stream->n_sem) < 0) {
+  if ( atomic_fetch_add( &sd->stream->n_sem, 1) < 0) {
     /* n_sem was -1 */
     lpel_task_t *cons = sd->stream->cons_sd->task;
     /* wakeup consumer: make ready */
@@ -140,7 +140,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
 #endif
 
   /* quasi P(n_sem) */
-  if ( fetch_and_dec( &sd->stream->n_sem) == 0) {
+  if ( atomic_fetch_sub( &sd->stream->n_sem, 1) == 0) {
 
 #ifdef USE_TASK_EVENT_LOGGING
     /* MONITORING CALLBACK */
@@ -162,7 +162,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
 
 
   /* quasi V(e_sem) */
-  if ( fetch_and_inc( &sd->stream->e_sem) < 0) {
+  if ( atomic_fetch_add( &sd->stream->e_sem, 1) < 0) {
     /* e_sem was -1 */
     lpel_task_t *prod = sd->stream->prod_sd->task;
     /* wakeup producer: make ready */

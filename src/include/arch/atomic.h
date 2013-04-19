@@ -2,7 +2,10 @@
 #define _ATOMIC_H_
 
 
-#if  (__GNUC__ > 4) || \
+#if (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_ATOMICS__)
+#include <stdatomic.h>
+
+#elif  (__GNUC__ > 4) || \
   (__GNUC__==4) && (__GNUC_MINOR__ >= 1) && (__GNUC_PATCHLEVEL__ >= 0)
 /* gcc/icc compiler builtin atomics  */
 #include "atomic-builtin.h"
