@@ -31,6 +31,8 @@ typedef struct {
  */
 void LpelTaskSetPriority(lpel_task_t *t, int prio);
 
+/* get wid of a task */
+int LpelTaskGetWorkerId(lpel_task_t *t);
 
 /******************************************************************************/
 /*  SPMD FUNCTIONS                                                            */

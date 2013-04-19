@@ -235,3 +235,11 @@ void LpelTaskCheckMigrate(void) {
 		  TaskStart(t);
 	}
 }
+
+
+int LpelTaskGetWorkerId(lpel_task_t *t)
+{
+  assert(t);
+  assert(t->worker_context);
+  return t->worker_context->wid;
+}
