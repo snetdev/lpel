@@ -16,7 +16,7 @@
 
 #include "hrc_worker.h"
 #include "hrc_task.h"
-#include "lpel_main.h"
+#include "lpel_hwloc.h"
 #include "lpelcfg.h"
 #include "stream.h"
 #include "mailbox.h"

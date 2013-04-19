@@ -18,7 +18,7 @@
 #include "spmdext.h"
 
 #include "task.h"
-#include "lpel_main.h"
+#include "lpel_hwloc.h"
 #include "lpelcfg.h"
 
 #include "mailbox.h"
