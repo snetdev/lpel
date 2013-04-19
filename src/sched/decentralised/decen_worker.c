@@ -25,6 +25,7 @@
 #include "lpel/monitor.h"
 #include "decen_scheduler.h"
 #include "workermsg.h"
+#include "task_migration.h"
 
 #define WORKER_PTR(i) (workers[(i)])
 
@@ -33,7 +34,7 @@
 
 /******************************************************************************/
 
-
+extern lpel_tm_config_t tm_conf;
 static int num_workers = -1;
 static workerctx_t **workers;
 
@@ -139,6 +140,7 @@ void LpelWorkersInit(int size)
 
     wc->sched = LpelSchedCreate( i);
     wc->wraptask = NULL;
+    wc->migrated = NULL;
 
 #ifdef USE_LOGGING
 
@@ -293,8 +295,26 @@ void LpelWorkersSpawn(void)
   }
 }
 
-
-
+/*
+ * at this point, the task wait proportion has been updated and become ready
+ * check if the task should be migrated or put in the scheduling task queue
+ * i.e. make task ready for itself or for another worker
+ */
+void LpelWorkerMakeTaskReady(lpel_task_t *t) {
+	assert(t->state == TASK_READY);
+	workerctx_t *wc = t->worker_context;
+	if (tm_conf.mechanism == LPEL_MIG_WAIT_PROP){
+		int target = LpelPickTargetWorker(t);
+		if (target > 0 && target != wc->wid) {
+			t->worker_context = LpelWorkerGetContext(target);
+			wc->num_tasks--;
+			SendAssign( t->worker_context, t);		/* MIGRATE */
+		} else
+			LpelSchedMakeReady( wc->sched, t);
+	}
+	else
+		LpelSchedMakeReady( wc->sched, t);
+}
 
 /**
  * Wakeup a task from within another task - this internal function
@@ -316,7 +336,7 @@ void LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom)
     } else {
       assert(whom->state != TASK_READY);
       whom->state = TASK_READY;
-      LpelSchedMakeReady( wc->sched, whom);
+      LpelWorkerMakeTaskReady(whom);
     }
   }
 }
@@ -326,7 +346,7 @@ void LpelWorkerTaskWakeupLocal( workerctx_t *wc, lpel_task_t *task)
   assert(task->state != TASK_READY);
   assert(task->worker_context == wc);
   task->state = TASK_READY;
-  LpelSchedMakeReady( wc->sched, task);
+  LpelWorkerMakeTaskReady(task);
 }
 
 
@@ -393,7 +413,6 @@ workerctx_t *LpelWorkerGetContext(int id) {
 void LpelWorkerSelfTaskExit(lpel_task_t *t)
 {
   workerctx_t *wc = t->worker_context;
-
   CleanupTaskContext(wc,t);
   wc->num_tasks--;
   /* wrappers can terminate if their task terminates */
@@ -414,6 +433,27 @@ void LpelWorkerSelfTaskYield(lpel_task_t *t)
   }
 }
 
+/*
+ * Migrate the task while in its context
+ * @param t					task
+ * @param target		target worker to migrate task to
+ *
+ * 	- set the migrated task to the worker structure
+ * 	- switch back to the worker context
+ * 	- task migration is done within the worker context
+ */
+void LpelWorkerSelfTaskMigrate(lpel_task_t *t, int target) {
+	workerctx_t *wc = t->worker_context;
+
+	if (t->worker_context->wid == target)
+		return;
+
+	/* assign new worker_context to the task */
+	t->worker_context = LpelWorkerGetContext(target);
+	wc->migrated = t;
+	/* switch back to worker context to migrate task, shouldn't migrate the task itself in the task's context */
+	mctx_switch(&t->mctx, &wc->mctx); /* SWITCH */
+}
 
 void LpelWorkerTaskBlock(lpel_task_t *t) {}
 
@@ -461,7 +501,7 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
       if (wc->wid < 0) {
         wc->wraptask = t;
       } else {
-        LpelSchedMakeReady( wc->sched, t);
+      	LpelWorkerMakeTaskReady(t);
       }
       break;
 
@@ -471,9 +511,9 @@ static void ProcessMessage( workerctx_t *wc, workermsg_t *msg)
 
     case WORKER_MSG_ASSIGN:
       t = msg->body.task;
-
-      assert(t->state == TASK_CREATED);
-      t->state = TASK_READY;
+      assert(t->state == TASK_CREATED || t->state == TASK_READY); /* either task is just created or has been migrated to */
+      if (t->state == TASK_CREATED)
+      	t->state = TASK_READY;
 
       wc->num_tasks++;
       WORKER_DBGMSG(wc, "Assigned task %d.\n", t->uid);
@@ -569,6 +609,12 @@ static void WorkerLoop( workerctx_t *wc)
       /* execute task */
       wc->current_task = t;
       mctx_switch(&wc->mctx, &t->mctx);
+      /* task switch back to worker, migrate task if required */
+      if (wc->migrated) {
+      	SendAssign(wc->migrated->worker_context, wc->migrated);			/* MIGRATE */
+      	wc->num_tasks--;
+      	wc->migrated = NULL;
+      }
 
       WORKER_DBGMSG(wc, "Back on worker %d context.\n", wc->wid);
 

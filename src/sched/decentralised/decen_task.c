@@ -1,5 +1,5 @@
+#include <stdio.h>
 #include "task.h"
-
 #include "lpelcfg.h"
 #include "decen_worker.h"
 #include "spmdext.h"
@@ -7,10 +7,9 @@
 #include "lpel/monitor.h"
 #include "decen_scheduler.h"
 #include "decen_lpel.h"
-#include "task.h"
+#include "task_migration.h"
 
-
-
+extern lpel_tm_config_t tm_conf;
 static atomic_t taskseq = ATOMIC_INIT(0);
 
 /**
@@ -171,6 +170,37 @@ void TaskStart( lpel_task_t *t)
 	t->state = TASK_RUNNING;
 }
 
+/**
+ * Yield execution back to scheduler voluntarily
+ *
+ * @pre This call must be made from within a LPEL task!
+ */
+void LpelTaskYield(void)
+{
+  lpel_task_t *ct = LpelTaskSelf();
+  assert( ct->state == TASK_RUNNING );
+
+  ct->state = TASK_READY;
+
+  /* task wait_prop is updated
+   * check if it should be migrated
+   * If yes --> self migrated, if no --> self yield
+   */
+  if (tm_conf.mechanism == LPEL_MIG_WAIT_PROP) {
+  	int target = LpelPickTargetWorker(ct);
+  	if (target > 0) {
+  		TaskStop(ct);
+  		LpelWorkerSelfTaskMigrate(ct, target);
+  		TaskStart(ct);
+  		return;
+  	}
+  }
+
+  LpelWorkerSelfTaskYield(ct);
+  TaskStop( ct);
+  LpelWorkerDispatcher( ct);
+  TaskStart( ct);
+}
 
 
 /* void function to be called by LpelStreamOpen
@@ -182,3 +212,26 @@ void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode){}
  * should not have any effect in DECEN
  */
 void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode){}
+
+
+/** check and migrate the current task if required, used in decen_lpel
+ * to be called from snet-rts after processing one message record
+ * used in random-based mechanism
+ * */
+void LpelTaskCheckMigrate(void) {
+	if (tm_conf.mechanism != LPEL_MIG_RAND)
+		return;
+
+	lpel_task_t *t = LpelTaskSelf();
+	if (t->worker_context->wid < 0)
+		return;		// no migrate wrapper task
+
+	assert( t->state == TASK_RUNNING );
+	int target = LpelPickTargetWorker(t);
+	if (target >= 0 && t->worker_context->wid != target) {
+		  t->state = TASK_READY;
+		  TaskStop(t);
+		  LpelWorkerSelfTaskMigrate(t, target);
+		  TaskStart(t);
+	}
+}

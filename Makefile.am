@@ -16,6 +16,8 @@ liblpel_la_SOURCES = \
 	src/sched/decentralised/spmdext.c \
 	src/sched/decentralised/spmdext.h \
 	src/sched/decentralised/decen_task.c \
+	src/sched/decentralised/task_migration.h \
+	src/sched/decentralised/task_migration.c \
 	src/sched/decentralised/decen_worker.c \
 	src/sched/decentralised/decen_worker.h \
 	src/sched/decentralised/decen_taskqueue.c \

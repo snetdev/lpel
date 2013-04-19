@@ -97,24 +97,6 @@ void LpelTaskExit(void *outarg)
 }
 
 
-/**
- * Yield execution back to scheduler voluntarily
- *
- * @pre This call must be made from within a LPEL task!
- */
-void LpelTaskYield(void)
-{
-  lpel_task_t *ct = LpelTaskSelf();
-  assert( ct->state == TASK_RUNNING );
-
-  ct->state = TASK_READY;
-  LpelWorkerSelfTaskYield(ct);
-  TaskStop( ct);
-  LpelWorkerDispatcher( ct);
-  TaskStart( ct);
-}
-
-
 
 
 /**
@@ -181,7 +163,4 @@ void TaskStop( lpel_task_t *t)
 #endif
 
 }
-
-
-
 

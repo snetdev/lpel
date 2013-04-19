@@ -287,6 +287,29 @@ int LpelTaskGetWorkerId(lpel_task_t *t) {
 		return -1;
 }
 
+/**
+ * Yield execution back to scheduler voluntarily
+ *
+ * @pre This call must be made from within a LPEL task!
+ */
+void LpelTaskYield(void)
+{
+  lpel_task_t *ct = LpelTaskSelf();
+  assert( ct->state == TASK_RUNNING );
+
+  ct->state = TASK_READY;
+  LpelWorkerSelfTaskYield(ct);
+  TaskStop( ct);
+  LpelWorkerDispatcher( ct);
+  TaskStart( ct);
+}
+
+
+/*
+ * void function to provide task migration in lpel decen
+ * */
+void LpelTaskCheckMigrate(void) {
+}
 
 /******************************************************************************/
 /* PRIVATE FUNCTIONS                                                          */
@@ -318,5 +341,3 @@ int countRec(stream_elem_t *list) {
 	}
 	return cnt;
 }
-
-

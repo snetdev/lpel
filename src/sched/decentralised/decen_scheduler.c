@@ -7,6 +7,7 @@
 
 #include "decen_taskqueue.h"
 #include "task.h"
+#include "task_migration.h"
 
 
 struct schedctx_t {

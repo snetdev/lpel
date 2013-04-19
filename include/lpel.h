@@ -56,12 +56,15 @@ typedef struct mon_task_t   mon_task_t;
 typedef struct mon_stream_t mon_stream_t;
 
 typedef struct lpel_monitoring_cb_t {
+	int num_workers;
+
   /* worker callbacks*/
   mon_worker_t *(*worker_create)(int);
   mon_worker_t *(*worker_create_wrapper)(mon_task_t *);
   void (*worker_destroy)(mon_worker_t*);
   void (*worker_waitstart)(mon_worker_t*);
   void (*worker_waitstop)(mon_worker_t*);
+
   //void (*worker_debug)(mon_worker_t*, const char *fmt, ...);
   /* task callbacks */
   /* note: no callback for task creation
@@ -71,6 +74,14 @@ typedef struct lpel_monitoring_cb_t {
   void (*task_assign)(mon_task_t*, mon_worker_t*);
   void (*task_start)(mon_task_t*);
   void (*task_stop)(mon_task_t*, lpel_taskstate_t);
+
+  /* callback functions support for task migration in lpel_decen */
+  void (*task_ready)(mon_task_t*);
+  double (*get_task_wait_prop) (mon_task_t *);
+  int (*worker_most_wait_prop)();
+  double (*get_global_wait_prop)();
+  double (*get_worker_wait_prop) (mon_task_t *);
+
   /* stream callbacks */
   mon_stream_t *(*stream_open)(mon_task_t*, unsigned int, char);
   void (*stream_close)(mon_stream_t*);
@@ -177,6 +188,10 @@ lpel_task_t *LpelTaskSelf(void);
 void LpelTaskExit(void *outarg);
 void LpelTaskYield(void);
 
+/** check and migrate the current task if required, used in decen_lpel
+ * to be called from snet-rts
+ * */
+void LpelTaskCheckMigrate(void);
 
 /******************************************************************************/
 /*  STREAM FUNCTIONS                                                          */

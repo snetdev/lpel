@@ -27,10 +27,12 @@ struct workerctx_t {
   schedctx_t   *sched;
   lpel_task_t  *wraptask;
   char          padding[64];
+  lpel_task_t	 *migrated;
 };
 
 
 void LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom);
 void LpelWorkerTaskWakeupLocal( workerctx_t *wc, lpel_task_t *task);
+void LpelWorkerSelfTaskMigrate(lpel_task_t *t, int target);
 
 #endif /* _DECEN_WORKER_H */
