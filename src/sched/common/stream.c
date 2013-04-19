@@ -52,7 +52,7 @@
 #include "lpel/monitor.h"
 
 
-static atomic_t stream_seq = ATOMIC_INIT(0);
+static atomic_int stream_seq = ATOMIC_VAR_INIT(0);
 
 /**
  * Create a stream
@@ -72,7 +72,7 @@ lpel_stream_t *LpelStreamCreate(int size)
   /* reset buffer (including buffer area) */
   s->buffer = LpelBufferInit( size);
 
-  s->uid = fetch_and_inc( &stream_seq);
+  s->uid = atomic_fetch_add( &stream_seq, 1);
   PRODLOCK_INIT( &s->prod_lock );
   atomic_init( &s->n_sem, 0);
   atomic_init( &s->e_sem, size);
@@ -254,7 +254,6 @@ void *LpelStreamPeek( lpel_stream_desc_t *sd)
   return LpelBufferTop( sd->stream->buffer);
 }
 
-
 /**
  * Non-blocking write to a stream
  *
@@ -315,7 +314,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
 
 
   /* place a poll token */
-  atomic_set( &self->poll_token, 1);
+  atomic_store( &self->poll_token, 1);
 
   /* for each stream in the set */
   LpelStreamIterReset(iter, set);
@@ -330,7 +329,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
         /* yes, we can stop iterating through streams.
          * determine, if we have been woken up by another producer:
          */
-        int tok = atomic_swap( &self->poll_token, 0);
+        int tok = atomic_exchange( &self->poll_token, 0);
         if (tok) {
           /* we have not been woken yet, no need for ctx switch */
           do_ctx_switch = 0;
@@ -361,7 +360,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
     /* set task as blocked */
     LpelTaskBlockStream( self);
   }
-  assert( atomic_read( &self->poll_token) == 0);
+  assert( atomic_load( &self->poll_token) == 0);
 
   /* unregister activators
    * - would only be necessary, if the consumer task closes the stream

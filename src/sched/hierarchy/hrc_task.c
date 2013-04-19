@@ -10,7 +10,7 @@
 #include "lpel/monitor.h"
 #include "taskpriority.h"
 
-static atomic_t taskseq = ATOMIC_INIT(0);
+static atomic_int taskseq = ATOMIC_VAR_INIT(0);
 
 static double (*prior_cal) (int in, int out) = priorfunc1;
 
@@ -56,7 +56,7 @@ lpel_task_t *LpelTaskCreate( int map, lpel_taskfunc_t func,
 	else
 		t->worker_context = NULL;
 
-	t->uid = fetch_and_inc( &taskseq);  /* obtain a unique task id */
+	t->uid = atomic_fetch_add( &taskseq, 1);  /* obtain a unique task id */
 	t->func = func;
 	t->inarg = inarg;
 

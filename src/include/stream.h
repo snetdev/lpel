@@ -56,8 +56,8 @@ struct lpel_stream_t {
                                 is_poll is protected by the prod_lock */
   lpel_stream_desc_t *prod_sd;   /** points to the sd of the producer */
   lpel_stream_desc_t *cons_sd;   /** points to the sd of the consumer */
-  atomic_t n_sem;           /** counter for elements in the stream */
-  atomic_t e_sem;           /** counter for empty space in the stream */
+  atomic_int n_sem;           /** counter for elements in the stream */
+  atomic_int e_sem;           /** counter for empty space in the stream */
   void *usr_data;           /** arbitrary user data */
 };
 

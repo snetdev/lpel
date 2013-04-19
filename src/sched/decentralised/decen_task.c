@@ -10,7 +10,7 @@
 #include "task_migration.h"
 
 extern lpel_tm_config_t tm_conf;
-static atomic_t taskseq = ATOMIC_INIT(0);
+static atomic_int taskseq = ATOMIC_VAR_INIT(0);
 
 /**
  * Create a task.
@@ -51,7 +51,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 	t->sched_info = (sched_task_t *) malloc(sizeof(sched_task_t));
 	t->sched_info->prio = 0;
 
-	t->uid = fetch_and_inc( &taskseq);  /* obtain a unique task id */
+	t->uid = atomic_fetch_add( &taskseq, 1);  /* obtain a unique task id */
 	t->func = func;
 	t->inarg = inarg;
 
