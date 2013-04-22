@@ -186,7 +186,8 @@ static void FinishOffCurrentTask(lpel_task_t *ct)
   /* context switch happens, this task is cleaned up then */
   ct->state = TASK_ZOMBIE;
   LpelWorkerSelfTaskExit(ct);
-  LpelTaskBlock( ct );
+  TaskStop( ct);
+  LpelWorkerDispatcher( ct);
   /* execution never comes back here */
   assert(0);
 }

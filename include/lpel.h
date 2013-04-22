@@ -216,9 +216,6 @@ void LpelSetUserDataDestructor(lpel_task_t *t, lpel_usrdata_destructor_t destr);
 lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t);
 
 
-/** enter SPMD request */
-void LpelTaskEnterSPMD(lpel_spmdfunc_t, void *);
-
 /** return the current worker index of the given task */
 int LpelTaskGetWorkerId(lpel_task_t *t);
 
