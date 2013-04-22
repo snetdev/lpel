@@ -19,7 +19,9 @@ void LpelMutexEnter(lpel_task_t *t, lpel_mutex_t *mx)
     /* mutex is busy, schedule another thread */
     t->state = TASK_READY;
     LpelWorkerSelfTaskYield(t);
-    LpelTaskBlock(t);
+    TaskStop(t);
+    LpelWorkerDispatcher(t);
+    TaskStart(t);
   }
 }
 
