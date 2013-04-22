@@ -173,7 +173,6 @@ void LpelHwLocStart(lpel_config_t *cfg)
 #ifdef HAVE_HWLOC
     //FIXME
 #elif defined(HAVE_PTHREAD_SETAFFINITY_NP)
-	lpel_config_t *cfg = &_lpel_global_config;
 	int  i;
 
 	/* create the cpu_set for worker threads */
@@ -219,7 +218,6 @@ int LpelThreadAssign(int core)
 #elif defined(HAVE_PTHREAD_SETAFFINITY_NP)
   lpel_config_t *cfg = &_lpel_global_config;
   pthread_t pt = pthread_self();
-  int res;
   cpu_set_t cpuset;
 
   if ( LPEL_ICFG(LPEL_FLAG_PINNED)) {
