@@ -2,7 +2,7 @@
 #define _STREAM_H_
 
 #include <pthread.h>
-#include <lpel.h>
+#include <lpel_common.h>
 #include "buffer.h"
 #include "task.h"
 

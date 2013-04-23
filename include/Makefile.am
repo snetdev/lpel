@@ -1,7 +1,7 @@
 
 nobase_include_HEADERS = \
-        lpel.h \
-				decen_lpel.h \
+        lpel_common.h \
+				lpel.h \
 				hrc_lpel.h \
         lpel/timing.h \
 				lpel/monitor.h

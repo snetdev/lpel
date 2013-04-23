@@ -1,7 +1,7 @@
 #ifndef _MONITORING_H_
 #define _MONITORING_H_
 
-#include <lpel.h>
+#include <lpel_common.h>
 
 #define LPEL_MON_TIME   (1<<0)
 #define LPEL_MON_TASK		  (1<<1)

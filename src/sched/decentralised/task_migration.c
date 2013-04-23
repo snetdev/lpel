@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include "task.h"
 #include "decen_worker.h"
-#include "decen_lpel.h"
+#include "lpel.h"
 #include "lpelcfg.h"
 #include "task_migration.h"
 

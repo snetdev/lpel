@@ -2,7 +2,7 @@
 #define _HRC_WORKER_H_
 
 #include <pthread.h>
-#include <lpel.h>
+#include <hrc_lpel.h>
 
 #include "arch/mctx.h"
 #include "worker.h"

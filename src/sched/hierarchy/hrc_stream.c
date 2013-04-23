@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include <lpel.h>
+#include <hrc_lpel.h>
 
 #include "arch/atomic.h"
 #include "lpelcfg.h"

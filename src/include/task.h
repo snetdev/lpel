@@ -2,7 +2,7 @@
 #define _TASK_H_
 
 
-#include <lpel.h>
+#include <lpel_common.h>
 
 #include "arch/mctx.h"
 

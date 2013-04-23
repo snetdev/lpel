@@ -9,7 +9,7 @@
 #ifndef _HRC_LPEL_H_
 #define _HRC_LPEL_H_
 
-#include <lpel.h>
+#include <lpel_common.h>
 
 
 /* extra task state in HRC */

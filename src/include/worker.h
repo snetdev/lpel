@@ -2,7 +2,7 @@
 #define _WORKER_H_
 
 #include <pthread.h>
-#include <lpel.h>
+#include <lpel_common.h>
 
 #include "arch/mctx.h"
 #include "task.h"

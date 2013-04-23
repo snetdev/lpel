@@ -1,7 +1,7 @@
 #ifndef _SPMDEXT_H_
 #define _SPMDEXT_H_
 
-#include <decen_lpel.h>
+#include <lpel.h>
 #include "task.h"
 
 

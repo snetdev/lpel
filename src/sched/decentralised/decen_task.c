@@ -6,7 +6,7 @@
 #include "stream.h"
 #include "lpel/monitor.h"
 #include "decen_scheduler.h"
-#include "decen_lpel.h"
+#include "lpel.h"
 #include "task_migration.h"
 
 extern lpel_tm_config_t tm_conf;

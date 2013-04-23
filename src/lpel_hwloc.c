@@ -9,7 +9,7 @@
 #include <sys/capability.h>
 #endif
 
-#include "lpel.h"
+#include "lpel_common.h"
 #include "lpelcfg.h"
 
 #include "lpel_hwloc.h"

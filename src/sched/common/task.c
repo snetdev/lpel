@@ -18,6 +18,7 @@
 #include "worker.h"
 #include "stream.h"
 #include "lpel/monitor.h"
+#include <lpel_common.h>
 
 static void FinishOffCurrentTask(lpel_task_t *ct);
 
@@ -96,12 +97,10 @@ void *LpelGetUserData(lpel_task_t *t)
  * @param outarg  output argument of the task
  * @pre This call must be made within a LPEL task!
  */
-void LpelTaskExit(void *outarg)
+void LpelTaskExit(void)
 {
   lpel_task_t *ct = LpelTaskSelf();
   assert( ct->state == TASK_RUNNING );
-
-  ct->outarg = outarg;
 
   FinishOffCurrentTask(ct);
   /* execution never comes back here */

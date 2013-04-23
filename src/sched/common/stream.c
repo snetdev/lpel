@@ -41,7 +41,7 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include <lpel.h>
+#include <lpel_common.h>
 
 #include "arch/atomic.h"
 #include "lpelcfg.h"

@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
-#include "decen_lpel.h"
+#include "lpel.h"
 #include "../modimpl/monitoring.h"
 
 

@@ -13,7 +13,7 @@
 #include <unistd.h>  /* sysconf() */
 #include <pthread.h> /* worker threads are OS threads */
 
-#include <lpel.h>
+#include <lpel_common.h>
 
 #include "arch/mctx.h"
 #include "lpel_hwloc.h"

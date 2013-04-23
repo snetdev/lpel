@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include <lpel.h>
-#include <decen_lpel.h>
 #include <lpel/timing.h>
 
 
