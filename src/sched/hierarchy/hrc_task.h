@@ -32,7 +32,6 @@ struct sched_task_t{
 	double prior;
 	stream_elem_t *in_streams;
 	stream_elem_t *out_streams;
-	int type;
 };
 
 double LpelTaskCalPriority(lpel_task_t *t);

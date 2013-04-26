@@ -41,9 +41,11 @@ void LpelWorkerBroadcast(workermsg_t *msg);
 workerctx_t *LpelWorkerGetContext(int id);
 workerctx_t *LpelWorkerSelf(void);
 lpel_task_t *LpelWorkerCurrentTask(void);
+int LpelWorkerIsWrapper(workerctx_t *wc);
 
 void LpelWorkerSelfTaskExit(lpel_task_t *t);
 void LpelWorkerSelfTaskYield(lpel_task_t *t);
 void LpelWorkerTaskBlock(lpel_task_t *t);
+
 
 #endif /* _WORKER_H_ */

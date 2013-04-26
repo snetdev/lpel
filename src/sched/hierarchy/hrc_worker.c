@@ -702,3 +702,8 @@ void LpelWorkerDispatcher( lpel_task_t *t) {
 	wc->current_task = NULL;
 	mctx_switch( &t->mctx, &wc->mctx);
 }
+
+int LpelWorkerIsWrapper(workerctx_t *wc) {
+	assert(wc != NULL);
+	return (wc->wid < 0? 1 : 0);
+}

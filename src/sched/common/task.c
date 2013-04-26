@@ -123,6 +123,10 @@ void LpelTaskBlockStream(lpel_task_t *t)
   TaskStart( t);
 }
 
+int LpelTaskIsWrapper(lpel_task_t *t) {
+	assert(t != NULL);
+	return LpelWorkerIsWrapper(t->worker_context);
+}
 
 /******************************************************************************/
 /* PRIVATE FUNCTIONS                                                          */

@@ -80,6 +80,8 @@ lpel_stream_t *LpelStreamCreate(int size)
   s->prod_sd = NULL;
   s->cons_sd = NULL;
   s->usr_data = NULL;
+  s->is_entry = 0;
+  s->is_exit = 0;
   return s;
 }
 
@@ -164,6 +166,13 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
    * It is implemented this way to avoid 2 implementations: one for HRC and one for DECEN
    */
   LpelTaskAddStream(ct, sd, mode);
+
+  /* set entry/exit stream */
+  if (LpelTaskIsWrapper(ct) && (mode == 'r'))
+  	s->is_exit;
+  if (LpelTaskIsWrapper(ct) && (mode == 'w'))
+    	s->is_entry;
+
   return sd;
 }
 
