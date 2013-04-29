@@ -16,7 +16,7 @@ typedef struct {
 
 
 
-void Relay(void *inarg)
+void *Relay(void *inarg)
 {
   channels_t *ch = (channels_t *)inarg;
   int term = 0;
@@ -42,6 +42,7 @@ void Relay(void *inarg)
   LpelStreamClose( out, 0);
   free(ch);
   printf("Relay %d TERM\n", id);
+  return NULL;
 }
 
 
@@ -75,7 +76,7 @@ lpel_stream_t *PipeElement(lpel_stream_t *in, int depth)
 
 
 
-static void Outputter(void *arg)
+static void *Outputter(void *arg)
 {
   lpel_stream_desc_t *in = LpelStreamOpen((lpel_stream_t*)arg, 'r'); 
   char *item;
@@ -98,10 +99,11 @@ static void Outputter(void *arg)
   printf("Outputter TERM\n");
 
   LpelStop();
+  return NULL;
 }
 
 
-static void Inputter(void *arg)
+static void *Inputter(void *arg)
 {
   lpel_stream_desc_t *out = LpelStreamOpen((lpel_stream_t*)arg, 'w'); 
   char *buf;
@@ -114,6 +116,7 @@ static void Inputter(void *arg)
 
   LpelStreamClose( out, 0);
   printf("Inputter TERM\n");
+  return NULL;
 }
 
 static void testBasic(void)

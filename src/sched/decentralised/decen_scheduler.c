@@ -1,8 +1,6 @@
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <assert.h>
-#include <pthread.h>
 
 #include "decen_scheduler.h"
 
@@ -64,3 +62,4 @@ lpel_task_t *LpelSchedFetchReady( schedctx_t *sc)
 
   return t;
 }
+

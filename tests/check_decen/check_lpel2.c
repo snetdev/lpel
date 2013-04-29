@@ -11,7 +11,7 @@ lpel_stream_t *scoll[NUM_COLL];
 
 
 
-void Consumer(void *inarg)
+void *Consumer(void *inarg)
 {
   char *msg;
   int i, term;
@@ -64,11 +64,12 @@ void Consumer(void *inarg)
   printf("exit Consumer\n" );
 
   LpelStop();
+  return NULL;
 }
 
 
 
-void Relay(void *inarg)
+void *Relay(void *inarg)
 {
   void *item;
   char *msg;
@@ -112,10 +113,11 @@ void Relay(void *inarg)
   }
   LpelStreamClose(in, 1);
   printf("exit Relay\n" );
+  return NULL;
 }
 
 
-static void Inputter(void *arg)
+static void *Inputter(void *arg)
 {
   lpel_stream_desc_t *out = LpelStreamOpen((lpel_stream_t*)arg, 'w');
   char *buf;
@@ -127,6 +129,7 @@ static void Inputter(void *arg)
 
   LpelStreamClose( out, 0);
   printf("exit Inputter\n" );
+  return NULL;
 }
 
 

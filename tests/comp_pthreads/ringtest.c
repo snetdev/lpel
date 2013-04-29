@@ -46,7 +46,7 @@ static void PrintEOR(msg_t *msg) {
 }
 
 
-void Process(void *arg)
+void *Process(void *arg)
 {
   int id = *(int *)arg;
   lpel_stream_desc_t *in, *out;
@@ -107,6 +107,8 @@ void Process(void *arg)
 
   LpelStreamClose( in, 1);
   LpelStreamClose( out, 0);
+
+  return NULL;
 }
 
 
