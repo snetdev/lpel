@@ -1,5 +1,5 @@
 /*
- * Buffer, implemented as Single-Writer Single-Reader circular buffer.
+ * Bounded buffer, implemented as Single-Writer Single-Reader circular buffer.
  *
  * It uses ideas from the FastForward queue implementation:
  * Synchronisation takes place with the content of the buffer, i.e., NULL indicates that
@@ -19,32 +19,53 @@
 #include "buffer.h"
 
 
+/* 64bytes is the common size of a cache line */
+#define longxCacheLine  (64/sizeof(long))
+
+/* Padding is required to avoid false-sharing
+   between core's private cache */
+struct buffer_t {
+  unsigned long pread;
+//  volatile unsigned long pread;
+  long padding1[longxCacheLine-1];
+  unsigned long pwrite;
+//  volatile unsigned long pwrite;
+  long padding2[longxCacheLine-1];
+  unsigned long size;
+  int count;
+  void **data;
+};
+
+
 /**
  * Initialize a buffer.
- * Also allocates space for size void* items
  *
  * @param buf   pointer to buffer struct
  * @param size  number of void* elements in the buffer
  */
-void LpelBufferInit( buffer_t *buf, unsigned int size)
+buffer_t *LpelBufferInit(unsigned int size)
 {
+	buffer_t *buf = (buffer_t *) malloc(sizeof(buffer_t));
   buf->pread = 0;
   buf->pwrite = 0;
   buf->size = size;
+  buf->count = 0;
   buf->data = malloc( size*sizeof(void*) );
   /* clear all the buffer space */
   memset(buf->data, 0, size*sizeof(void *));
+  return buf;
 }
 
 /**
  * Cleanup the buffer.
- * Free the memory for the buffer items.
+ * Free the memory for the buffer items and the buffer itself.
  *
  * @param buf   pointer to buffer struct
  */
 void  LpelBufferCleanup(buffer_t *buf)
 {
   free(buf->data);
+  free(buf);
 }
 
 
@@ -76,6 +97,7 @@ void LpelBufferPop( buffer_t *buf)
   /* clear, and advance pread */
   buf->data[buf->pread]=NULL;
   buf->pread += (buf->pread+1 >= buf->size) ? (1-buf->size) : 1;
+  buf->count--;
 }
 
 
@@ -123,8 +145,19 @@ void LpelBufferPut( buffer_t *buf, void *item)
   WMB();
   buf->data[buf->pwrite] = item;
   buf->pwrite += (buf->pwrite+1 >= buf->size) ? (1-buf->size) : 1;
+  buf->count++;
 }
 
 
+
+/**
+ * Return the number of data item in the buffer
+ *
+ * @param buf   buffer
+ * @pre         no concurrent calls
+ */
+int	LpelBufferCount(buffer_t *buf) {
+	return buf->count;
+}
 
 

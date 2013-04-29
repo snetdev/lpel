@@ -1,9 +1,9 @@
 /**
  * File: stream.c
  * Auth: Daniel Prokesch <daniel.prokesch@gmail.com>
- * Date: 2010/08/26
+ * Modified: Nga
  *
- * Desc:
+ * Desc: Common implementations for DECEN and HRC
  *
  * Core stream handling functions, including stream descriptors.
  *
@@ -41,7 +41,7 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include <lpel.h>
+#include <lpel_common.h>
 
 #include "arch/atomic.h"
 #include "lpelcfg.h"
@@ -51,50 +51,8 @@
 #include "stream.h"
 #include "lpel/monitor.h"
 
-/** Macros for lock handling */
-
-#ifdef STREAM_POLL_SPINLOCK
-
-#define PRODLOCK_TYPE       pthread_spinlock_t
-#define PRODLOCK_INIT(x)    pthread_spin_init(x, PTHREAD_PROCESS_PRIVATE)
-#define PRODLOCK_DESTROY(x) pthread_spin_destroy(x)
-#define PRODLOCK_LOCK(x)    pthread_spin_lock(x)
-#define PRODLOCK_UNLOCK(x)  pthread_spin_unlock(x)
-
-#else
-
-#define PRODLOCK_TYPE       pthread_mutex_t
-#define PRODLOCK_INIT(x)    pthread_mutex_init(x, NULL)
-#define PRODLOCK_DESTROY(x) pthread_mutex_destroy(x)
-#define PRODLOCK_LOCK(x)    pthread_mutex_lock(x)
-#define PRODLOCK_UNLOCK(x)  pthread_mutex_unlock(x)
-
-#endif /* STREAM_POLL_SPINLOCK */
-
-
-
-
-
-/**
- * A stream which is shared between a
- * (single) producer and a (single) consumer.
- */
-struct lpel_stream_t {
-  buffer_t buffer;          /** buffer holding the actual data */
-  unsigned int uid;         /** unique sequence number */
-  PRODLOCK_TYPE prod_lock;  /** to support polling a lock is needed */
-  int is_poll;              /** indicates if a consumer polls this stream,
-                                is_poll is protected by the prod_lock */
-  lpel_stream_desc_t *prod_sd;   /** points to the sd of the producer */
-  lpel_stream_desc_t *cons_sd;   /** points to the sd of the consumer */
-  atomic_int n_sem;           /** counter for elements in the stream */
-  atomic_int e_sem;           /** counter for empty space in the stream */
-  void *usr_data;           /** arbitrary user data */
-};
 
 static atomic_int stream_seq = ATOMIC_VAR_INIT(0);
-
-
 
 /**
  * Create a stream
@@ -112,7 +70,7 @@ lpel_stream_t *LpelStreamCreate(int size)
   lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
 
   /* reset buffer (including buffer area) */
-  LpelBufferInit( &s->buffer, size);
+  s->buffer = LpelBufferInit( size);
 
   s->uid = atomic_fetch_add( &stream_seq, 1);
   PRODLOCK_INIT( &s->prod_lock );
@@ -124,7 +82,6 @@ lpel_stream_t *LpelStreamCreate(int size)
   s->usr_data = NULL;
   return s;
 }
-
 
 /**
  * Destroy a stream
@@ -139,7 +96,7 @@ void LpelStreamDestroy( lpel_stream_t *s)
   PRODLOCK_DESTROY( &s->prod_lock);
   atomic_destroy( &s->n_sem);
   atomic_destroy( &s->e_sem);
-  LpelBufferCleanup( &s->buffer);
+  LpelBufferCleanup( s->buffer);
   free( s);
 }
 
@@ -174,10 +131,12 @@ void *LpelStreamGetUsrData(lpel_stream_t *s)
  */
 lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
 {
-  lpel_task_t *ct = NULL;
   lpel_stream_desc_t *sd;
+  lpel_task_t *ct = LpelTaskSelf();
+
   assert( mode == 'r' || mode == 'w' );
-  sd = malloc( sizeof( lpel_stream_desc_t));
+  sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
+  sd->task = ct;
   sd->stream = s;
   sd->mode = mode;
   sd->next  = NULL;
@@ -186,7 +145,7 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   /* create monitoring object, or NULL if stream
    * is not going to be monitored (depends on ct->mon)
    */
-  if (ct && ct->mon && MON_CB(stream_open)) {
+  if (ct->mon && MON_CB(stream_open)) {
     sd->mon = MON_CB(stream_open)( ct->mon, s->uid, mode);
   } else {
     sd->mon = NULL;
@@ -200,6 +159,11 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
     case 'w': s->prod_sd = sd; break;
   }
 
+  /* add stream desc to the task, used for calculate dynamic task priority in HRC
+   * This function has no effect in DECEN
+   * It is implemented this way to avoid 2 implementations: one for HRC and one for DECEN
+   */
+  LpelTaskAddStream(ct, sd, mode);
   return sd;
 }
 
@@ -217,6 +181,17 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
     MON_CB(stream_close)(sd->mon);
   }
 #endif
+
+  if (sd->mode == 'r')
+  	sd->stream->cons_sd = NULL;
+  else if (sd->mode == 'w')
+  	sd->stream->prod_sd = NULL;
+
+  /* add stream desc to the task, used for calculate dynamic task priority in HRC
+   * This function has no effect in DECEN
+   * It is implemented this way to avoid 2 implementations: one for HRC and one for DECEN
+   */
+  LpelTaskRemoveStream(sd->task, sd, sd->mode);
 
   if (destroy_s) {
     LpelStreamDestroy( sd->stream);
@@ -276,182 +251,8 @@ lpel_stream_t *LpelStreamGet(lpel_stream_desc_t *sd)
 void *LpelStreamPeek( lpel_stream_desc_t *sd)
 {
   assert( sd->mode == 'r');
-  return LpelBufferTop( &sd->stream->buffer);
+  return LpelBufferTop( sd->stream->buffer);
 }
-
-
-/**
- * Blocking, consuming read from a stream
- *
- * If the stream is empty, the task is suspended until
- * a producer writes an item to the stream.
- *
- * @param sd  stream descriptor
- * @return    the next item of the stream
- * @pre       current task is single reader
- */
-void *LpelStreamRead( lpel_stream_desc_t *sd)
-{
-  void *item;
-  sd->task = LpelTaskSelf();
-
-  assert( sd->mode == 'r');
-
-  /* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-  if (sd->mon && MON_CB(stream_readprepare)) {
-    MON_CB(stream_readprepare)(sd->mon);
-  }
-#endif
-
-  /* quasi P(n_sem) */
-  if ( atomic_fetch_sub( &sd->stream->n_sem, 1) == 0) {
-
-#ifdef USE_TASK_EVENT_LOGGING
-    /* MONITORING CALLBACK */
-    if (sd->mon && MON_CB(stream_blockon)) {
-      MON_CB(stream_blockon)(sd->mon);
-    }
-#endif
-
-    /* wait on stream: */
-    LpelTaskBlockStream( sd->task);
-  }
-
-
-  /* read the top element */
-  item = LpelBufferTop( &sd->stream->buffer);
-  assert( item != NULL);
-  /* pop off the top element */
-  LpelBufferPop( &sd->stream->buffer);
-
-
-  /* quasi V(e_sem) */
-  if ( atomic_fetch_add( &sd->stream->e_sem, 1) < 0) {
-    /* e_sem was -1 */
-    lpel_task_t *prod = sd->stream->prod_sd->task;
-    /* wakeup producer: make ready */
-    LpelTaskUnblock( sd->task, prod);
-
-    /* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-    if (sd->mon && MON_CB(stream_wakeup)) {
-      MON_CB(stream_wakeup)(sd->mon);
-    }
-#endif
-
-  }
-
-  /* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-  if (sd->mon && MON_CB(stream_readfinish)) {
-    MON_CB(stream_readfinish)(sd->mon, item);
-  }
-#endif
-  return item;
-}
-
-
-
-/**
- * Blocking write to a stream
- *
- * If the stream is full, the task is suspended until the consumer
- * reads items from the stream, freeing space for more items.
- *
- * @param sd    stream descriptor
- * @param item  data item (a pointer) to write
- * @pre         current task is single writer
- * @pre         item != NULL
- */
-void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
-{
-  int poll_wakeup = 0;
-  sd->task = LpelTaskSelf();
-
-  /* check if opened for writing */
-  assert( sd->mode == 'w' );
-  assert( item != NULL );
-
-  /* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-  if (sd->mon && MON_CB(stream_writeprepare)) {
-    MON_CB(stream_writeprepare)(sd->mon, item);
-  }
-#endif
-
-  /* quasi P(e_sem) */
-  if ( atomic_fetch_sub( &sd->stream->e_sem, 1)== 0) {
-
-	/* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-    if (sd->mon && MON_CB(stream_blockon)) {
-      MON_CB(stream_blockon)(sd->mon);
-    }
-#endif
-
-    /* wait on stream: */
-    LpelTaskBlockStream( sd->task);
-  }
-
-  /* writing to the buffer and checking if consumer polls must be atomic */
-  PRODLOCK_LOCK( &sd->stream->prod_lock);
-  {
-    /* there must be space now in buffer */
-    assert( LpelBufferIsSpace( &sd->stream->buffer) );
-    /* put item into buffer */
-    LpelBufferPut( &sd->stream->buffer, item);
-
-    if ( sd->stream->is_poll) {
-      /* get consumer's poll token */
-      poll_wakeup = atomic_exchange( &sd->stream->cons_sd->task->poll_token, 0);
-      sd->stream->is_poll = 0;
-    }
-  }
-  PRODLOCK_UNLOCK( &sd->stream->prod_lock);
-
-
-
-  /* quasi V(n_sem) */
-  if ( atomic_fetch_add( &sd->stream->n_sem, 1) < 0) {
-    /* n_sem was -1 */
-    lpel_task_t *cons = sd->stream->cons_sd->task;
-    /* wakeup consumer: make ready */
-    LpelTaskUnblock( sd->task, cons);
-
-    /* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-    if (sd->mon && MON_CB(stream_wakeup)) {
-      MON_CB(stream_wakeup)(sd->mon);
-    }
-#endif
-  } else {
-    /* we are the sole producer task waking the polling consumer up */
-    if (poll_wakeup) {
-      lpel_task_t *cons = sd->stream->cons_sd->task;
-      cons->wakeup_sd = sd->stream->cons_sd;
-
-      LpelTaskUnblock( sd->task, cons);
-
-      /* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-      if (sd->mon && MON_CB(stream_wakeup)) {
-        MON_CB(stream_wakeup)(sd->mon);
-      }
-#endif
-    }
-  }
-
-  /* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-  if (sd->mon && MON_CB(stream_writefinish)) {
-    MON_CB(stream_writefinish)(sd->mon);
-  }
-#endif
-
-}
-
-
 
 /**
  * Non-blocking write to a stream
@@ -464,7 +265,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
  */
 int LpelStreamTryWrite( lpel_stream_desc_t *sd, void *item)
 {
-  if (!LpelBufferIsSpace(&sd->stream->buffer)) {
+  if (!LpelBufferIsSpace(sd->stream->buffer)) {
     return -1;
   }
   LpelStreamWrite( sd, item );
@@ -496,7 +297,6 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   assert( *set != NULL);
 
   /* get 'self', i.e. the task calling LpelStreamPoll() */
-  (*set)->task = LpelTaskSelf();
   self = (*set)->task;
 
   iter = LpelStreamIterCreate( set);
@@ -505,7 +305,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   while( LpelStreamIterHasNext( iter)) {
     lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
     lpel_stream_t *s = sd->stream;
-    if ( LpelBufferTop( &s->buffer) != NULL) {
+    if ( LpelBufferTop( s->buffer) != NULL) {
       LpelStreamIterDestroy(iter);
       *set = sd;
       return sd;
@@ -520,13 +320,12 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   LpelStreamIterReset(iter, set);
   while( LpelStreamIterHasNext( iter)) {
     lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
-    sd->task = LpelTaskSelf();
     lpel_stream_t *s = sd->stream;
     /* lock stream (prod-side) */
     PRODLOCK_LOCK( &s->prod_lock);
     { /* CS BEGIN */
       /* check if there is something in the buffer */
-      if ( LpelBufferTop( &s->buffer) != NULL) {
+      if ( LpelBufferTop( s->buffer) != NULL) {
         /* yes, we can stop iterating through streams.
          * determine, if we have been woken up by another producer:
          */
@@ -596,5 +395,31 @@ int LpelStreamGetId(lpel_stream_desc_t *sd) {
 		if (sd->stream)
 			return sd->stream->uid;
 	return -1;
+}
+
+int LpelStreamFillLevel(lpel_stream_t *s) {
+	int n;
+	PRODLOCK_LOCK( &s->prod_lock);
+	n = LpelBufferCount(s->buffer);
+	PRODLOCK_UNLOCK( &s->prod_lock);
+	return n;
+}
+
+lpel_task_t *LpelStreamConsumer(lpel_stream_t *s) {
+	if (s->cons_sd != NULL)
+		return s->cons_sd->task;
+	else
+		return NULL;
+}
+
+lpel_task_t *LpelStreamProducer(lpel_stream_t *s) {
+	lpel_task_t *t;
+	PRODLOCK_LOCK( &s->prod_lock);
+	if (s->prod_sd != NULL)
+		t = s->prod_sd->task;
+	else
+		t = NULL;
+	PRODLOCK_UNLOCK( &s->prod_lock);
+	return t;
 }
 

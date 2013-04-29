@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
-#include "lpel.h"
+#include <lpel.h>
 
 #define NUM_COLL    (4*10+1)
 lpel_stream_t *sinp;
@@ -151,15 +151,15 @@ static void testBasic(void)
   }
 
   /* create tasks */
-  trelay = LpelTaskCreate( 0, &Relay, NULL, 8192);
-  LpelTaskRun(trelay);
+  trelay = LpelTaskCreate( 0, Relay, NULL, 8192);
+  LpelTaskStart(trelay);
 
-  tcons = LpelTaskCreate( 1, &Consumer, NULL, 8192);
-  LpelTaskRun(tcons);
+  tcons = LpelTaskCreate( 1, Consumer, NULL, 8192);
+  LpelTaskStart(tcons);
 
 
-  intask = LpelTaskCreate( -1, &Inputter, sinp, 8192);
-  LpelTaskRun(intask);
+  intask = LpelTaskCreate( -1, Inputter, sinp, 8192);
+  LpelTaskStart(intask);
 
   LpelStart(&cfg);
 

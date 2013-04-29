@@ -3,7 +3,7 @@
 #include <assert.h>
 
 
-#include "taskqueue.h"
+#include "decen_taskqueue.h"
 #include "task.h"
 
 /**
@@ -17,15 +17,16 @@
  */
 
 
-
 /**
  * Initialise a taskqueue
  */
-void LpelTaskqueueInit(taskqueue_t *tq)
+taskqueue_t *LpelTaskqueueInit()
 {
+	taskqueue_t *tq = (taskqueue_t *)malloc(sizeof(taskqueue_t));
   tq->head = NULL;
   tq->tail = NULL;
   tq->count = 0;
+  return tq;
 }
 
 
@@ -33,7 +34,7 @@ void LpelTaskqueueInit(taskqueue_t *tq)
  * Enqueue a task at the tail
  *
  */
-void LpelTaskqueuePushBack(taskqueue_t *tq, lpel_task_t *t)
+void LpelTaskqueuePush(taskqueue_t *tq, lpel_task_t *t)
 {
   assert( t->prev==NULL && t->next==NULL );
 
@@ -52,8 +53,8 @@ void LpelTaskqueuePushBack(taskqueue_t *tq, lpel_task_t *t)
 }
 
 
-
-/**
+/*
+ *
  * Enqueue a task at the head
  *
  */
@@ -82,7 +83,7 @@ void LpelTaskqueuePushFront(taskqueue_t *tq, lpel_task_t *t)
  *
  * @return NULL if taskqueue is empty
  */
-lpel_task_t *LpelTaskqueuePopFront(taskqueue_t *tq)
+lpel_task_t *LpelTaskqueuePop(taskqueue_t *tq)
 {
   lpel_task_t *t;
 
@@ -192,3 +193,9 @@ int LpelTaskqueueIterateRemove(taskqueue_t *tq,
   return cnt_removed;
 }
 
+
+
+void LpelTaskqueueDestroy(taskqueue_t *tq){
+	assert(tq->head == NULL && tq->tail == NULL);
+  free(tq);
+}

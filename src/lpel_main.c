@@ -13,13 +13,39 @@
 #include <unistd.h>  /* sysconf() */
 #include <pthread.h> /* worker threads are OS threads */
 
-#include <lpel.h>
+#include <lpel_common.h>
 
 #include "arch/mctx.h"
-//#include "lpel_main.h"
+#include "lpel_hwloc.h"
 #include "lpelcfg.h"
 #include "worker.h"
-#include "lpel_hwloc.h"
+
+
+/**
+ * Get the number of available cores
+ */
+int LpelGetNumCores( int *result)
+{
+  int proc_avail = -1;
+#ifdef HAVE_SYSCONF
+  /* query the number of CPUs */
+  proc_avail = sysconf(_SC_NPROCESSORS_ONLN);
+#endif
+  if (proc_avail == -1) {
+      char *p = getenv("LPEL_NUM_WORKERS");
+      if (p != 0)
+      {
+          unsigned long n = strtoul(p, 0, 0);
+          if (errno != EINVAL)
+              proc_avail = n;
+      }
+  }
+  if (proc_avail == -1) {
+    return LPEL_ERR_FAIL;
+  }
+  *result = proc_avail;
+  return 0;
+}
 
 
 /**
@@ -37,8 +63,6 @@
  */
 void LpelInit(lpel_config_t *cfg)
 {
-  memset(cfg, 0, sizeof(lpel_config_t));
-
   /* Initialise hardware information for thread pinning */
   LpelHwLocInit(cfg);
 
@@ -64,22 +88,16 @@ int LpelStart(lpel_config_t *cfg)
   LpelHwLocStart(cfg);
 
   /* initialise workers */
-  LpelWorkerInit( _lpel_global_config.num_workers);
+  LpelWorkersInit( _lpel_global_config.num_workers);
 
-  LpelWorkerSpawn();
-
-  if (cfg->placement) {
-    /* Initialize placement scheduler */
-    LpelPlacementSchedulerInit();
-  }
+  LpelWorkersSpawn();
 
   return 0;
 }
 
-
 void LpelStop(void)
 {
-  LpelWorkerTerminate();
+  LpelWorkersTerminate();
 }
 
 
@@ -92,7 +110,7 @@ void LpelStop(void)
 void LpelCleanup(void)
 {
   /* Cleanup workers */
-  LpelWorkerCleanup();
+  LpelWorkersCleanup();
 
   /* Cleanup hardware info */
   LpelHwLocCleanup();
@@ -102,3 +120,8 @@ void LpelCleanup(void)
   co_thread_cleanup();
 #endif
 }
+
+
+
+
+
