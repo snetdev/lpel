@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include <lpel.h>
+#include <lpel_common.h>
 
 #include "stream.h"
 

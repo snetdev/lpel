@@ -60,7 +60,9 @@ void LpelBiSemaWait(lpel_bisema_t *sem)
         lpel_task_t *t = LpelTaskSelf();
         t->state = TASK_READY;
         LpelWorkerSelfTaskYield(t);
-        LpelTaskBlock(t);
+        TaskStop(t);
+        LpelWorkerDispatcher(t);
+        TaskStart(t);
       }
     }
   }

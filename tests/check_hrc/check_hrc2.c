@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
-#include "lpel.h"
+#include <hrc_lpel.h>
 
 #define NUM_COLL    (4*10+1)
 lpel_stream_t *sinp;
@@ -11,7 +11,7 @@ lpel_stream_t *scoll[NUM_COLL];
 
 
 
-void Consumer(void *inarg)
+void *Consumer(void *inarg)
 {
   char *msg;
   int i, term;
@@ -64,11 +64,12 @@ void Consumer(void *inarg)
   printf("exit Consumer\n" );
 
   LpelStop();
+  return NULL;
 }
 
 
 
-void Relay(void *inarg)
+void *Relay(void *inarg)
 {
   void *item;
   char *msg;
@@ -112,10 +113,11 @@ void Relay(void *inarg)
   }
   LpelStreamClose(in, 1);
   printf("exit Relay\n" );
+  return NULL;
 }
 
 
-static void Inputter(void *arg)
+static void *Inputter(void *arg)
 {
   lpel_stream_desc_t *out = LpelStreamOpen((lpel_stream_t*)arg, 'w');
   char *buf;
@@ -127,6 +129,7 @@ static void Inputter(void *arg)
 
   LpelStreamClose( out, 0);
   printf("exit Inputter\n" );
+  return NULL;
 }
 
 
@@ -137,8 +140,8 @@ static void testBasic(void)
   lpel_task_t *trelay, *tcons, *intask;
 
   memset(&cfg, 0, sizeof(lpel_config_t));
-  cfg.num_workers = 2;
-  cfg.proc_workers = 2;
+  cfg.num_workers = 3;
+  cfg.proc_workers = 3;
   cfg.proc_others = 0;
   cfg.flags = 0;
 
@@ -151,15 +154,15 @@ static void testBasic(void)
   }
 
   /* create tasks */
-  trelay = LpelTaskCreate( 0, &Relay, NULL, 8192);
-  LpelTaskRun(trelay);
+  trelay = LpelTaskCreate( 0, Relay, NULL, 8192);
+  LpelTaskStart(trelay);
 
-  tcons = LpelTaskCreate( 1, &Consumer, NULL, 8192);
-  LpelTaskRun(tcons);
+  tcons = LpelTaskCreate( 0, Consumer, NULL, 8192);
+  LpelTaskStart(tcons);
 
 
-  intask = LpelTaskCreate( -1, &Inputter, sinp, 8192);
-  LpelTaskRun(intask);
+  intask = LpelTaskCreate( 0, Inputter, sinp, 8192);
+  LpelTaskStart(intask);
 
   LpelStart(&cfg);
 

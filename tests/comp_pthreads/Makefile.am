@@ -11,3 +11,4 @@ ringtest_LDADD = $(top_builddir)/liblpel.la
 pipetest_SOURCES = pipetest.c
 pipetest_LDADD = $(top_builddir)/liblpel.la
 CPPFLAGS = -I$(top_srcdir)/include
+
