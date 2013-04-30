@@ -6,14 +6,8 @@
 /*
  * worker msg body
  */
-typedef enum {
-  WORKER_MSG_TERMINATE = 1,
-  WORKER_MSG_WAKEUP,
-  WORKER_MSG_ASSIGN,
-  WORKER_MSG_SPMDREQ,
-  WORKER_MSG_REQUEST,
-  WORKER_MSG_TASKMIG,
-} workermsg_type_t;
+typedef int workermsg_type_t;
+
 
 typedef struct {
   workermsg_type_t  type;

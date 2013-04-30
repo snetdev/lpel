@@ -3,7 +3,7 @@
 #define _LPELCFG_H_
 
 
-#include <lpel.h>
+#include <lpel_common.h>
 
 #define MON_CB(name) (_MON_CB_MEMBER(_lpel_global_config.mon,name))
 #define _MON_CB_MEMBER(glob,member) (glob.member)

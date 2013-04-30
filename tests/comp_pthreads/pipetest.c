@@ -51,7 +51,7 @@ typedef struct {
 static lpel_timing_t ts;
 
 
-void Source(void *inarg)
+void *Source(void *inarg)
 {
   unsigned long cnt = 0;
   lpel_stream_desc_t *out;
@@ -74,11 +74,12 @@ void Source(void *inarg)
   LpelStreamWrite( out, msg);
 
   LpelStreamClose( out, 0);
+  return NULL;
 }
 
 
 
-void Sink(void *inarg)
+void *Sink(void *inarg)
 {
   unsigned long cnt = 0;
   lpel_stream_desc_t *in;
@@ -105,9 +106,11 @@ void Sink(void *inarg)
   bench_stats.msg_cnt = cnt;
   bench_stats.msg_time = LpelTimingToNSec(&ts);
 #endif
+
+  return NULL;
 }
 
-void Relay(void *inarg)
+void *Relay(void *inarg)
 {
   task_arg_t *arg = (task_arg_t *)inarg;
   //int id = arg->id;
@@ -128,6 +131,8 @@ void Relay(void *inarg)
   LpelStreamClose( out, 0);
 
   free(arg);
+
+  return NULL;
 }
 
 
@@ -138,8 +143,8 @@ static void CreateTask(task_arg_t *arg)
 
   place = PLACEMENT(arg->id);
 
-  t = LpelTaskCreate( place, &Relay, arg, STACK_SIZE);
-  LpelTaskRun(t);
+  t = LpelTaskCreate( place, Relay, arg, STACK_SIZE);
+  LpelTaskStart(t);
 }
 
 
@@ -170,11 +175,11 @@ static void CreatePipe(void)
   glob_in = LpelStreamCreate(0);
   glob_out = PipeElement(glob_in, 1);
 
-  t = LpelTaskCreate( 0, &Source, glob_in, STACK_SIZE);
-  LpelTaskRun(t);
+  t = LpelTaskCreate( 0, Source, glob_in, STACK_SIZE);
+  LpelTaskStart(t);
 
-  t = LpelTaskCreate( 1, &Sink, glob_out, STACK_SIZE);
-  LpelTaskRun(t);
+  t = LpelTaskCreate( 1, Sink, glob_out, STACK_SIZE);
+  LpelTaskStart(t);
 }
 
 

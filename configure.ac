@@ -156,5 +156,7 @@ AC_LANG_POP([C])
 AC_OUTPUT([Makefile
            include/Makefile
            tests/Makefile
-           tests/comp_pthreads/Makefile])
+           tests/comp_pthreads/Makefile
+           tests/check_decen/Makefile
+           tests/check_hrc/Makefile])
 

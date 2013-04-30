@@ -10,7 +10,7 @@
 
 #include "lpelcfg.h"
 #include "arch/atomic.h"
-#include "worker.h"
+#include "decen_worker.h"
 
 
 /****************************************************************************/
@@ -105,7 +105,7 @@ void LpelSpmdCleanup(void)
 
 void LpelSpmdHandleRequests(int worker_id)
 {
-  spmdreq_t curreq;
+	spmdreq_t curreq;
   spmd_worker_t *master_data, *self_data;
   int i, head, cur_worker_id;
 
@@ -171,15 +171,14 @@ void LpelSpmdHandleRequests(int worker_id)
     /**********************************/
     /* EXECUTE THE REQUESTED FUNCTION */
     {
-      workerctx_t *wc = LpelWorkerGetContext(worker_id);
-      (void) wc; // Silence compiler warning
-      WORKER_DBGMSG(wc,
-          "Enter spmd req'd by task %u on worker %d (VId=%d).\n",
-          curreq.task->uid, cur_worker_id,
-          GetVId(worker_id, cur_worker_id)
-          );
-      curreq.func(curreq.arg);
-      WORKER_DBGMSG(wc, "Left spmd.\n");
+//      workerctx_t *wc = LpelWorkerGetContext(worker_id);
+//      WORKER_DBGMSG(wc,
+//          "Enter spmd req'd by task %u on worker %d (VId=%d).\n",
+//          curreq.task->uid, cur_worker_id,
+//          GetVId(worker_id, cur_worker_id)
+//          );
+//      curreq.func(curreq.arg);
+//      WORKER_DBGMSG(wc, "Left spmd.\n");
     }
     /**********************************/
 

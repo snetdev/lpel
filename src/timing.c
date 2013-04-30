@@ -20,7 +20,7 @@
  * @param t   pointer to lpel_timing_t
  */
 #define TIMESTAMP(t) do { \
-  (void) clock_gettime(TIMING_CLOCK, (t)); \
+    (void) clock_gettime(CLOCK_REALTIME, (t)); \
 } while (0)
 
 #else  /* defined(HAVE_POSIX_TIMERS) && _POSIX_TIMERS > 0 */
