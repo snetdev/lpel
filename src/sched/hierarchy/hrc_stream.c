@@ -1,8 +1,9 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
-
+#include <stdio.h>
 #include <hrc_lpel.h>
 
 #include "arch/atomic.h"
@@ -40,6 +41,24 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     MON_CB(stream_writeprepare)(sd->mon, item);
   }
 #endif
+
+
+  /* only entry streams are bounded */
+  if (sd->stream->is_entry) {
+  	/* quasi P(e_sem) */
+  	if ( atomic_fetch_sub( &sd->stream->e_sem, 1)== 0) {
+
+  		/* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+  		if (sd->mon && MON_CB(stream_blockon)) {
+  			MON_CB(stream_blockon)(sd->mon);
+  		}
+#endif
+
+  		/* block source tasks wait on stream: */
+  		LpelTaskBlockStream( self);
+  	}
+  }
 
 
   /* writing to the buffer and checking if consumer polls must be atomic */
@@ -99,7 +118,6 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 
   /* check if a task should be yield after writing this output record */
   LpelTaskCheckYield(self);
-
 }
 
 
@@ -149,6 +167,17 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
   /* pop off the top element */
   LpelBufferPop( sd->stream->buffer);
 
+
+  /* only entry streams are bounded */
+  if (sd->stream->is_entry) {
+  	/* quasi V(e_sem) */
+  	if ( atomic_fetch_add( &sd->stream->e_sem, 1) < 0) {
+  		/* e_sem was -1 */
+  		lpel_task_t *prod = sd->stream->prod_sd->task;
+  		/* wakeup source tasks: make ready */
+  		LpelTaskUnblock( self, prod);
+  	}
+  }
 
   /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING

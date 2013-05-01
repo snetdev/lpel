@@ -16,6 +16,8 @@
  */
 #define LPEL_TASK_SIZE_DEFAULT  8192  /* 8k */
 
+#define LPEL_REC_LIMIT_DEFAULT 	8
+
 struct workerctx_t;
 struct mon_task_t;
 

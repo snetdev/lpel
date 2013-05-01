@@ -144,8 +144,10 @@ static void testBasic(void)
   cfg.proc_workers = 3;
   cfg.proc_others = 0;
   cfg.flags = 0;
+  cfg.type = HRC_LPEL;
 
   LpelInit(&cfg);
+  LpelStart(&cfg);
 
   /* create streams */
   sinp = LpelStreamCreate(0);
@@ -163,8 +165,6 @@ static void testBasic(void)
 
   intask = LpelTaskCreate( 0, Inputter, sinp, 8192);
   LpelTaskStart(intask);
-
-  LpelStart(&cfg);
 
   LpelCleanup();
 }

@@ -79,7 +79,7 @@ lpel_task_t *LpelTaskCreate( int map, lpel_taskfunc_t func,
 	t->sched_info = (sched_task_t *) malloc(sizeof(sched_task_t));
 	t->sched_info->prior = 0;
 	t->sched_info->rec_cnt = 0;
-	t->sched_info->rec_limit = 1;
+	t->sched_info->rec_limit = LPEL_REC_LIMIT_DEFAULT;
 	t->sched_info->in_streams = NULL;
 	t->sched_info->out_streams = NULL;
 
@@ -238,8 +238,6 @@ double LpelTaskCalPriority(lpel_task_t *t) {
 	in = countRec(t->sched_info->in_streams, 'i');
 	out = countRec(t->sched_info->out_streams, 'o');
 	return prior_cal(in, out);
-//	return (in + 1.0)/((out + 1.0)*(in + out + 1.0));
-
 }
 
 
@@ -337,9 +335,10 @@ int countRec(stream_elem_t *list, char inout) {
 	int cnt = 0;
 	while (list != NULL) {
 		if ((inout == 'i' && list->stream_desc->stream->is_entry)
-			|| (inout == 'o' && list->stream_desc->stream->is_exit))	// if input stream is entry or output stream is exit --> don't count
-			continue;
-		cnt += LpelStreamFillLevel(list->stream_desc->stream);
+			|| (inout == 'o' && list->stream_desc->stream->is_exit)) {
+			// if input stream is entry or output stream is exit --> not count
+		} else
+			cnt += LpelStreamFillLevel(list->stream_desc->stream);
 		list = list->next;
 	}
 	return cnt;

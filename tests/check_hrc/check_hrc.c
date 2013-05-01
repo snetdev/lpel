@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
+#include <time.h>
 #include "hrc_lpel.h"
 #include "../modimpl/monitoring.h"
 
@@ -28,6 +29,7 @@ void *Relay(void *inarg)
   out = LpelStreamOpen(ch->out, 'w');
 
   printf("Relay %d START\n", id);
+
 
   while (!term) {
     item = LpelStreamRead( in);
@@ -111,6 +113,12 @@ static void *Inputter(void *arg)
   printf("Inputter START\n");
   do {
     buf = fgets( malloc( 120 * sizeof(char) ), 119, stdin  );
+    if (0 != strcmp(buf, "T\n")) {
+    	LpelStreamWrite( out, strcpy(malloc(120 * sizeof(char)), buf));
+    	LpelStreamWrite( out, strcpy(malloc(120 * sizeof(char)), buf));
+    	LpelStreamWrite( out, strcpy(malloc(120 * sizeof(char)), buf));
+    	LpelStreamWrite( out, strcpy(malloc(120 * sizeof(char)), buf));
+    }
     LpelStreamWrite( out, buf);
   } while ( 0 != strcmp(buf, "T\n") );
 
@@ -135,10 +143,10 @@ static void testBasic(void)
   unsigned long flags = 1 << 7 - 1;
   LpelMonInit(&cfg.mon, flags);
   LpelInit(&cfg);
-
+  LpelStart(&cfg);
 
   in = LpelStreamCreate(0);
-  out = PipeElement(in, 4);
+  out = PipeElement(in, 2);
   outtask = LpelTaskCreate( -1, Outputter, out, 8192);
   mt = LpelMonTaskCreate( LpelTaskGetId(outtask), "outtask");
   LpelTaskMonitor(outtask, mt);
@@ -149,7 +157,6 @@ static void testBasic(void)
   LpelTaskMonitor(intask, mt);
   LpelTaskStart(intask);
 
-  LpelStart(&cfg);
   LpelCleanup();
   LpelMonCleanup();
 }

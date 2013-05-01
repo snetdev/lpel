@@ -237,6 +237,7 @@ static void sendWakeup( mailbox_t *mb, lpel_task_t *t)
  ******************************************************************************/
 static int servePendingReq( lpel_task_t *t) {
 	int i;
+	t->sched_info->prior = LpelTaskCalPriority(t);
 	for (i = 0; i < num_workers; i++){
 		if (waitworkers[i] == 1) {
 			waitworkers[i] = 0;
