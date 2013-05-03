@@ -302,6 +302,14 @@ void LpelTaskYield(void)
   TaskStart( ct);
 }
 
+/**
+ * Check if a task is wrapper, used for set entry/exit stream
+ */
+int LpelTaskIsWrapper(lpel_task_t *t) {
+	assert(t != NULL);
+	return LpelWorkerIsWrapper(t->worker_context);
+}
+
 
 /*
  * void function to provide task migration in lpel decen

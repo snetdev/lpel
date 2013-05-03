@@ -39,4 +39,8 @@ struct sched_task_t{
 double LpelTaskCalPriority(lpel_task_t *t);
 void LpelTaskCheckYield(lpel_task_t *t);
 
+void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
+void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
+int  LpelTaskIsWrapper(lpel_task_t *t);
+
 #endif /* _HRC_TASK_H */
