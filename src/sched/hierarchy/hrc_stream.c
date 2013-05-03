@@ -242,8 +242,8 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
     																				however it is set here for special case in source/sink mode */
 
   /* destroy old stream */
-  LpelStreamDestroy( sd->stream);
   PRODLOCK_LOCK( &sd->stream->prod_lock);
+  LpelStreamDestroy( sd->stream);
   /* assign new stream */
   sd->stream = snew;
   /* new consumer sd of stream */
