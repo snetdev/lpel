@@ -344,11 +344,13 @@ int countRec(stream_elem_t *list, char inout) {
 		return -1;
 	int cnt = 0;
 	while (list != NULL) {
-		if ((inout == 'i' && list->stream_desc->stream->is_entry)
-			|| (inout == 'o' && list->stream_desc->stream->is_exit)) {
-			// if input stream is entry or output stream is exit --> not count
-		} else
-			cnt += LpelStreamFillLevel(list->stream_desc->stream);
+		if (list->stream_desc->stream) {
+			if ((inout == 'i' && list->stream_desc->stream->is_entry)
+					|| (inout == 'o' && list->stream_desc->stream->is_exit)) {
+				// if input stream is entry or output stream is exit --> not count
+			} else
+				cnt += LpelStreamFillLevel(list->stream_desc->stream);
+		}
 		list = list->next;
 	}
 	return cnt;
