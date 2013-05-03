@@ -59,6 +59,9 @@ struct lpel_stream_t {
   atomic_int n_sem;           /** counter for elements in the stream */
   atomic_int e_sem;           /** counter for empty space in the stream */
   void *usr_data;           /** arbitrary user data */
+
+  int is_entry;		/* if stream is an entry stream, used to support source/sink */
+  int is_exit;			/* if stream is an exit stream, used to support source/sink */
 };
 
 

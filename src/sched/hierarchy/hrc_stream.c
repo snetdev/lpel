@@ -1,8 +1,9 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
-
+#include <stdio.h>
 #include <hrc_lpel.h>
 
 #include "arch/atomic.h"
@@ -17,8 +18,13 @@
 /**
  * Blocking write to a stream
  *
- * If the stream is full, the task is suspended until the consumer
+ * HRC stream is unbounded, except for entry stream.
+ * If entry stream is full, the task is suspended until the consumer
  * reads items from the stream, freeing space for more items.
+ *
+ * After writing one message record,
+ * if the number of written messages (in the current dispatch) reaches the limit,
+ * the task yield itself
  *
  * @param sd    stream descriptor
  * @param item  data item (a pointer) to write
@@ -40,6 +46,24 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     MON_CB(stream_writeprepare)(sd->mon, item);
   }
 #endif
+
+
+  /* only entry streams are bounded */
+  if (sd->stream->is_entry) {
+  	/* quasi P(e_sem) */
+  	if ( atomic_fetch_sub( &sd->stream->e_sem, 1)== 0) {
+
+  		/* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+  		if (sd->mon && MON_CB(stream_blockon)) {
+  			MON_CB(stream_blockon)(sd->mon);
+  		}
+#endif
+
+  		/* block source tasks wait on stream: */
+  		LpelTaskBlockStream( self);
+  	}
+  }
 
 
   /* writing to the buffer and checking if consumer polls must be atomic */
@@ -99,7 +123,6 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
 
   /* check if a task should be yield after writing this output record */
   LpelTaskCheckYield(self);
-
 }
 
 
@@ -150,6 +173,17 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
   LpelBufferPop( sd->stream->buffer);
 
 
+  /* only entry streams are bounded */
+  if (sd->stream->is_entry) {
+  	/* quasi V(e_sem) */
+  	if ( atomic_fetch_add( &sd->stream->e_sem, 1) < 0) {
+  		/* e_sem was -1 */
+  		lpel_task_t *prod = sd->stream->prod_sd->task;
+  		/* wakeup source tasks: make ready */
+  		LpelTaskUnblock( self, prod);
+  	}
+  }
+
   /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
   if (sd->mon && MON_CB(stream_readfinish)) {
@@ -157,4 +191,125 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
   }
 #endif
   return item;
+}
+
+/**
+ * Close a stream previously opened for reading/writing
+ *
+ * @param sd          stream descriptor
+ * @param destroy_s   if != 0, destroy the stream as well
+ */
+void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
+{
+  /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+  if (sd->mon && MON_CB(stream_close)) {
+    MON_CB(stream_close)(sd->mon);
+  }
+#endif
+
+  lpel_task_t *self = LpelTaskSelf();
+  PRODLOCK_LOCK( &sd->stream->prod_lock);
+   	if (sd->mode == 'r' && sd->stream->cons_sd->task == self)		// stream is not replaced yet
+   		sd->stream->cons_sd = NULL;
+     else if (sd->mode == 'w' && sd->stream->prod_sd->task == self)	// stream is not replaced yet
+   		sd->stream->prod_sd = NULL;
+   PRODLOCK_UNLOCK( &sd->stream->prod_lock);
+
+  LpelTaskRemoveStream(sd->task, sd, sd->mode);
+
+  if (destroy_s) {
+    LpelStreamDestroy( sd->stream);
+  }
+  free(sd);
+}
+
+
+/**
+ * Replace a stream opened for reading by another stream
+ * Destroys old stream.
+ *
+ * @param sd    stream descriptor for which the stream must be replaced
+ * @param snew  the new stream
+ * @pre         snew must not be opened by same or other task
+ */
+void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
+{
+  assert( sd->mode == 'r');
+  /* set exit/entry stream if needed */
+  snew->is_exit = sd->stream->is_exit;
+  snew->is_entry = sd->stream->is_entry; /* technically, no need to set as entry stream shouldn't be replaced
+    																				however it is set here for special case in source/sink mode */
+
+  /* destroy old stream */
+  LpelStreamDestroy( sd->stream);
+  PRODLOCK_LOCK( &sd->stream->prod_lock);
+  /* assign new stream */
+  sd->stream = snew;
+  /* new consumer sd of stream */
+  sd->stream->cons_sd = sd;
+  PRODLOCK_UNLOCK( &sd->stream->prod_lock);
+
+  /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+  if (sd->mon && MON_CB(stream_replace)) {
+    MON_CB(stream_replace)(sd->mon, snew->uid);
+  }
+#endif
+
+}
+
+
+/**
+  * Open a stream for reading/writing
+ *
+ * @param s     pointer to stream
+ * @param mode  either 'r' for reading or 'w' for writing
+ * @return      a stream descriptor
+ * @pre         only one task may open it for reading resp. writing
+ *              at any given point in time
+ */
+lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
+{
+  lpel_stream_desc_t *sd;
+  lpel_task_t *ct = LpelTaskSelf();
+
+  assert( mode == 'r' || mode == 'w' );
+  sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
+  sd->task = ct;
+  sd->stream = s;
+  sd->mode = mode;
+  sd->next  = NULL;
+
+#ifdef USE_TASK_EVENT_LOGGING
+  /* create monitoring object, or NULL if stream
+   * is not going to be monitored (depends on ct->mon)
+   */
+  if (ct->mon && MON_CB(stream_open)) {
+    sd->mon = MON_CB(stream_open)( ct->mon, s->uid, mode);
+  } else {
+    sd->mon = NULL;
+  }
+#else
+  sd->mon = NULL;
+#endif
+
+  switch(mode) {
+    case 'r': s->cons_sd = sd; break;
+    case 'w': s->prod_sd = sd; break;
+  }
+
+  /* add stream desc to the task, used for calculate dynamic task priority in HRC
+   * This function has no effect in DECEN
+   * It is implemented this way to avoid 2 implementations: one for HRC and one for DECEN
+   */
+  LpelTaskAddStream(ct, sd, mode);
+
+  /* set entry/exit stream */
+  if (LpelTaskIsWrapper(ct) && (mode == 'r'))
+  	s->is_exit = 1;
+  if (LpelTaskIsWrapper(ct) && (mode == 'w'))
+    	s->is_entry = 1;
+
+  return sd;
 }

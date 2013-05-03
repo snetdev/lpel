@@ -16,6 +16,8 @@
  */
 #define LPEL_TASK_SIZE_DEFAULT  8192  /* 8k */
 
+#define LPEL_REC_LIMIT_DEFAULT 	8
+
 struct workerctx_t;
 struct mon_task_t;
 
@@ -32,10 +34,13 @@ struct sched_task_t{
 	double prior;
 	stream_elem_t *in_streams;
 	stream_elem_t *out_streams;
-	int type;
 };
 
 double LpelTaskCalPriority(lpel_task_t *t);
 void LpelTaskCheckYield(lpel_task_t *t);
+
+void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
+void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
+int  LpelTaskIsWrapper(lpel_task_t *t);
 
 #endif /* _HRC_TASK_H */
