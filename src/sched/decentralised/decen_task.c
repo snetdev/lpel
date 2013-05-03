@@ -205,17 +205,6 @@ void LpelTaskYield(void)
 }
 
 
-/* void function to be called by LpelStreamOpen
- * should not have any effect in DECEN
- */
-void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode){}
-
-/* void function to be called by LpelStreamClose
- * should not have any effect in DECEN
- */
-void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode){}
-
-
 /** check and migrate the current task if required, used in decen_lpel
  * to be called from snet-rts after processing one message record
  * used in random-based mechanism

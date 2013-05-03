@@ -53,6 +53,6 @@ typedef struct masterctx_t {
 workerctx_t *LpelCreateWrapperContext(int wid);		// can be wrapper or source/sink
 void LpelWorkerTaskBlock(lpel_task_t *t);
 void LpelWorkerTaskWakeup( lpel_task_t *t);
-
+int LpelWorkerIsWrapper(workerctx_t *wc);
 
 #endif /* _HRC_WORKER_H_ */

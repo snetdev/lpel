@@ -80,6 +80,8 @@ lpel_stream_t *LpelStreamCreate(int size)
   s->prod_sd = NULL;
   s->cons_sd = NULL;
   s->usr_data = NULL;
+  s->is_entry = 0;
+  s->is_exit = 0;
   return s;
 }
 
@@ -119,114 +121,6 @@ void *LpelStreamGetUsrData(lpel_stream_t *s)
   return s->usr_data;
 }
 
-
-/**
-  * Open a stream for reading/writing
- *
- * @param s     pointer to stream
- * @param mode  either 'r' for reading or 'w' for writing
- * @return      a stream descriptor
- * @pre         only one task may open it for reading resp. writing
- *              at any given point in time
- */
-lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
-{
-  lpel_stream_desc_t *sd;
-  lpel_task_t *ct = LpelTaskSelf();
-
-  assert( mode == 'r' || mode == 'w' );
-  sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
-  sd->task = ct;
-  sd->stream = s;
-  sd->mode = mode;
-  sd->next  = NULL;
-
-#ifdef USE_TASK_EVENT_LOGGING
-  /* create monitoring object, or NULL if stream
-   * is not going to be monitored (depends on ct->mon)
-   */
-  if (ct->mon && MON_CB(stream_open)) {
-    sd->mon = MON_CB(stream_open)( ct->mon, s->uid, mode);
-  } else {
-    sd->mon = NULL;
-  }
-#else
-  sd->mon = NULL;
-#endif
-
-  switch(mode) {
-    case 'r': s->cons_sd = sd; break;
-    case 'w': s->prod_sd = sd; break;
-  }
-
-  /* add stream desc to the task, used for calculate dynamic task priority in HRC
-   * This function has no effect in DECEN
-   * It is implemented this way to avoid 2 implementations: one for HRC and one for DECEN
-   */
-  LpelTaskAddStream(ct, sd, mode);
-  return sd;
-}
-
-/**
- * Close a stream previously opened for reading/writing
- *
- * @param sd          stream descriptor
- * @param destroy_s   if != 0, destroy the stream as well
- */
-void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
-{
-  /* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-  if (sd->mon && MON_CB(stream_close)) {
-    MON_CB(stream_close)(sd->mon);
-  }
-#endif
-
-  if (sd->mode == 'r')
-  	sd->stream->cons_sd = NULL;
-  else if (sd->mode == 'w')
-  	sd->stream->prod_sd = NULL;
-
-  /* add stream desc to the task, used for calculate dynamic task priority in HRC
-   * This function has no effect in DECEN
-   * It is implemented this way to avoid 2 implementations: one for HRC and one for DECEN
-   */
-  LpelTaskRemoveStream(sd->task, sd, sd->mode);
-
-  if (destroy_s) {
-    LpelStreamDestroy( sd->stream);
-  }
-  free(sd);
-}
-
-
-/**
- * Replace a stream opened for reading by another stream
- * Destroys old stream.
- *
- * @param sd    stream descriptor for which the stream must be replaced
- * @param snew  the new stream
- * @pre         snew must not be opened by same or other task
- */
-void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
-{
-  assert( sd->mode == 'r');
-  /* destroy old stream */
-  LpelStreamDestroy( sd->stream);
-  /* assign new stream */
-  sd->stream = snew;
-  /* new consumer sd of stream */
-  sd->stream->cons_sd = sd;
-
-
-  /* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-  if (sd->mon && MON_CB(stream_replace)) {
-    MON_CB(stream_replace)(sd->mon, snew->uid);
-  }
-#endif
-
-}
 
 
 /**
