@@ -15,7 +15,7 @@ static atomic_int taskseq = ATOMIC_VAR_INIT(0);
 static double (*prior_cal) (int in, int out) = priorfunc1;
 
 
-int countRec(stream_elem_t *list);
+int countRec(stream_elem_t *list, char inout);
 
 /**
  * Create a task.
@@ -79,7 +79,7 @@ lpel_task_t *LpelTaskCreate( int map, lpel_taskfunc_t func,
 	t->sched_info = (sched_task_t *) malloc(sizeof(sched_task_t));
 	t->sched_info->prior = 0;
 	t->sched_info->rec_cnt = 0;
-	t->sched_info->rec_limit = 1;
+	t->sched_info->rec_limit = LPEL_REC_LIMIT_DEFAULT;
 	t->sched_info->in_streams = NULL;
 	t->sched_info->out_streams = NULL;
 
@@ -235,11 +235,9 @@ void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
  */
 double LpelTaskCalPriority(lpel_task_t *t) {
 	int in, out;
-	in = countRec(t->sched_info->in_streams);
-	out = countRec(t->sched_info->out_streams);
+	in = countRec(t->sched_info->in_streams, 'i');
+	out = countRec(t->sched_info->out_streams, 'o');
 	return prior_cal(in, out);
-//	return (in + 1.0)/((out + 1.0)*(in + out + 1.0));
-
 }
 
 
@@ -331,12 +329,16 @@ void TaskStart( lpel_task_t *t)
 /*
  * count records in the list of tracked stream
  */
-int countRec(stream_elem_t *list) {
+int countRec(stream_elem_t *list, char inout) {
 	if (list == NULL)
 		return -1;
 	int cnt = 0;
 	while (list != NULL) {
-		cnt += LpelStreamFillLevel(list->stream_desc->stream);
+		if ((inout == 'i' && list->stream_desc->stream->is_entry)
+			|| (inout == 'o' && list->stream_desc->stream->is_exit)) {
+			// if input stream is entry or output stream is exit --> not count
+		} else
+			cnt += LpelStreamFillLevel(list->stream_desc->stream);
 		list = list->next;
 	}
 	return cnt;

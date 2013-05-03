@@ -134,10 +134,10 @@ static void testBasic(void)
   unsigned long flags = 1 << 7 - 1;
   LpelMonInit(&cfg.mon, flags);
   LpelInit(&cfg);
-
+  LpelStart(&cfg);
 
   in = LpelStreamCreate(0);
-  out = PipeElement(in, cfg.num_workers*20 - 1);
+  out = PipeElement(in, cfg.num_workers);
 
   outtask = LpelTaskCreate( -1, Outputter, out, 8192);
   mt = LpelMonTaskCreate( LpelTaskGetId(outtask), "outtask");
@@ -149,7 +149,6 @@ static void testBasic(void)
   LpelTaskMonitor(intask, mt);
   LpelTaskStart(intask);
 
-  LpelStart(&cfg);
   LpelCleanup();
   LpelMonCleanup();
 }

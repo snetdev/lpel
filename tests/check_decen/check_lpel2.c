@@ -146,6 +146,7 @@ static void testBasic(void)
   cfg.flags = 0;
 
   LpelInit(&cfg);
+  LpelStart(&cfg);
 
   /* create streams */
   sinp = LpelStreamCreate(0);
@@ -164,7 +165,6 @@ static void testBasic(void)
   intask = LpelTaskCreate( -1, Inputter, sinp, 8192);
   LpelTaskStart(intask);
 
-  LpelStart(&cfg);
 
   LpelCleanup();
 }

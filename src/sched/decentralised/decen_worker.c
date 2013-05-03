@@ -735,4 +735,8 @@ static void *WorkerThread( void *arg)
   return NULL;
 }
 
+int LpelWorkerIsWrapper(workerctx_t *wc) {
+	assert(wc != NULL);
+	return (wc->wid < 0? 1 : 0);
+}
 

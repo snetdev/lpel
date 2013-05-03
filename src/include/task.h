@@ -68,6 +68,7 @@ void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
 
 void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
 void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
+int  LpelTaskIsWrapper(lpel_task_t *t);
 
 /* local functions
  * defined here to share the implementations for both HRC and DECEN
