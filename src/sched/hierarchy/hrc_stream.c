@@ -208,19 +208,27 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
   }
 #endif
 
-  lpel_task_t *self = LpelTaskSelf();
-  PRODLOCK_LOCK( &sd->stream->prod_lock);
-   	if (sd->mode == 'r' && sd->stream->cons_sd->task == self)		// stream is not replaced yet
-   		sd->stream->cons_sd = NULL;
-     else if (sd->mode == 'w' && sd->stream->prod_sd->task == self)	// stream is not replaced yet
-   		sd->stream->prod_sd = NULL;
-   PRODLOCK_UNLOCK( &sd->stream->prod_lock);
+  if (sd->stream) {		//stream is not destroyed yet
+  	PRODLOCK_LOCK( &sd->stream->prod_lock);
+  	if (sd->mode == 'r' && sd->stream->cons_sd == sd) {		// stream is not replaced yet
+  		sd->stream->cons_sd = NULL;
+  		if (sd->stream->prod_sd && destroy_s)
+  			sd->stream->prod_sd->stream = NULL;		// set this so that the task on the other side of stream does not access to stream after stream is destroy
+  	}
+  	if (sd->mode == 'w' && sd->stream->prod_sd == sd) {	// stream is not replaced yet
+  		sd->stream->prod_sd = NULL;
+  		if(sd->stream->cons_sd && destroy_s)
+  			sd->stream->cons_sd->stream = NULL; // set this so that the task on the other side of stream does not access to stream after stream is destroy
+  	}
+
+  	if (destroy_s) {
+  		LpelStreamDestroy( sd->stream);
+  	}
+
+  	PRODLOCK_UNLOCK( &sd->stream->prod_lock);
+  }
 
   LpelTaskRemoveStream(sd->task, sd, sd->mode);
-
-  if (destroy_s) {
-    LpelStreamDestroy( sd->stream);
-  }
   free(sd);
 }
 
