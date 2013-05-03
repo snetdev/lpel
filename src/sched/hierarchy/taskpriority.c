@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <float.h>
 #include "taskpriority.h"
 
@@ -157,4 +158,11 @@ double priorfunc12(int in, int out) {
 			return (in + 1.0);
 
 		return (in + 1.0)/(out + 1.0)/(out + 1.0);
+}
+
+/*
+ * random priority
+ */
+double priorfunc13(int in, int out) {
+	return rand();
 }

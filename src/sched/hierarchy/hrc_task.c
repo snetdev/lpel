@@ -270,6 +270,8 @@ void LpelTaskSetPriorityFunc(int func){
 					break;
 	case 12: prior_cal = priorfunc12;
 					break;
+	case 13: prior_cal = priorfunc13;	// random
+					break;
 	default: prior_cal = priorfunc1;
 	}
 }

@@ -14,4 +14,6 @@ double priorfunc10(int in, int out);
 double priorfunc11(int in, int out);
 double priorfunc12(int in, int out);
 
+/* random priority */
+double priorfunc13(int in, int out);
 #endif /* _TASKPRIORITY_H */
