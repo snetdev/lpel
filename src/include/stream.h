@@ -60,12 +60,17 @@ struct lpel_stream_t {
   atomic_int e_sem;           /** counter for empty space in the stream */
   void *usr_data;           /** arbitrary user data */
 
+  /* used for lpel hrc */
+  PRODLOCK_TYPE sd_lock;		/** to support update prod_sd, cons_sd */
+
   int is_entry;		/* if stream is an entry stream, used to support source/sink */
   int is_exit;			/* if stream is an exit stream, used to support source/sink */
 };
 
 
 int LpelStreamFillLevel(lpel_stream_t *s);
+
+/* so far only for lpel hrc */
 lpel_task_t *LpelStreamConsumer(lpel_stream_t *s);
 lpel_task_t *LpelStreamProducer(lpel_stream_t *s);
 

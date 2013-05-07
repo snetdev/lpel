@@ -80,6 +80,7 @@ lpel_stream_t *LpelStreamCreate(int size)
   s->prod_sd = NULL;
   s->cons_sd = NULL;
   s->usr_data = NULL;
+  PRODLOCK_INIT(& s->sd_lock);
   s->is_entry = 0;
   s->is_exit = 0;
   return s;
@@ -99,6 +100,7 @@ void LpelStreamDestroy( lpel_stream_t *s)
   atomic_destroy( &s->n_sem);
   atomic_destroy( &s->e_sem);
   LpelBufferCleanup( s->buffer);
+  PRODLOCK_DESTROY( &s->sd_lock);
   free( s);
 }
 
@@ -291,29 +293,18 @@ int LpelStreamGetId(lpel_stream_desc_t *sd) {
 	return -1;
 }
 
+/*
+ * Return the number of items in the stream
+ * n_sem may vary by 1
+ * 	Case: consumer try to read, get blocked, n_sem = -1
+ * 				producer writes, unblocks consumer, n_sem = 0
+ * 	The variant is not important, here we reused n_sem
+ * 	To get the accurate, one can introduce a new atomic counter and update when the stream is acctually written/read
+ */
 int LpelStreamFillLevel(lpel_stream_t *s) {
-	int n;
-	PRODLOCK_LOCK( &s->prod_lock);
-	n = LpelBufferCount(s->buffer);
-	PRODLOCK_UNLOCK( &s->prod_lock);
+	int n = atomic_load(&s->n_sem);
+	if (n < 0)
+		return 0;
 	return n;
-}
-
-lpel_task_t *LpelStreamConsumer(lpel_stream_t *s) {
-	if (s->cons_sd != NULL)
-		return s->cons_sd->task;
-	else
-		return NULL;
-}
-
-lpel_task_t *LpelStreamProducer(lpel_stream_t *s) {
-	lpel_task_t *t;
-	PRODLOCK_LOCK( &s->prod_lock);
-	if (s->prod_sd != NULL)
-		t = s->prod_sd->task;
-	else
-		t = NULL;
-	PRODLOCK_UNLOCK( &s->prod_lock);
-	return t;
 }
 
