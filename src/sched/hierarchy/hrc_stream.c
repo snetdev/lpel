@@ -208,10 +208,14 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
   }
 #endif
 
-  if (sd->stream) {		//stream is not destroyed yet
-  	PRODLOCK_LOCK( &sd->stream->prod_lock);
+  /*
+   * if stream is not destroyed yet, update prod_sd and cons_sd
+   * */
+  if (sd->stream) {
+  	PRODLOCK_LOCK( &sd->stream->sd_lock);
   	if (sd->mode == 'r' && sd->stream->cons_sd == sd) {		// stream is not replaced yet
   		sd->stream->cons_sd = NULL;
+
   		if (sd->stream->prod_sd && destroy_s)
   			sd->stream->prod_sd->stream = NULL;		// set this so that the task on the other side of stream does not access to stream after stream is destroy
   	}
@@ -220,13 +224,12 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
   		if(sd->stream->cons_sd && destroy_s)
   			sd->stream->cons_sd->stream = NULL; // set this so that the task on the other side of stream does not access to stream after stream is destroy
   	}
-
-  	if (destroy_s) {
-  		LpelStreamDestroy( sd->stream);
-  	}
-
-  	PRODLOCK_UNLOCK( &sd->stream->prod_lock);
+  	PRODLOCK_UNLOCK( &sd->stream->sd_lock);
   }
+
+  if (destroy_s) {
+		LpelStreamDestroy( sd->stream);
+	}
 
   LpelTaskRemoveStream(sd->task, sd, sd->mode);
   free(sd);
@@ -250,13 +253,14 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
     																				however it is set here for special case in source/sink mode */
 
   /* destroy old stream */
-  PRODLOCK_LOCK( &sd->stream->prod_lock);
   LpelStreamDestroy( sd->stream);
   /* assign new stream */
   sd->stream = snew;
+
   /* new consumer sd of stream */
+  PRODLOCK_LOCK( &sd->stream->sd_lock);
   sd->stream->cons_sd = sd;
-  PRODLOCK_UNLOCK( &sd->stream->prod_lock);
+  PRODLOCK_UNLOCK( &sd->stream->sd_lock);
 
   /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -302,6 +306,9 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   sd->mon = NULL;
 #endif
 
+  /*
+   * the first time set cons_sd/prod_sd, no need to use lock
+   */
   switch(mode) {
     case 'r': s->cons_sd = sd; break;
     case 'w': s->prod_sd = sd; break;
@@ -321,3 +328,38 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
 
   return sd;
 }
+
+
+/*
+ * return the stream's consumer
+ */
+lpel_task_t *LpelStreamConsumer(lpel_stream_t *s) {
+	if (!s)
+		return NULL;
+	lpel_task_t *t;
+	PRODLOCK_LOCK( &s->sd_lock);
+	if (s->cons_sd != NULL)
+		t = s->cons_sd->task;
+	else
+		t = NULL;
+	PRODLOCK_UNLOCK( &s->sd_lock);
+	return t;
+}
+
+/*
+ * return the stream's producer
+ */
+lpel_task_t *LpelStreamProducer(lpel_stream_t *s) {
+	if (!s)
+		return NULL;
+
+	lpel_task_t *t;
+	PRODLOCK_LOCK( &s->sd_lock);
+	if (s->prod_sd != NULL)
+		t = s->prod_sd->task;
+	else
+		t = NULL;
+	PRODLOCK_UNLOCK( &s->sd_lock);
+	return t;
+}
+
