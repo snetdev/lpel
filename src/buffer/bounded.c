@@ -32,7 +32,6 @@ struct buffer_t {
 //  volatile unsigned long pwrite;
   long padding2[longxCacheLine-1];
   unsigned long size;
-  int count;
   void **data;
 };
 
@@ -49,7 +48,6 @@ buffer_t *LpelBufferInit(unsigned int size)
   buf->pread = 0;
   buf->pwrite = 0;
   buf->size = size;
-  buf->count = 0;
   buf->data = malloc( size*sizeof(void*) );
   /* clear all the buffer space */
   memset(buf->data, 0, size*sizeof(void *));
@@ -97,7 +95,6 @@ void LpelBufferPop( buffer_t *buf)
   /* clear, and advance pread */
   buf->data[buf->pread]=NULL;
   buf->pread += (buf->pread+1 >= buf->size) ? (1-buf->size) : 1;
-  buf->count--;
 }
 
 
@@ -145,19 +142,8 @@ void LpelBufferPut( buffer_t *buf, void *item)
   WMB();
   buf->data[buf->pwrite] = item;
   buf->pwrite += (buf->pwrite+1 >= buf->size) ? (1-buf->size) : 1;
-  buf->count++;
 }
 
 
-
-/**
- * Return the number of data item in the buffer
- *
- * @param buf   buffer
- * @pre         no concurrent calls
- */
-int	LpelBufferCount(buffer_t *buf) {
-	return buf->count;
-}
 
 
