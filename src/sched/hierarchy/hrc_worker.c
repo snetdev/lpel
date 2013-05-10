@@ -18,7 +18,7 @@
 #include "hrc_task.h"
 #include "lpel_hwloc.h"
 #include "lpelcfg.h"
-#include "stream.h"
+#include "hrc_stream.h"
 #include "mailbox.h"
 #include "lpel/monitor.h"
 
@@ -317,7 +317,11 @@ static void MasterLoop( void)
 				}
 				break;
 
-			default: // TASK_ZOMBIE
+			case TASK_ZOMBIE:
+				updatePriorityNeigh(MASTER_PTR->ready_tasks, t);	//update neighbor before destroying task
+				LpelTaskDestroy(t);
+				break;
+			default:
 				assert(0);
 				break;
 			}
@@ -352,11 +356,6 @@ static void MasterLoop( void)
 			}
 			t = LpelTaskqueuePop(MASTER_PTR->ready_tasks);
 			break;
-
-//		case WORKER_MSG_PRIORITY:
-//			t = msg.body.task;
-//			updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
-//			break;
 
 		case WORKER_MSG_TERMINATE:
 			assert((LpelTaskqueueSize(MASTER_PTR->ready_tasks) == 0));
@@ -573,13 +572,9 @@ static void WorkerLoop( workerctx_t *wc)
   	  	mctx_switch(&wc->mctx, &t->mctx);
   	  	//task return here
   	  	assert(t->state != TASK_RUNNING);
-  	  	if (t->state != TASK_ZOMBIE) {
   	  		t->worker_context = NULL;
   	  		PRT_DBG("worker %d: return task %d, state %c\n", wc->wid, t->uid, t->state);
   	  		returnTask(t);
-  	  	} else {
-  	  		LpelTaskDestroy(t);
-  	  	}
   	  	break;
   	  case WORKER_MSG_TERMINATE:
   	  	wc->terminate = 1;
@@ -613,7 +608,6 @@ static void *WorkerThread( void *arg)
 
   wc->terminate = 0;
   wc->current_task = NULL;
-  //wc->marked_del = NULL;
 	LpelThreadAssign( wc->wid + 1);		// 0 is for the master
 	WorkerLoop( wc);
 
