@@ -14,6 +14,40 @@
 #include "lpel/monitor.h"
 
 
+static atomic_int stream_seq = ATOMIC_VAR_INIT(0);
+
+/**
+ * Create a stream
+ *
+ * Allocate and initialize memory for a stream.
+ *
+ * @return pointer to the created stream
+ */
+lpel_stream_t *LpelStreamCreate(int size)
+{
+  assert( size >= 0);
+  if (0==size) size = STREAM_BUFFER_SIZE;
+
+  /* allocate memory for both the stream struct and the buffer area */
+  lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
+
+  /* reset buffer (including buffer area) */
+  s->buffer = LpelBufferInit( size);
+
+  s->uid = atomic_fetch_add( &stream_seq, 1);
+  PRODLOCK_INIT( &s->prod_lock );
+  atomic_init( &s->n_sem, 0);
+  atomic_init( &s->e_sem, size);
+  s->is_poll = 0;
+  s->prod_sd = NULL;
+  s->cons_sd = NULL;
+  s->usr_data = NULL;
+  s->sched_info = NULL;
+  return s;
+}
+
+
+
 /**
  * Blocking write to a stream
  *
@@ -220,10 +254,6 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
 void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
 {
   assert( sd->mode == 'r');
-  /* set exit/entry stream if needed */
-  snew->is_exit = sd->stream->is_exit;
-  snew->is_entry = sd->stream->is_entry; /* technically, no need to set as entry stream shouldn't be replaced
-    																				however it is set here for special case in source/sink mode */
 
   /* destroy old stream */
   LpelStreamDestroy( sd->stream);
@@ -282,4 +312,21 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   }
 
   return sd;
+}
+
+/**
+ * Destroy a stream
+ *
+ * Free the memory allocated for a stream.
+ *
+ * @param s   stream to be freed
+ * @pre       stream must not be opened by any task!
+ */
+void LpelStreamDestroy( lpel_stream_t *s)
+{
+  PRODLOCK_DESTROY( &s->prod_lock);
+  atomic_destroy( &s->n_sem);
+  atomic_destroy( &s->e_sem);
+  LpelBufferCleanup( s->buffer);
+  free( s);
 }

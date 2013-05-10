@@ -52,59 +52,6 @@
 #include "lpel/monitor.h"
 
 
-static atomic_int stream_seq = ATOMIC_VAR_INIT(0);
-
-/**
- * Create a stream
- *
- * Allocate and initialize memory for a stream.
- *
- * @return pointer to the created stream
- */
-lpel_stream_t *LpelStreamCreate(int size)
-{
-  assert( size >= 0);
-  if (0==size) size = STREAM_BUFFER_SIZE;
-
-  /* allocate memory for both the stream struct and the buffer area */
-  lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
-
-  /* reset buffer (including buffer area) */
-  s->buffer = LpelBufferInit( size);
-
-  s->uid = atomic_fetch_add( &stream_seq, 1);
-  PRODLOCK_INIT( &s->prod_lock );
-  atomic_init( &s->n_sem, 0);
-  atomic_init( &s->e_sem, size);
-  s->is_poll = 0;
-  s->prod_sd = NULL;
-  s->cons_sd = NULL;
-  s->usr_data = NULL;
-  PRODLOCK_INIT(& s->sd_lock);
-  s->is_entry = 0;
-  s->is_exit = 0;
-  return s;
-}
-
-/**
- * Destroy a stream
- *
- * Free the memory allocated for a stream.
- *
- * @param s   stream to be freed
- * @pre       stream must not be opened by any task!
- */
-void LpelStreamDestroy( lpel_stream_t *s)
-{
-  PRODLOCK_DESTROY( &s->prod_lock);
-  atomic_destroy( &s->n_sem);
-  atomic_destroy( &s->e_sem);
-  LpelBufferCleanup( s->buffer);
-  PRODLOCK_DESTROY( &s->sd_lock);
-  free( s);
-}
-
-
 /**
  * Store arbitrary user data in stream
  * CAUTION use at own risk

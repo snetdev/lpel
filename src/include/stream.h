@@ -34,6 +34,8 @@
 #endif /* STREAM_POLL_SPINLOCK */
 
 
+typedef struct stream_sched_info_t stream_sched_info_t;
+
 struct lpel_stream_desc_t {
   lpel_task_t   *task;        /** the task which opened the stream */
   lpel_stream_t *stream;      /** pointer to the stream */
@@ -41,7 +43,6 @@ struct lpel_stream_desc_t {
   struct lpel_stream_desc_t *next; /** for organizing in stream sets */
   struct mon_stream_t *mon;   /** monitoring object */
 };
-
 
 
 /**
@@ -60,18 +61,12 @@ struct lpel_stream_t {
   atomic_int e_sem;           /** counter for empty space in the stream */
   void *usr_data;           /** arbitrary user data */
 
-  /* used for lpel hrc */
-  PRODLOCK_TYPE sd_lock;		/** to support update prod_sd, cons_sd */
 
-  int is_entry;		/* if stream is an entry stream, used to support source/sink */
-  int is_exit;			/* if stream is an exit stream, used to support source/sink */
+  /* used for lpel hrc to keep update the neighbors*/
+  stream_sched_info_t *sched_info;
 };
 
 
 int LpelStreamFillLevel(lpel_stream_t *s);
-
-/* so far only for lpel hrc */
-lpel_task_t *LpelStreamConsumer(lpel_stream_t *s);
-lpel_task_t *LpelStreamProducer(lpel_stream_t *s);
 
 #endif /* _STREAM_H_ */

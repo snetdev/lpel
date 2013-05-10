@@ -4,7 +4,7 @@
 #include "arch/atomic.h"
 
 #include "hrc_task.h"
-#include "stream.h"
+#include "hrc_stream.h"
 #include "lpelcfg.h"
 #include "hrc_worker.h"
 #include "lpel/monitor.h"
@@ -345,8 +345,8 @@ int countRec(stream_elem_t *list, char inout) {
 	int cnt = 0;
 	while (list != NULL) {
 		if (list->stream_desc->stream) {
-			if ((inout == 'i' && list->stream_desc->stream->is_entry)
-					|| (inout == 'o' && list->stream_desc->stream->is_exit)) {
+			if ((inout == 'i' && LpelStreamIsEntry(list->stream_desc->stream))
+					|| (inout == 'o' && LpelStreamIsExit(list->stream_desc->stream))) {
 				// if input stream is entry or output stream is exit --> not count
 			} else
 				cnt += LpelStreamFillLevel(list->stream_desc->stream);
