@@ -144,7 +144,7 @@ void LpelWorkersCleanup( void) {
 	free(master);
 
 #ifndef HAVE___THREAD
-	pthread_key_delete(workerctx_key);
+	pthread_key_delete(masterctx_key);
 	pthread_key_delete(workerctx_key);
 #endif /* HAVE___THREAD */
 }
@@ -450,11 +450,6 @@ static void WrapperLoop( workerctx_t *wp)
 				assert (t->state == TASK_BLOCKED);
 				t->state = TASK_READY;
 				wp->current_task = t;
-#ifdef USE_LOGGING
-				if (t->mon && MON_CB(task_assign)) {
-					MON_CB(task_assign)(t->mon, wp->mon);
-				}
-#endif
 				break;
 			default:
 				assert(0);
