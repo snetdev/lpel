@@ -249,6 +249,8 @@ int LpelStreamGetId(lpel_stream_desc_t *sd) {
  * 	To get the accurate, one can introduce a new atomic counter and update when the stream is acctually written/read
  */
 int LpelStreamFillLevel(lpel_stream_t *s) {
+	if (s == NULL)
+		return 0;
 	int n = atomic_load(&s->n_sem);
 	if (n < 0)
 		return 0;

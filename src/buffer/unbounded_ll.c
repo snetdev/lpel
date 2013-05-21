@@ -135,4 +135,6 @@ void LpelBufferPut( buffer_t *buf, void *item)
   buf->tail = buf->tail->next;
 }
 
-
+int LpelBufferIsEmpty(buffer_t *buf) {
+	return (buf->head->next == NULL);
+}

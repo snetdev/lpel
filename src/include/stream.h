@@ -64,6 +64,7 @@ struct lpel_stream_t {
 
   /* used for lpel hrc to keep update the neighbors*/
   stream_sched_info_t *sched_info;
+  struct lpel_stream_t *next;		/** for organizing in the free stream list, currently used only in hrc */
 };
 
 
