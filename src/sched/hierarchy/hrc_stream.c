@@ -11,7 +11,7 @@
 #include "buffer.h"
 #include "task.h"
 #include "hrc_task.h"
-
+#include "hrc_worker.h"
 #include "stream.h"
 #include "hrc_stream.h"
 #include "lpel/monitor.h"
@@ -32,10 +32,12 @@ lpel_stream_t *LpelStreamCreate(int size)
   if (0==size) size = STREAM_BUFFER_SIZE;
 
   /* allocate memory for both the stream struct and the buffer area */
-  lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
-
-  /* reset buffer (including buffer area) */
-  s->buffer = LpelBufferInit( size);
+  lpel_stream_t *s = LpelWorkerGetStream();
+  if (!s) {
+  	s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
+  	s->buffer = LpelBufferInit( size);
+  	s->sched_info = (stream_sched_info_t *) malloc(sizeof(stream_sched_info_t));
+  }
 
   s->uid = atomic_fetch_add( &stream_seq, 1);
   PRODLOCK_INIT( &s->prod_lock );
@@ -45,13 +47,9 @@ lpel_stream_t *LpelStreamCreate(int size)
   s->prod_sd = NULL;
   s->cons_sd = NULL;
   s->usr_data = NULL;
-  s->sched_info = (stream_sched_info_t *) malloc(sizeof(stream_sched_info_t));
   s->sched_info->is_entry = 0;
   s->sched_info->is_exit = 0;
-  s->sched_info->ref_count = 0;
-  s->sched_info->destroy = 0;
-  PRODLOCK_INIT( &s->sched_info->sd_lock);
-
+  s->next = NULL;
   return s;
 }
 
@@ -250,46 +248,20 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
   }
 #endif
 
-  stream_sched_info_t *hrc;
-  int flag = 0;
-  if (destroy_s == 0) {
-  	if (sd->stream != NULL) {
-  		hrc = sd->stream->sched_info;
-  		PRODLOCK_LOCK(&hrc->sd_lock);
-  		hrc->ref_count--;
-  		if (hrc->ref_count == 0 && hrc->destroy == 1)
-  			flag = 1;
-  		else if (sd->mode == 'r' && sd->stream->cons_sd == sd)	// stream is not replaced yet or will not be replaced
-    		sd->stream->cons_sd = NULL;
-  		else if (sd->mode == 'w' && sd->stream->prod_sd == sd) 	// stream is not replaced yet or will not be replaced
-    		sd->stream->prod_sd = NULL;
-
-  		PRODLOCK_UNLOCK(&hrc->sd_lock);
-  	}
-  	if (flag)
-  		LpelStreamDestroy(sd->stream);
-
-  } else {		// snet-rts notifies to destroy stream
-  	assert(sd->stream != NULL);
-  	hrc = sd->stream->sched_info;
-  	PRODLOCK_LOCK(&hrc->sd_lock);
-  	hrc->ref_count--;
-  	hrc->destroy = 1;
-  	if (hrc->ref_count == 0)
-  		flag = 1;
-  	else if (sd->mode == 'r')
-  		sd->stream->cons_sd = NULL;
-  	else if (sd->mode == 'w')
-  		sd->stream->prod_sd = NULL;
-
-  	PRODLOCK_UNLOCK(&hrc->sd_lock);
-
-  	if (flag)
-  		LpelStreamDestroy(sd->stream);
+  workerctx_t *wc = sd->task->worker_context;
+  if (destroy_s) {
+  	assert(sd->mode == 'r');
+  	lpel_stream_t *s = sd->stream;
+  	assert(LpelBufferIsEmpty(s->buffer));
+  	s->prod_sd->stream = NULL;
+  	s->prod_sd = NULL;
+  	s->cons_sd = NULL;
+    LpelWorkerPutStream(wc, sd->stream);
+    sd->stream = NULL;
   }
-
   LpelTaskRemoveStream(sd->task, sd, sd->mode);
-  free(sd);
+  sd->task = NULL;
+  LpelWorkerPutSd(wc, sd);
 }
 
 
@@ -309,26 +281,21 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
   snew->sched_info->is_entry = sd->stream->sched_info->is_entry; /* technically, no need to set as entry stream shouldn't be replaced
     																				however it is set here for special case in source/sink mode */
 
-  /* destroy old stream */
-  int flag = 0;
-  PRODLOCK_LOCK(&sd->stream->sched_info->sd_lock);
-  sd->stream->sched_info->destroy = 1;
-  sd->stream->sched_info->ref_count--;
- 	if (sd->stream->sched_info->ref_count == 0)
- 		flag = 1;
- 	PRODLOCK_UNLOCK(&sd->stream->sched_info->sd_lock);
- 	if (flag)
- 		LpelStreamDestroy( sd->stream);
+  /* free the old stream */
+  workerctx_t *wc = sd->task->worker_context;
+  lpel_stream_t *s = sd->stream;
+  s->prod_sd->stream = NULL;
+  s->prod_sd = NULL;
+  s->cons_sd = NULL;
+  LpelWorkerPutStream(wc, sd->stream);
 
 
   /* assign new stream */
+  lpel_stream_desc_t *old_cons = snew->cons_sd;
+  old_cons->stream = NULL;
+  snew->cons_sd = sd;
   sd->stream = snew;
 
-  /* new consumer sd of stream */
-  PRODLOCK_LOCK( &sd->stream->sched_info->sd_lock);
-  sd->stream->cons_sd = sd;
-  sd->stream->sched_info->ref_count++;
-  PRODLOCK_UNLOCK( &sd->stream->sched_info->sd_lock);
 
   /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -355,7 +322,9 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   lpel_task_t *ct = LpelTaskSelf();
 
   assert( mode == 'r' || mode == 'w' );
-  sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
+  sd = LpelWorkerGetSd(ct->worker_context);
+  if (sd == NULL)
+  	sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
   sd->task = ct;
   sd->stream = s;
   sd->mode = mode;
@@ -374,9 +343,6 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   sd->mon = NULL;
 #endif
 
-  /*
-   * the first time set cons_sd/prod_sd, no need to use lock
-   */
   switch(mode) {
     case 'r': s->cons_sd = sd; break;
     case 'w': s->prod_sd = sd; break;
@@ -393,10 +359,6 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   	s->sched_info->is_exit = 1;
   if (LpelTaskIsWrapper(ct) && (mode == 'w'))
     	s->sched_info->is_entry = 1;
-
-  PRODLOCK_LOCK(&s->sched_info->sd_lock);
-  s->sched_info->ref_count++;
-  PRODLOCK_UNLOCK(&s->sched_info->sd_lock);
   return sd;
 }
 
@@ -407,14 +369,9 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
 lpel_task_t *LpelStreamConsumer(lpel_stream_t *s) {
 	if (!s)
 		return NULL;
-	lpel_task_t *t;
-	PRODLOCK_LOCK( &s->sched_info->sd_lock);
-	if (s->cons_sd != NULL)
-		t = s->cons_sd->task;
-	else
-		t = NULL;
-	PRODLOCK_UNLOCK( &s->sched_info->sd_lock);
-	return t;
+	if (!s->cons_sd)
+		return NULL;
+	return s->cons_sd->task;
 }
 
 /*
@@ -423,17 +380,10 @@ lpel_task_t *LpelStreamConsumer(lpel_stream_t *s) {
 lpel_task_t *LpelStreamProducer(lpel_stream_t *s) {
 	if (!s)
 		return NULL;
-
-	lpel_task_t *t;
-	PRODLOCK_LOCK( &s->sched_info->sd_lock);
-	if (s->prod_sd != NULL)
-		t = s->prod_sd->task;
-	else
-		t = NULL;
-	PRODLOCK_UNLOCK( &s->sched_info->sd_lock);
-	return t;
+	if (!s->prod_sd)
+		return NULL;
+	return s->prod_sd->task;
 }
-
 
 /**
  * Destroy a stream
@@ -450,18 +400,13 @@ void LpelStreamDestroy( lpel_stream_t *s)
   atomic_destroy( &s->n_sem);
   atomic_destroy( &s->e_sem);
   LpelBufferCleanup( s->buffer);
-
-  assert(s->sched_info->ref_count == 0 && s->sched_info->destroy == 1);
-  PRODLOCK_DESTROY(&s->sched_info->sd_lock);
   free(s->sched_info);
   free( s);
 }
 
-
 int LpelStreamIsEntry(lpel_stream_t *s) {
 	return s->sched_info->is_entry;
 }
-
 int LpelStreamIsExit(lpel_stream_t *s) {
 	return s->sched_info->is_exit;
 }
