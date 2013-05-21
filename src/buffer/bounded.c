@@ -145,5 +145,8 @@ void LpelBufferPut( buffer_t *buf, void *item)
 }
 
 
+int LpelBufferIsEmpty(buffer_t *buf) {
+	return (buf->data[buf->pread] == NULL);
+}
 
 

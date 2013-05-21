@@ -9,6 +9,7 @@
 #include "hrc_task.h"
 #include "mailbox.h"
 #include "taskqueue.h"
+#include "hrc_stream.h"
 
 //#define _USE_DBG__
 
@@ -36,6 +37,8 @@ struct workerctx_t {
   mon_worker_t *mon;
   mailbox_t    *mailbox;
   char          padding[64];
+  lpel_stream_t *free_stream;			/* list of free stream */
+  lpel_stream_desc_t *free_sd;		/* list of free stream desc */
 };
 
 
@@ -54,5 +57,18 @@ workerctx_t *LpelCreateWrapperContext(int wid);		// can be wrapper or source/sin
 void LpelWorkerTaskBlock(lpel_task_t *t);
 void LpelWorkerTaskWakeup( lpel_task_t *t);
 int LpelWorkerIsWrapper(workerctx_t *wc);
+
+
+/* put and get free stream */
+void LpelWorkerPutStream(workerctx_t *wc, lpel_stream_t *s);
+lpel_stream_t *LpelWorkerGetStream();
+
+/* put and get free stream desc*/
+void LpelWorkerPutSd(workerctx_t *wc, lpel_stream_desc_t *s);
+lpel_stream_desc_t *LpelWorkerGetSd(workerctx_t *wc);
+
+/* destroy list of free stream and stream desc when terminate worker */
+void LpelWorkerDestroyStream(workerctx_t *wc);
+void LpelWorkerDestroySd(workerctx_t *wc);
 
 #endif /* _HRC_WORKER_H_ */
