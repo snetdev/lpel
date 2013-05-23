@@ -37,6 +37,7 @@ struct workerctx_t {
   mon_worker_t *mon;
   mailbox_t    *mailbox;
   char          padding[64];
+  lpel_task_t  *marked_del;
   lpel_stream_t *free_stream;			/* list of free stream */
   lpel_stream_desc_t *free_sd;		/* list of free stream desc */
 };

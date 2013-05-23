@@ -47,6 +47,7 @@ static pthread_key_t masterctx_key;
 
 
 static void cleanupMasterMb();
+static void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t);
 
 /**
  * Initialise worker globally
@@ -125,24 +126,28 @@ void LpelWorkersCleanup( void) {
 	/* wait for the master to finish */
 	(void) pthread_join( master->thread, NULL);
 
-	/* cleanup the data structures */
-	for( i=0; i<num_workers; i++) {
-		wc = WORKER_PTR(i);
-		LpelMailboxDestroy(wc->mailbox);
-		LpelWorkerDestroyStream(wc);
-		LpelWorkerDestroySd(wc);
-		free(wc);
-	}
-	/* free workers tables */
-	free( workers);
-	free( waitworkers);
-
 	/* clean up master's mailbox */
 	cleanupMasterMb();
 
 	LpelMailboxDestroy(master->mailbox);
 	LpelTaskqueueDestroy(master->ready_tasks);
+
+
 	free(master);
+
+	/* cleanup the data structures */
+	for( i=0; i<num_workers; i++) {
+		wc = WORKER_PTR(i);
+		CleanupTaskContext(wc, NULL);
+		LpelMailboxDestroy(wc->mailbox);
+		LpelWorkerDestroyStream(wc);
+		LpelWorkerDestroySd(wc);
+		free(wc);
+	}
+
+	/* free workers tables */
+		free( workers);
+		free( waitworkers);
 
 #ifndef HAVE___THREAD
 	pthread_key_delete(masterctx_key);
@@ -344,7 +349,6 @@ static void MasterLoop( void)
 
 			case TASK_ZOMBIE:
 				updatePriorityNeigh(MASTER_PTR->ready_tasks, t);	//update neighbor before destroying task
-				LpelTaskDestroy(t);
 				break;
 			default:
 				assert(0);
@@ -552,6 +556,25 @@ int LpelWorkerCount(void)
 /*******************************************************************************
  * WORKER FUNCTION
  ******************************************************************************/
+/**
+ * Deferred deletion of a task
+ */
+
+static void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t)
+{
+  /* delete task marked before */
+  if (wc->marked_del != NULL) {
+    //LpelMonDebug( wc->mon, "Destroy task %d\n", wc->marked_del->uid);
+    LpelTaskDestroy( wc->marked_del);
+  }
+  /* place a new task (if any) */
+  if (t != NULL) {
+    wc->marked_del = t;
+  } else
+  	wc->marked_del = NULL;
+}
+
+
 void LpelWorkerBroadcast(workermsg_t *msg)
 {
 	int i;
@@ -596,9 +619,13 @@ static void WorkerLoop( workerctx_t *wc)
   	  	mctx_switch(&wc->mctx, &t->mctx);
   	  	//task return here
   	  	assert(t->state != TASK_RUNNING);
-  	  		t->worker_context = NULL;
-  	  		PRT_DBG("worker %d: return task %d, state %c\n", wc->wid, t->uid, t->state);
-  	  		returnTask(t);
+  	  	t->worker_context = NULL;
+  	  	returnTask(t);
+  	  	if (t->state == TASK_ZOMBIE)
+  	  		CleanupTaskContext(wc, t);
+
+  	  	PRT_DBG("worker %d: return task %d, state %c\n", wc->wid, t->uid, t->state);
+
   	  	break;
   	  case WORKER_MSG_TERMINATE:
   	  	wc->terminate = 1;
