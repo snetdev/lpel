@@ -12,7 +12,7 @@
 
 static atomic_int taskseq = ATOMIC_VAR_INIT(0);
 
-static double (*prior_cal) (int in, int out) = priorfunc1;
+static double (*prior_cal) (int in, int out) = priorfunc14;
 
 
 int countRec(stream_elem_t *list, char inout);
@@ -272,6 +272,9 @@ void LpelTaskSetPriorityFunc(int func){
 					break;
 	case 13: prior_cal = priorfunc13;	// random
 					break;
+	case 14: prior_cal = priorfunc14;
+					break;
+
 	default: prior_cal = priorfunc1;
 	}
 }
