@@ -49,6 +49,8 @@ lpel_stream_t *LpelStreamCreate(int size)
   s->usr_data = NULL;
   s->sched_info->is_entry = 0;
   s->sched_info->is_exit = 0;
+  s->sched_info->write = 0;
+  s->sched_info->read = 0;
   s->next = NULL;
   return s;
 }
@@ -123,6 +125,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   PRODLOCK_UNLOCK( &sd->stream->prod_lock);
 
 
+  sd->stream->sched_info->write++;
 
   /* quasi V(n_sem) */
   if ( atomic_fetch_add( &sd->stream->n_sem, 1) < 0) {
@@ -212,6 +215,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
   /* pop off the top element */
   LpelBufferPop( sd->stream->buffer);
 
+  sd->stream->sched_info->read++;
 
   /* only entry streams are bounded */
   if (sd->stream->sched_info->is_entry) {
@@ -409,4 +413,10 @@ int LpelStreamIsEntry(lpel_stream_t *s) {
 }
 int LpelStreamIsExit(lpel_stream_t *s) {
 	return s->sched_info->is_exit;
+}
+
+int LpelStreamFillLevel(lpel_stream_t *s) {
+	if (s == NULL)
+		return 0;
+	return s->sched_info->write - s->sched_info->read;
 }

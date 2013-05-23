@@ -240,20 +240,4 @@ int LpelStreamGetId(lpel_stream_desc_t *sd) {
 	return -1;
 }
 
-/*
- * Return the number of items in the stream
- * n_sem may vary by 1
- * 	Case: consumer try to read, get blocked, n_sem = -1
- * 				producer writes, unblocks consumer, n_sem = 0
- * 	The variant is not important, here we reused n_sem
- * 	To get the accurate, one can introduce a new atomic counter and update when the stream is acctually written/read
- */
-int LpelStreamFillLevel(lpel_stream_t *s) {
-	if (s == NULL)
-		return 0;
-	int n = atomic_load(&s->n_sem);
-	if (n < 0)
-		return 0;
-	return n;
-}
 

@@ -68,6 +68,4 @@ struct lpel_stream_t {
 };
 
 
-int LpelStreamFillLevel(lpel_stream_t *s);
-
 #endif /* _STREAM_H_ */
