@@ -1,16 +1,18 @@
 #include <stdio.h>
-#include "task.h"
+#include <lpel.h>
 #include "lpelcfg.h"
 #include "decen_worker.h"
 #include "spmdext.h"
-#include "stream.h"
 #include "lpel/monitor.h"
 #include "decen_scheduler.h"
-#include "lpel.h"
 #include "task_migration.h"
 
 extern lpel_tm_config_t tm_conf;
 static atomic_int taskseq = ATOMIC_VAR_INIT(0);
+
+static void FinishOffCurrentTask(lpel_task_t *ct);
+static void TaskStartup( void *arg);
+
 
 /**
  * Create a task.
@@ -48,8 +50,7 @@ lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
 	/* obtain a usable worker context */
 	t->worker_context = LpelWorkerGetContext(worker);
 
-	t->sched_info = (sched_task_t *) malloc(sizeof(sched_task_t));
-	t->sched_info->prio = 0;
+	t->sched_info.prio = 0;
 
 	t->uid = atomic_fetch_add( &taskseq, 1);  /* obtain a unique task id */
 	t->func = func;
@@ -99,7 +100,6 @@ void LpelTaskDestroy( lpel_task_t *t)
 #endif
 
 	/* free the TCB itself*/
-	free(t->sched_info);
 	free(t);
 }
 
@@ -110,25 +110,36 @@ void LpelTaskDestroy( lpel_task_t *t)
  */
 void LpelTaskSetPriority(lpel_task_t *t, int prio)
 {
-	t->sched_info->prio = prio;
+	t->sched_info.prio = prio;
 }
 
 
 /**
- * Unblock a task.
- * 		Called from StreamRead/StreamWrite procedures
- * @param ct				task to unblock
- * @param blocked		task to be unblocked
+ * Let a task start
  */
-void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
+void LpelTaskStart( lpel_task_t *t)
 {
-	assert(ct != NULL);
-	assert(blocked != NULL);
+  assert( t->state == TASK_CREATED );
 
-	LpelWorkerTaskWakeup( ct, blocked);
+  LpelWorkerRunTask( t);
 }
 
 
+/**
+ * Exit the current task
+ *
+ * @param outarg  output argument of the task
+ * @pre This call must be made within a LPEL task!
+ */
+void LpelTaskExit(void)
+{
+  lpel_task_t *ct = LpelTaskSelf();
+  assert( ct->state == TASK_RUNNING );
+
+  FinishOffCurrentTask(ct);
+  /* execution never comes back here */
+  assert(0);
+}
 
 /**
  * Task issues an enter world request
@@ -156,21 +167,6 @@ void LpelTaskEnterSPMD( lpel_spmdfunc_t fun, void *arg)
 	TaskStart( ct);
 }
 
-
-/* private function */
-void TaskStart( lpel_task_t *t)
-{
-	assert( t->state == TASK_READY );
-
-	/* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-	if (t->mon && MON_CB(task_start)) {
-		MON_CB(task_start)(t->mon);
-	}
-#endif
-
-	t->state = TASK_RUNNING;
-}
 
 /**
  * Yield execution back to scheduler voluntarily
@@ -205,6 +201,35 @@ void LpelTaskYield(void)
 }
 
 
+/**
+ * Block a task by reading from/writing to a stream
+ */
+void LpelTaskBlockStream(lpel_task_t *t)
+{
+  /* a reference to it is held in the stream */
+  t->state = TASK_BLOCKED;
+  LpelWorkerTaskBlock(t);
+  TaskStop( t);
+  LpelWorkerDispatcher( t);
+  TaskStart( t);
+}
+
+
+/**
+ * Unblock a task.
+ * 		Called from StreamRead/StreamWrite procedures
+ * @param ct				task to unblock
+ * @param blocked		task to be unblocked
+ */
+void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked)
+{
+	assert(ct != NULL);
+	assert(blocked != NULL);
+
+	LpelWorkerTaskWakeup( ct, blocked);
+}
+
+
 /** check and migrate the current task if required, used in decen_lpel
  * to be called from snet-rts after processing one message record
  * used in random-based mechanism
@@ -227,6 +252,71 @@ void LpelTaskCheckMigrate(void) {
 	}
 }
 
+
+int LpelTaskGetWorkerId(lpel_task_t *t)
+{
+  assert(t);
+  assert(t->worker_context);
+  return t->worker_context->wid;
+}
+
+
+/**
+ * Get Task Id
+ *		usually used for debugging
+ * @param t		task
+ */
+unsigned int LpelTaskGetId(lpel_task_t *t)
+{
+  return t->uid;
+}
+
+/**
+ * Get Task Monitor
+ *
+ * @param t		task
+ */
+mon_task_t *LpelTaskGetMon( lpel_task_t *t )
+{
+  return t->mon;
+}
+
+/**
+ * Set Task Monitor
+ *
+ * @param t		task
+ * @param mt	task monitor
+ */
+void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt)
+{
+  t->mon = mt;
+}
+
+
+/**
+ * Get the current task
+ *
+ * @pre This call must be made from within a LPEL task!
+ */
+lpel_task_t *LpelTaskSelf(void)
+{
+	return LpelWorkerCurrentTask();
+}
+
+
+/** user data */
+void  LpelSetUserData(lpel_task_t *t, void *data)
+{
+  assert(t);
+  t->usrdata = data;
+}
+
+void *LpelGetUserData(lpel_task_t *t)
+{
+  assert(t);
+  return t->usrdata;
+}
+
 void LpelSetUserDataDestructor(lpel_task_t *t, lpel_usrdata_destructor_t destr)
 {
   assert(t);
@@ -239,10 +329,84 @@ lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t)
   return t->usrdt_destr;
 }
 
+/******************************************************************************/
+/* PRIVATE FUNCTIONS                                                          */
+/******************************************************************************/
 
-int LpelTaskGetWorkerId(lpel_task_t *t)
+/**
+ * Startup function for user specified task,
+ * calls task function with proper signature
+ *
+ * @param data  the previously allocated lpel_task_t TCB
+ */
+static void TaskStartup( void *data)
 {
-  assert(t);
-  assert(t->worker_context);
-  return t->worker_context->wid;
+  lpel_task_t *t = (lpel_task_t *)data;
+
+#if 0
+  unsigned long z;
+
+  z = x<<16;
+  z <<= 16;
+  z |= y;
+  t = (lpel_task_t *)z;
+#endif
+  TaskStart( t);
+
+  /* call the task function with inarg as parameter */
+  t->outarg = t->func(t->inarg);
+
+  /* if task function returns, exit properly */
+  t->state = TASK_ZOMBIE;
+  LpelWorkerSelfTaskExit(t);
+  TaskStop( t);
+  LpelWorkerDispatcher( t);
+  /* execution never comes back here */
+  assert(0);
 }
+
+
+void TaskStart( lpel_task_t *t)
+{
+	assert( t->state == TASK_READY );
+
+	/* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+	if (t->mon && MON_CB(task_start)) {
+		MON_CB(task_start)(t->mon);
+	}
+#endif
+
+	t->state = TASK_RUNNING;
+}
+
+void TaskStop( lpel_task_t *t)
+{
+  //workerctx_t *wc = t->worker_context;
+  assert( t->state != TASK_RUNNING);
+
+  /* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+  if (t->mon && MON_CB(task_stop)) {
+    MON_CB(task_stop)(t->mon, t->state);
+  }
+#endif
+
+}
+
+static void FinishOffCurrentTask(lpel_task_t *ct)
+{
+  /* call the destructor for the Task Local Data */
+  if (ct->usrdt_destr && ct->usrdata) {
+    ct->usrdt_destr (ct, ct->usrdata);
+  }
+
+  /* context switch happens, this task is cleaned up then */
+  ct->state = TASK_ZOMBIE;
+  LpelWorkerSelfTaskExit(ct);
+  TaskStop( ct);
+  LpelWorkerDispatcher( ct);
+  /* execution never comes back here */
+  assert(0);
+}
+

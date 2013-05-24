@@ -2,7 +2,7 @@
 #define _TASK_MIGRATION_H_
 
 #include <lpel.h>
-#include "task.h"
+#include "decen_task.h"
 
 int LpelPickTargetWorker(lpel_task_t *t);
 

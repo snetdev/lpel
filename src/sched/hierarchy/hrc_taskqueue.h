@@ -1,7 +1,7 @@
-#ifndef _TASKQUEUE_H_
-#define _TASKQUEUE_H_
+#ifndef _HRC_TASKQUEUE_H_
+#define _HRC_TASKQUEUE_H_
 
-#include "task.h"
+#include "lpel_common.h"
 
 
 typedef struct taskqueue_t taskqueue_t;
@@ -23,11 +23,6 @@ void LpelTaskqueueDestroy(taskqueue_t *tq);
 lpel_task_t *LpelTaskqueuePeek( taskqueue_t *tq);
 int LpelTaskqueueSize(taskqueue_t *tq);
 
-/* this function is used for HRC only, declared here to avoid separating header file for DECEN and HRC */
 void LpelTaskqueueUpdatePriority(taskqueue_t *tq, lpel_task_t *t, double np);
 
-/* these functions are implemented by DECEN but not used so far
-void LpelTaskqueuePushFront( taskqueue_t *tq, lpel_task_t *t);
-lpel_task_t *LpelTaskqueuePopBack(  taskqueue_t *tq);
-*/
-#endif /* _TASKQUEUE_H_ */
+#endif /* _HRC_TASKQUEUE_H_ */

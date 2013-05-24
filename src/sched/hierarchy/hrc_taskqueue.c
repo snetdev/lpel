@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "taskqueue.h"
+#include "hrc_taskqueue.h"
 #include "hrc_task.h"
 
 #define BLOCKSIZE 50
@@ -26,9 +26,9 @@ struct taskqueue_t{
 void upHeap(taskqueue_t *tq, int pos) {
 	int parent;
 	lpel_task_t *t = tq->heap[pos];
-	double p = t->sched_info->prior;
+	double p = t->sched_info.prior;
 	  /* append at end, then up heap */
-	  while ((parent = pos / 2) &&  p > tq->heap[parent]->sched_info->prior) {
+	  while ((parent = pos / 2) &&  p > tq->heap[parent]->sched_info.prior) {
 	    tq->heap[pos] = tq->heap[parent];
 	    pos = parent;
 	  }
@@ -38,12 +38,12 @@ void upHeap(taskqueue_t *tq, int pos) {
 void downHeap(taskqueue_t *tq, int pos) {
 	  int child;
 		lpel_task_t *t = tq->heap[pos];
-		double p = t->sched_info->prior;
+		double p = t->sched_info.prior;
 		while( (child = pos * 2) < tq->count) {
-			if (child + 1 < tq->count && tq->heap[child]->sched_info->prior < tq->heap[child+1]->sched_info->prior)
+			if (child + 1 < tq->count && tq->heap[child]->sched_info.prior < tq->heap[child+1]->sched_info.prior)
 				child++;
 
-			if (p >= tq->heap[child]->sched_info->prior)
+			if (p >= tq->heap[child]->sched_info.prior)
 				break;
 
 			tq->heap[pos] = tq->heap[child];
@@ -149,8 +149,8 @@ void LpelTaskqueueDestroy(taskqueue_t *tq){
 void LpelTaskqueueUpdatePriority(taskqueue_t *tq, lpel_task_t *t, double np){
 	int pos = searchItem(tq, t);
 	assert(pos > 0);
-	double p = t->sched_info->prior;
-	t->sched_info->prior = np;
+	double p = t->sched_info.prior;
+	t->sched_info.prior = np;
 	if (np > p)
 		upHeap(tq, pos);
 	else

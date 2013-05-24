@@ -1,9 +1,27 @@
 #ifndef _DECEN_WORKER_H_
 #define _DECEN_WORKER_H_
 
-#include "task.h"
-#include "worker.h"
 #include "decen_scheduler.h"
+#include <pthread.h>
+#include <lpel_common.h>
+
+#include "arch/mctx.h"
+#include "decen_task.h"
+#include "mailbox.h"
+
+
+typedef struct workerctx_t workerctx_t;
+
+#ifdef LPEL_DEBUG_WORKER
+/* use the debug callback if available to print a debug message */
+#define WORKER_DBGMSG(wc,...) do {\
+  if ((wc)->mon && MON_CB(worker_debug)) { \
+    MON_CB(worker_debug)( (wc)->mon, ##__VA_ARGS__ ); \
+  }} while(0)
+
+#else /* LPEL_DEBUG_WORKER */
+#define WORKER_DBGMSG(wc,...) /*NOP*/
+#endif /* LPEL_DEBUG_WORKER */
 
 
 #define  WORKER_MSG_TERMINATE 	1
@@ -30,6 +48,17 @@ struct workerctx_t {
   lpel_task_t	 *migrated;
 };
 
+void LpelWorkerRunTask( lpel_task_t *t);
+void LpelWorkerDispatcher( lpel_task_t *t);
+
+void LpelWorkerBroadcast(workermsg_t *msg);
+workerctx_t *LpelWorkerGetContext(int id);
+workerctx_t *LpelWorkerSelf(void);
+lpel_task_t *LpelWorkerCurrentTask(void);
+
+void LpelWorkerSelfTaskExit(lpel_task_t *t);
+void LpelWorkerSelfTaskYield(lpel_task_t *t);
+void LpelWorkerTaskBlock(lpel_task_t *t);
 
 void LpelWorkerTaskWakeup( lpel_task_t *by, lpel_task_t *whom);
 void LpelWorkerTaskWakeupLocal( workerctx_t *wc, lpel_task_t *task);

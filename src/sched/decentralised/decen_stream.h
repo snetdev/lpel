@@ -2,9 +2,10 @@
 #define _STREAM_H_
 
 #include <pthread.h>
-#include <lpel_common.h>
+#include <lpel.h>
 #include "buffer.h"
-#include "task.h"
+#include "decen_task.h"
+#include "lpel_main.h"
 
 /* default size */
 #ifndef  STREAM_BUFFER_SIZE
@@ -34,16 +35,6 @@
 #endif /* STREAM_POLL_SPINLOCK */
 
 
-typedef struct stream_sched_info_t stream_sched_info_t;
-
-struct lpel_stream_desc_t {
-  lpel_task_t   *task;        /** the task which opened the stream */
-  lpel_stream_t *stream;      /** pointer to the stream */
-  char mode;                  /** either 'r' or 'w' */
-  struct lpel_stream_desc_t *next; /** for organizing in stream sets */
-  struct mon_stream_t *mon;   /** monitoring object */
-};
-
 
 /**
  * A stream which is shared between a
@@ -60,11 +51,6 @@ struct lpel_stream_t {
   atomic_int n_sem;           /** counter for elements in the stream */
   atomic_int e_sem;           /** counter for empty space in the stream */
   void *usr_data;           /** arbitrary user data */
-
-
-  /* used for lpel hrc to keep update the neighbors*/
-  stream_sched_info_t *sched_info;
-  struct lpel_stream_t *next;		/** for organizing in the free stream list, currently used only in hrc */
 };
 
 

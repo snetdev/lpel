@@ -21,6 +21,7 @@ struct entry {
 struct buffer_t{
 	entry *head;
 	entry *tail;
+	int count;
 };
 
 static entry *createEntry(void *data) {
@@ -42,6 +43,7 @@ buffer_t *LpelBufferInit(unsigned int size)
 	buffer_t *buf = (buffer_t *) malloc(sizeof(buffer_t));
   buf->head = createEntry(NULL);
   buf->tail = buf->head;
+  buf->count = 0;
   return buf;
 }
 
@@ -88,6 +90,7 @@ void LpelBufferPop( buffer_t *buf)
 	    return;
 	  entry *t = buf->head;
 	  buf->head = t->next;
+	  buf->count--;
 	  free(t);
 }
 
@@ -133,8 +136,13 @@ void LpelBufferPut( buffer_t *buf, void *item)
   WMB();
   buf->tail->next = createEntry(item);
   buf->tail = buf->tail->next;
+  buf->count++;
 }
 
 int LpelBufferIsEmpty(buffer_t *buf) {
 	return (buf->head->next == NULL);
+}
+
+int LpelBufferCount(buffer_t *buf){
+	return buf->count;
 }

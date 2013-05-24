@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include "task.h"
+#include "decen_task.h"
 #include "decen_worker.h"
 #include "lpel.h"
 #include "lpelcfg.h"

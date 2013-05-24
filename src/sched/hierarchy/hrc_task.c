@@ -14,8 +14,15 @@ static atomic_int taskseq = ATOMIC_VAR_INIT(0);
 
 static double (*prior_cal) (int in, int out) = priorfunc14;
 
+static void TaskStartup( void *arg);
 
-int countRec(stream_elem_t *list, char inout);
+static void TaskStart( lpel_task_t *t);
+static void TaskStop( lpel_task_t *t);
+
+
+#define TASK_STACK_ALIGN  256
+#define TASK_MINSIZE  4096
+
 
 /**
  * Create a task.
@@ -51,7 +58,7 @@ lpel_task_t *LpelTaskCreate( int map, lpel_taskfunc_t func,
 	t->size = size;
 
 
-	if (map == LPEL_MAP_OTHERS )	/** others wrapper or source/sink */
+	if (map != LPEL_MAP_MASTER )	/** others wrapper or source/sink */
 		t->worker_context = LpelCreateWrapperContext(map);
 	else
 		t->worker_context = NULL;
@@ -76,12 +83,11 @@ lpel_task_t *LpelTaskCreate( int map, lpel_taskfunc_t func,
 #endif
 
 	// default scheduling info
-	t->sched_info = (sched_task_t *) malloc(sizeof(sched_task_t));
-	t->sched_info->prior = 0;
-	t->sched_info->rec_cnt = 0;
-	t->sched_info->rec_limit = LPEL_REC_LIMIT_DEFAULT;
-	t->sched_info->in_streams = NULL;
-	t->sched_info->out_streams = NULL;
+	t->sched_info.prior = 0;
+	t->sched_info.rec_cnt = 0;
+	t->sched_info.rec_limit = -1;
+	t->sched_info.in_streams = NULL;
+	t->sched_info.out_streams = NULL;
 
 	return t;
 }
@@ -111,19 +117,111 @@ void LpelTaskDestroy( lpel_task_t *t)
 #endif
 
 
-	assert(t->sched_info->in_streams == NULL);
-	assert(t->sched_info->out_streams == NULL);
-	free(t->sched_info);
+	assert(t->sched_info.in_streams == NULL);
+	assert(t->sched_info.out_streams == NULL);
 	/* free the TCB itself*/
 	free(t);
 }
 
 
+unsigned int LpelTaskGetId(lpel_task_t *t)
+{
+	return t->uid;
+}
+
+mon_task_t *LpelTaskGetMon( lpel_task_t *t )
+{
+	return t->mon;
+}
+
+
+void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt)
+{
+	t->mon = mt;
+}
+
+
+/**
+ * Let the task run on the worker
+ */
+void LpelTaskStart( lpel_task_t *t)
+{
+	assert( t->state == TASK_CREATED );
+
+	LpelWorkerRunTask( t);
+}
+
+
+
+/**
+ * Get the current task
+ *
+ * @pre This call must be made from within a LPEL task!
+ */
+lpel_task_t *LpelTaskSelf(void)
+{
+	return LpelWorkerCurrentTask();
+}
+
+
+/**
+ * Exit the current task
+ *
+ * @param outarg  output argument of the task
+ * @pre This call must be made from within a LPEL task!
+ */
+void LpelTaskExit(void)
+{
+	lpel_task_t *ct = LpelTaskSelf();
+	assert( ct->state == TASK_RUNNING );
+
+	/* context switch happens, this task is cleaned up then */
+	ct->state = TASK_ZOMBIE;
+	TaskStop( ct);
+	LpelWorkerTaskExit(ct);
+	/* execution never comes back here */
+	assert(0);
+}
+
+
+/**
+ * Yield execution back to scheduler voluntarily
+ *
+ * @pre This call must be made from within a LPEL task!
+ */
+void LpelTaskYield(void)
+{
+	lpel_task_t *ct = LpelTaskSelf();
+	assert( ct->state == TASK_RUNNING );
+
+	ct->state = TASK_READY;
+	TaskStop( ct);
+	LpelWorkerTaskYield(ct);
+	TaskStart( ct);
+}
+
+
+
+
+/**
+ * Block a task
+ */
+void LpelTaskBlockStream(lpel_task_t *t)
+{
+	/* a reference to it is held in the stream */
+	assert( t->state == TASK_RUNNING );
+	t->state = TASK_BLOCKED;
+	TaskStop( t);
+	LpelWorkerTaskBlock(t);
+	TaskStart( t);		// task will be backed here when it is dispatched the next time
+
+}
+
 
 /**
  * Unblock a task. Called from StreamRead/StreamWrite procedures
  */
-void LpelTaskUnblock( lpel_task_t *by, lpel_task_t *t)
+void LpelTaskUnblock( lpel_task_t *t)
 {
 	assert(t != NULL);
 	LpelWorkerTaskWakeup( t);
@@ -132,53 +230,112 @@ void LpelTaskUnblock( lpel_task_t *by, lpel_task_t *t)
 
 
 
+/******************************************************************************/
+/* PRIVATE FUNCTIONS                                                          */
+/******************************************************************************/
+
+/**
+ * Startup function for user specified task,
+ * calls task function with proper signature
+ *
+ * @param data  the previously allocated lpel_task_t TCB
+ */
+static void TaskStartup( void *data)
+{
+	lpel_task_t *t = (lpel_task_t *)data;
+
+#if 0
+	unsigned long z;
+
+	z = x<<16;
+	z <<= 16;
+	z |= y;
+	t = (lpel_task_t *)z;
+#endif
+
+	TaskStart( t);
+
+	/* call the task function with inarg as parameter */
+	t->outarg = t->func(t->inarg);
+
+	/* if task function returns, exit properly */
+	t->state = TASK_ZOMBIE;
+	TaskStop(t);
+	LpelWorkerTaskExit(t);
+	/* execution never comes back here */
+	assert(0);
+}
+
+
+static void TaskStart( lpel_task_t *t)
+{
+	// TODO reset task scheduling info
+
+	assert( t->state == TASK_READY );
+	/* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+	if (t->mon && MON_CB(task_start)) {
+		MON_CB(task_start)(t->mon);
+	}
+#endif
+
+	t->sched_info.rec_cnt = 0;	// reset rec_cnt
+	t->state = TASK_RUNNING;
+}
+
+
+static void TaskStop( lpel_task_t *t)
+{
+	/* MONITORING CALLBACK */
+#ifdef USE_TASK_EVENT_LOGGING
+	if (t->mon && MON_CB(task_stop)) {
+		MON_CB(task_stop)(t->mon, t->state);
+	}
+#endif
+
+}
+
+
 /*
- * this will be called after producing each record
+ * this will be called before 1 rec is processed
  * increase the rec count by 1, if it reaches the limit then yield
  */
 void LpelTaskCheckYield(lpel_task_t *t) {
 
 	assert( t->state == TASK_RUNNING );
 
-	if (t->sched_info->rec_limit < 0) {		//limit < 0 --> no yield
+	if (t->sched_info.rec_limit < 0) {		//limit < 0 --> no yield
 		return;
 	}
 
-	t->sched_info->rec_cnt ++;
-	if (t->sched_info->rec_cnt >= t->sched_info->rec_limit) {
+	if (t->sched_info.rec_cnt == t->sched_info.rec_limit) {
 		t->state = TASK_READY;
 		TaskStop( t);
-		LpelWorkerSelfTaskYield(t);
+		LpelWorkerTaskYield(t);
 		TaskStart( t);
 	}
+	t->sched_info.rec_cnt ++;
+
 }
 
-/*
- * set limit of produced records
- */
 void LpelTaskSetRecLimit(lpel_task_t *t, int lim) {
-	t->sched_info->rec_limit = lim;
+	t->sched_info.rec_limit = lim;
 }
 
-void LpelTaskSetPriority(lpel_task_t *t, double p) {
-	t->sched_info->prior = p;
+void LpelTaskSetPrior(lpel_task_t *t, double p) {
+	t->sched_info.prior = p;
 }
 
-/*
- * Add a tracked stream, used for calculate task priority
- * @param t			task
- * @param des		stream description
- * @param mode	read/write mode
- */
+
 void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 	stream_elem_t **list;
 	stream_elem_t *head;
 	switch (mode) {
 	case 'r':
-		list = &t->sched_info->in_streams;
+		list = &t->sched_info.in_streams;
 		break;
 	case 'w':
-		list = &t->sched_info->out_streams;
+		list = &t->sched_info.out_streams;
 		break;
 	}
 	head = *list;
@@ -191,21 +348,16 @@ void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 	*list = new;
 }
 
-/*
- * Remove a tracked stream
- * @param t			task
- * @param des		stream description
- * @param mode	read/write mode
- */
+
 void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 	stream_elem_t **list;
 	stream_elem_t *head;
 	switch (mode) {
 	case 'r':
-		list = &t->sched_info->in_streams;
+		list = &t->sched_info.in_streams;
 		break;
 	case 'w':
-		list = &t->sched_info->out_streams;
+		list = &t->sched_info.out_streams;
 		break;
 	}
 	head = *list;
@@ -230,20 +382,33 @@ void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 
 
 
-/*
- * Calculate dynamic priority for task
- */
-double LpelTaskCalPriority(lpel_task_t *t) {
-	int in, out;
-	in = countRec(t->sched_info->in_streams, 'i');
-	out = countRec(t->sched_info->out_streams, 'o');
-	return prior_cal(in, out);
+int countRec(stream_elem_t *list) {
+	if (list == NULL)
+		return -1;
+	int cnt = 0;
+	while (list != NULL) {
+		cnt += LpelStreamFillLevel(list->stream_desc->stream);
+		list = list->next;
+	}
+	return cnt;
 }
 
 
-/*
- * Set function used to calculate task priority
- */
+double LpelTaskCalPriority(lpel_task_t *t) {
+	int in, out;
+	if (t->sched_info.type == LPEL_ENTRY_TASK)
+		in = -1;
+	else
+		in = countRec(t->sched_info.in_streams);
+	if (t->sched_info.type == LPEL_EXIT_TASK)
+		out = -1;
+	else
+		out = countRec(t->sched_info.out_streams);
+	return prior_cal(in, out);
+//	return (in + 1.0)/((out + 1.0)*(in + out + 1.0));
+
+}
+
 void LpelTaskSetPriorityFunc(int func){
 	switch (func){
 	case 1: prior_cal = priorfunc1;
@@ -270,19 +435,10 @@ void LpelTaskSetPriorityFunc(int func){
 					break;
 	case 12: prior_cal = priorfunc12;
 					break;
-	case 13: prior_cal = priorfunc13;	// random
-					break;
-	case 14: prior_cal = priorfunc14;
-					break;
-
 	default: prior_cal = priorfunc1;
 	}
 }
 
-/*
- * get WorkerId where task is currently running
- * 		used for debugging
- */
 int LpelTaskGetWorkerId(lpel_task_t *t) {
 	if (t->worker_context)
 		return t->worker_context->wid;
@@ -290,71 +446,9 @@ int LpelTaskGetWorkerId(lpel_task_t *t) {
 		return -1;
 }
 
-/**
- * Yield execution back to scheduler voluntarily
- *
- * @pre This call must be made from within a LPEL task!
- */
-void LpelTaskYield(void)
-{
-  lpel_task_t *ct = LpelTaskSelf();
-  assert( ct->state == TASK_RUNNING );
-
-  ct->state = TASK_READY;
-  LpelWorkerSelfTaskYield(ct);
-  TaskStop( ct);
-  LpelWorkerDispatcher( ct);
-  TaskStart( ct);
-}
-
-/**
- * Check if a task is wrapper, used for set entry/exit stream
- */
-int LpelTaskIsWrapper(lpel_task_t *t) {
-	assert(t != NULL);
-	return LpelWorkerIsWrapper(t->worker_context);
+void LpelTaskSetType(lpel_task_t *t, int type) {
+	t->sched_info.type = type;
 }
 
 
-/*
- * void function to provide task migration in lpel decen
- * */
-void LpelTaskCheckMigrate(void) {
-}
-
-/******************************************************************************/
-/* PRIVATE FUNCTIONS                                                          */
-/******************************************************************************/
-void TaskStart( lpel_task_t *t)
-{
-	assert( t->state == TASK_READY );
-
-	/* MONITORING CALLBACK */
-#ifdef USE_TASK_EVENT_LOGGING
-	if (t->mon && MON_CB(task_start)) {
-		MON_CB(task_start)(t->mon);
-	}
-#endif
-	t->sched_info->rec_cnt = 0;	// reset rec_cnt
-	t->state = TASK_RUNNING;
-}
-
-/*
- * count records in the list of tracked stream
- */
-int countRec(stream_elem_t *list, char inout) {
-	if (list == NULL)
-		return -1;
-	int cnt = 0;
-	while (list != NULL) {
-		if (list->stream_desc->stream) {
-			if ((inout == 'i' && LpelStreamIsEntry(list->stream_desc->stream))
-					|| (inout == 'o' && LpelStreamIsExit(list->stream_desc->stream))) {
-				// if input stream is entry or output stream is exit --> not count
-			} else
-				cnt += LpelStreamFillLevel(list->stream_desc->stream);
-		}
-		list = list->next;
-	}
-	return cnt;
-}
+void LpelTaskCheckMigrate(void) {}

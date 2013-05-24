@@ -14,4 +14,5 @@ void  LpelBufferPop(buffer_t *buf);
 int   LpelBufferIsSpace(buffer_t *buf);
 void  LpelBufferPut(buffer_t *buf, void *item);
 int LpelBufferIsEmpty(buffer_t *buf);
+int LpelBufferCount(buffer_t *buf);
 #endif /* _BUFFER_H_ */
