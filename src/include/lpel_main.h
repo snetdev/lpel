@@ -1,5 +1,7 @@
-#ifndef _COMMON_H_
-#define _COMMON_H_
+#ifndef _LPELMAIN_H
+#define _LPELMAIN_H
+
+#include <pthread.h>
 #include <lpel_common.h>
 
 struct lpel_stream_desc_t {
@@ -10,6 +12,28 @@ struct lpel_stream_desc_t {
   struct mon_stream_t *mon;   /** monitoring object */
 };
 
+//#define STREAM_POLL_SPINLOCK
+
+/** Macros for lock handling */
+
+#ifdef STREAM_POLL_SPINLOCK
+
+#define PRODLOCK_TYPE       pthread_spinlock_t
+#define PRODLOCK_INIT(x)    pthread_spin_init(x, PTHREAD_PROCESS_PRIVATE)
+#define PRODLOCK_DESTROY(x) pthread_spin_destroy(x)
+#define PRODLOCK_LOCK(x)    pthread_spin_lock(x)
+#define PRODLOCK_UNLOCK(x)  pthread_spin_unlock(x)
+
+#else
+
+#define PRODLOCK_TYPE       pthread_mutex_t
+#define PRODLOCK_INIT(x)    pthread_mutex_init(x, NULL)
+#define PRODLOCK_DESTROY(x) pthread_mutex_destroy(x)
+#define PRODLOCK_LOCK(x)    pthread_mutex_lock(x)
+#define PRODLOCK_UNLOCK(x)  pthread_mutex_unlock(x)
+
+#endif /* STREAM_POLL_SPINLOCK */
+
 
 
 void LpelWorkersInit( int size);
@@ -18,4 +42,4 @@ void LpelWorkersSpawn(void);
 void LpelWorkersTerminate(void);
 
 
-#endif /* _COMMON_H_ */
+#endif /* _LPELMAIN_H */

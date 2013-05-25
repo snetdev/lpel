@@ -106,6 +106,8 @@ void LpelWorkersInit( int size) {
 
 	/* mailbox */
 	wc->mailbox = LpelMailboxCreate();
+	wc->free_sd = NULL;
+	wc->free_stream = NULL;
 	}
 }
 
@@ -137,6 +139,8 @@ void LpelWorkersCleanup( void) {
 	for( i=0; i<num_workers; i++) {
 		wc = WORKER_PTR(i);
 		LpelMailboxDestroy(wc->mailbox);
+		LpelWorkerDestroyStream(wc);
+		LpelWorkerDestroySd(wc);
 		free(wc);
 	}
 
@@ -502,6 +506,8 @@ static void *WrapperThread( void *arg)
 	WrapperLoop( wp);
 
 	LpelMailboxDestroy(wp->mailbox);
+	LpelWorkerDestroyStream(wp);
+	LpelWorkerDestroySd(wp);
 	free( wp);
 
 #ifdef USE_MCTX_PCL
@@ -521,6 +527,8 @@ workerctx_t *LpelCreateWrapperContext(int wid) {
 
 	/* mailbox */
 	wp->mailbox = LpelMailboxCreate();
+	wp->free_sd = NULL;
+	wp->free_stream = NULL;
 	/* taskqueue of free tasks */
 	(void) pthread_create( &wp->thread, NULL, WrapperThread, wp);
 	(void) pthread_detach( wp->thread);
@@ -718,3 +726,87 @@ void LpelWorkerTaskWakeup( lpel_task_t *t) {
 	}
 }
 
+
+
+/******************************************
+ * STREAM RELATED FUNCTIONS
+ ******************************************/
+void LpelWorkerPutStream(workerctx_t *wc, lpel_stream_t *s) {
+	if (wc->free_stream == NULL) {
+		wc->free_stream = s;
+		s->next = NULL;
+	} else {
+		s->next = wc->free_stream;
+		wc->free_stream = s;
+	}
+}
+
+lpel_stream_t *LpelWorkerGetStream() {
+	lpel_stream_t *t;
+	workerctx_t *wc = LpelWorkerSelf();
+	if (wc == NULL) {
+		return NULL;
+	}
+
+	t = wc->free_stream;
+	if (t) {
+		wc->free_stream = t->next;
+		t->next = NULL;
+		assert(t->cons_sd == NULL && t->prod_sd == NULL);
+	}
+	return t;
+}
+
+void LpelWorkerPutSd(workerctx_t *wc, lpel_stream_desc_t *sd) {
+	if (wc->free_sd == NULL) {
+		wc->free_sd = sd;
+		sd->next = NULL;
+	} else {
+		sd->next = wc->free_sd;
+		wc->free_sd = sd;
+	}
+}
+
+lpel_stream_desc_t *LpelWorkerGetSd(workerctx_t *wc) {
+	lpel_stream_desc_t *t = wc->free_sd;
+	if (t != NULL) {
+		if (t->task == NULL && t->stream == NULL) {
+			wc->free_sd = t->next;
+			t->next = NULL;
+			return t;
+		} else {
+			lpel_stream_desc_t *prev = t;
+			t = t->next;
+			while (t != NULL) {
+				if (t->task == NULL && t->stream == NULL) {
+					prev->next = t->next;
+					t->next = NULL;
+					return t;
+				}
+				prev = t;
+				t = t->next;
+			}
+		}
+	}
+	return NULL;
+}
+
+void LpelWorkerDestroyStream(workerctx_t *wc) {
+	lpel_stream_t *head = wc->free_stream;
+	lpel_stream_t *t;
+	while (head != NULL) {
+		t = head->next;
+		LpelStreamDestroy(head);
+		head = t;
+	}
+}
+
+void LpelWorkerDestroySd(workerctx_t *wc) {
+	lpel_stream_desc_t *head = wc->free_sd;
+	lpel_stream_desc_t *t;
+	while (head != NULL) {
+		t = head->next;
+		free(head);
+		head = t;
+	}
+}

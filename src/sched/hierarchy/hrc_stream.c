@@ -8,53 +8,10 @@
 
 #include "arch/atomic.h"
 #include "lpelcfg.h"
-#include "buffer.h"
 #include "hrc_task.h"
 #include "hrc_worker.h"
 #include "hrc_stream.h"
 #include "lpel/monitor.h"
-
-
-/** Macros for lock handling */
-
-#ifdef STREAM_POLL_SPINLOCK
-
-#define PRODLOCK_TYPE       pthread_spinlock_t
-#define PRODLOCK_INIT(x)    pthread_spin_init(x, PTHREAD_PROCESS_PRIVATE)
-#define PRODLOCK_DESTROY(x) pthread_spin_destroy(x)
-#define PRODLOCK_LOCK(x)    pthread_spin_lock(x)
-#define PRODLOCK_UNLOCK(x)  pthread_spin_unlock(x)
-
-#else
-
-#define PRODLOCK_TYPE       pthread_mutex_t
-#define PRODLOCK_INIT(x)    pthread_mutex_init(x, NULL)
-#define PRODLOCK_DESTROY(x) pthread_mutex_destroy(x)
-#define PRODLOCK_LOCK(x)    pthread_mutex_lock(x)
-#define PRODLOCK_UNLOCK(x)  pthread_mutex_unlock(x)
-
-#endif /* STREAM_POLL_SPINLOCK */
-
-
-
-
-
-/**
- * A stream which is shared between a
- * (single) producer and a (single) consumer.
- */
-struct lpel_stream_t {
-  buffer_t *buffer;          /** buffer holding the actual data */
-  unsigned int uid;         /** unique sequence number */
-  PRODLOCK_TYPE prod_lock;  /** to support polling a lock is needed */
-  int is_poll;              /** indicates if a consumer polls this stream,
-                                is_poll is protected by the prod_lock */
-  lpel_stream_desc_t *prod_sd;   /** points to the sd of the producer */
-  lpel_stream_desc_t *cons_sd;   /** points to the sd of the consumer */
-  atomic_int n_sem;           /** counter for elements in the stream */
-  atomic_int e_sem;           /** counter for empty space in the stream */
-  void *usr_data;           /** arbitrary user data */
-};
 
 static atomic_int stream_seq = ATOMIC_VAR_INIT(0);
 
@@ -73,10 +30,14 @@ lpel_stream_t *LpelStreamCreate(int size)
   if (0==size) size = STREAM_BUFFER_SIZE;
 
   /* allocate memory for both the stream struct and the buffer area */
-  lpel_stream_t *s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
+  lpel_stream_t *s;
+  s = LpelWorkerGetStream();
+  if (s == NULL) {
+  	s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
+  	LpelBufferInit( &s->buffer, size);
+  }
 
-  /* reset buffer (including buffer area) */
-  s->buffer = LpelBufferInit(size);
+  assert(LpelBufferCount(&s->buffer) == 0);
 
   s->uid = atomic_fetch_add( &stream_seq, 1);
   PRODLOCK_INIT( &s->prod_lock );
@@ -103,7 +64,7 @@ void LpelStreamDestroy( lpel_stream_t *s)
   PRODLOCK_DESTROY( &s->prod_lock);
   atomic_destroy( &s->n_sem);
   atomic_destroy( &s->e_sem);
-  LpelBufferCleanup( s->buffer);
+  LpelBufferCleanup( &s->buffer);
   free( s);
 }
 
@@ -142,7 +103,9 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   lpel_task_t *ct = LpelTaskSelf();
 
   assert( mode == 'r' || mode == 'w' );
-  sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
+  sd = LpelWorkerGetSd(ct->worker_context);
+  if (sd == NULL)
+   	sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
   sd->task = ct;
   sd->stream = s;
   sd->mode = mode;
@@ -186,18 +149,20 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
   }
 #endif
 
-  PRODLOCK_LOCK( &sd->stream->prod_lock);
-  	if (sd->mode == 'r')
-  		sd->stream->cons_sd = NULL;
-    else if (sd->mode == 'w')
-  		sd->stream->prod_sd = NULL;
-  PRODLOCK_UNLOCK( &sd->stream->prod_lock);
-  LpelTaskRemoveStream(sd->task, sd, sd->mode);
-
+  workerctx_t *wc = sd->task->worker_context;
   if (destroy_s) {
-    LpelStreamDestroy( sd->stream);
+  	assert(sd->mode == 'r');
+  	lpel_stream_t *s = sd->stream;
+  	assert(LpelBufferIsEmpty(&s->buffer));
+  	s->prod_sd->stream = NULL;
+  	s->prod_sd = NULL;
+  	s->cons_sd = NULL;
+  	LpelWorkerPutStream(wc, sd->stream);
+  	sd->stream = NULL;
   }
-  free(sd);
+  LpelTaskRemoveStream(sd->task, sd, sd->mode);
+  sd->task = NULL;
+  LpelWorkerPutSd(wc, sd);
 }
 
 
@@ -212,13 +177,19 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
 void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
 {
   assert( sd->mode == 'r');
-  /* destroy old stream */
-  LpelStreamDestroy( sd->stream);
-  /* assign new stream */
-  sd->stream = snew;
-  /* new consumer sd of stream */
-  sd->stream->cons_sd = sd;
+  /* free the old stream */
+  workerctx_t *wc = sd->task->worker_context;
+  lpel_stream_t *s = sd->stream;
+  s->prod_sd->stream = NULL;
+  s->prod_sd = NULL;
+  s->cons_sd = NULL;
+  LpelWorkerPutStream(wc, sd->stream);
 
+  /* assign new stream */
+  lpel_stream_desc_t *old_cons = snew->cons_sd;
+  old_cons->stream = NULL;
+  snew->cons_sd = sd;
+  sd->stream = snew;
 
   /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -252,7 +223,7 @@ lpel_stream_t *LpelStreamGet(lpel_stream_desc_t *sd)
 void *LpelStreamPeek( lpel_stream_desc_t *sd)
 {
   assert( sd->mode == 'r');
-  return LpelBufferTop( sd->stream->buffer);
+  return LpelBufferTop( &sd->stream->buffer);
 }
 
 
@@ -299,10 +270,10 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
 
 
   /* read the top element */
-  item = LpelBufferTop( sd->stream->buffer);
+  item = LpelBufferTop( &sd->stream->buffer);
   assert( item != NULL);
   /* pop off the top element */
-  LpelBufferPop( sd->stream->buffer);
+  LpelBufferPop( &sd->stream->buffer);
 
 #ifdef _USE_BOUNDED_BUFFER_
   /* quasi V(e_sem) */
@@ -382,9 +353,9 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   PRODLOCK_LOCK( &sd->stream->prod_lock);
   {
     /* there must be space now in buffer */
-    assert( LpelBufferIsSpace( sd->stream->buffer) );
+    assert( LpelBufferIsSpace( &sd->stream->buffer) );
     /* put item into buffer */
-    LpelBufferPut( sd->stream->buffer, item);
+    LpelBufferPut( &sd->stream->buffer, item);
 
     if ( sd->stream->is_poll) {
       /* get consumer's poll token */
@@ -447,7 +418,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
  */
 int LpelStreamTryWrite( lpel_stream_desc_t *sd, void *item)
 {
-  if (!LpelBufferIsSpace(sd->stream->buffer)) {
+  if (!LpelBufferIsSpace(&sd->stream->buffer)) {
     return -1;
   }
   LpelStreamWrite( sd, item );
@@ -487,7 +458,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   while( LpelStreamIterHasNext( iter)) {
     lpel_stream_desc_t *sd = LpelStreamIterNext( iter);
     lpel_stream_t *s = sd->stream;
-    if ( LpelBufferTop( s->buffer) != NULL) {
+    if ( LpelBufferTop( &s->buffer) != NULL) {
       LpelStreamIterDestroy(iter);
       *set = sd;
       return sd;
@@ -507,7 +478,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
     PRODLOCK_LOCK( &s->prod_lock);
     { /* CS BEGIN */
       /* check if there is something in the buffer */
-      if ( LpelBufferTop( s->buffer) != NULL) {
+      if ( LpelBufferTop( &s->buffer) != NULL) {
         /* yes, we can stop iterating through streams.
          * determine, if we have been woken up by another producer:
          */
@@ -576,7 +547,7 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
 int LpelStreamFillLevel(lpel_stream_t *s) {
 	int n;
 	PRODLOCK_LOCK( &s->prod_lock);
-	n = LpelBufferCount(s->buffer);
+	n = LpelBufferCount(&s->buffer);
 	PRODLOCK_UNLOCK( &s->prod_lock);
 	return n;
 }

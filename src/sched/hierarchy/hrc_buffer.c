@@ -9,20 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "buffer.h"
-
-
-typedef struct entry entry;
-struct entry {
-	void *data;
-	entry *next;
-};
-
-struct buffer_t{
-	entry *head;
-	entry *tail;
-	int count;
-};
+#include "hrc_buffer.h"
 
 static entry *createEntry(void *data) {
   entry *e = (entry *) malloc(sizeof(entry));
@@ -38,13 +25,11 @@ static entry *createEntry(void *data) {
  * @param buf   pointer to buffer struct
  * @param size	unused (declared for same protocol with bounded buffer)
  */
-buffer_t *LpelBufferInit(unsigned int size)
+void LpelBufferInit(buffer_t *buf, unsigned int size)
 {
-	buffer_t *buf = (buffer_t *) malloc(sizeof(buffer_t));
   buf->head = createEntry(NULL);
   buf->tail = buf->head;
   buf->count = 0;
-  return buf;
 }
 
 /**
@@ -56,7 +41,6 @@ buffer_t *LpelBufferInit(unsigned int size)
 void  LpelBufferCleanup(buffer_t *buf)
 {
 	 free(buf->head);
-	 free(buf);
 }
 
 

@@ -35,6 +35,8 @@ typedef struct workerctx_t {
   mon_worker_t *mon;
   mailbox_t    *mailbox;
   char          padding[64];
+  lpel_stream_t *free_stream;
+  lpel_stream_desc_t *free_sd;
 } workerctx_t;
 
 
@@ -61,5 +63,21 @@ void LpelWorkerTaskBlock(lpel_task_t *t);
 void LpelWorkerRunTask( lpel_task_t *t);
 
 void LpelWorkerBroadcast(workermsg_t *msg);
+
+
+
+/* put and get free stream */
+void LpelWorkerPutStream(workerctx_t *wc, lpel_stream_t *s);
+lpel_stream_t *LpelWorkerGetStream();
+
+/* put and get free stream desc*/
+void LpelWorkerPutSd(workerctx_t *wc, lpel_stream_desc_t *s);
+lpel_stream_desc_t *LpelWorkerGetSd(workerctx_t *wc);
+
+/* destroy list of free stream and stream desc when terminate worker */
+void LpelWorkerDestroyStream(workerctx_t *wc);
+void LpelWorkerDestroySd(workerctx_t *wc);
+
+
 
 #endif /* _HRC_WORKER_H_ */

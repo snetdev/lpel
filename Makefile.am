@@ -9,7 +9,6 @@ liblpel_la_SOURCES = \
 	src/lpelcfg.c \
 	src/lpel_main.c \
 	src/lpel_hwloc.c \
-	src/buffer/bounded.c \
 	src/sched/decentralised/sema.c \
 	src/sched/decentralised/decen_scheduler.c \
 	src/sched/decentralised/decen_scheduler.h \
@@ -24,7 +23,9 @@ liblpel_la_SOURCES = \
 	src/sched/decentralised/decen_taskqueue.c \
 	src/sched/decentralised/decen_taskqueue.h \
 	src/sched/decentralised/decen_stream.c \
-	src/sched/decentralised/decen_stream.h 
+	src/sched/decentralised/decen_stream.h \ 
+	src/sched/decentralised/decen_buffer.c \
+	src/sched/decentralised/decen_buffer.h 
 
 liblpel_la_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/src/include
 
@@ -35,7 +36,6 @@ liblpel_hrc_la_SOURCES = \
 	src/lpelcfg.c \
 	src/lpel_main.c \
 	src/lpel_hwloc.c \
-	src/buffer/unbounded_ll.c \
 	src/sched/hierarchy/hrc_task.c \
 	src/sched/hierarchy/hrc_task.h \
 	src/sched/hierarchy/hrc_worker.c \
@@ -45,7 +45,9 @@ liblpel_hrc_la_SOURCES = \
 	src/sched/hierarchy/taskpriority.h \
 	src/sched/hierarchy/taskpriority.c \
 	src/sched/hierarchy/hrc_stream.c \
-	src/sched/hierarchy/hrc_stream.h
+	src/sched/hierarchy/hrc_stream.h \
+	src/sched/hierarchy/hrc_buffer.c \
+	src/sched/hierarchy/hrc_buffer.h
 
 
 liblpel_hrc_la_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/src/include

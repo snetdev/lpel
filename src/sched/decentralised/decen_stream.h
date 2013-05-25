@@ -3,7 +3,7 @@
 
 #include <pthread.h>
 #include <lpel.h>
-#include "buffer.h"
+#include "decen_buffer.h"
 #include "decen_task.h"
 #include "lpel_main.h"
 
@@ -12,36 +12,13 @@
 #define  STREAM_BUFFER_SIZE 16
 #endif
 
-//#define STREAM_POLL_SPINLOCK
-
-/** Macros for lock handling */
-
-#ifdef STREAM_POLL_SPINLOCK
-
-#define PRODLOCK_TYPE       pthread_spinlock_t
-#define PRODLOCK_INIT(x)    pthread_spin_init(x, PTHREAD_PROCESS_PRIVATE)
-#define PRODLOCK_DESTROY(x) pthread_spin_destroy(x)
-#define PRODLOCK_LOCK(x)    pthread_spin_lock(x)
-#define PRODLOCK_UNLOCK(x)  pthread_spin_unlock(x)
-
-#else
-
-#define PRODLOCK_TYPE       pthread_mutex_t
-#define PRODLOCK_INIT(x)    pthread_mutex_init(x, NULL)
-#define PRODLOCK_DESTROY(x) pthread_mutex_destroy(x)
-#define PRODLOCK_LOCK(x)    pthread_mutex_lock(x)
-#define PRODLOCK_UNLOCK(x)  pthread_mutex_unlock(x)
-
-#endif /* STREAM_POLL_SPINLOCK */
-
-
 
 /**
  * A stream which is shared between a
  * (single) producer and a (single) consumer.
  */
 struct lpel_stream_t {
-  buffer_t *buffer;          /** buffer holding the actual data */
+  buffer_t buffer;          /** buffer holding the actual data */
   unsigned int uid;         /** unique sequence number */
   PRODLOCK_TYPE prod_lock;  /** to support polling a lock is needed */
   int is_poll;              /** indicates if a consumer polls this stream,
