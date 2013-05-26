@@ -10,6 +10,13 @@
 #define  STREAM_BUFFER_SIZE 16
 #endif
 
+typedef enum {
+	LPEL_STREAM_ENTRY,
+	LPEL_STREAM_EXIT,
+	LPEL_STREAM_MIDDLE
+} lpel_stream_type;
+
+
 /**
  * A stream which is shared between a
  * (single) producer and a (single) consumer.
@@ -26,6 +33,7 @@ struct lpel_stream_t {
   atomic_int e_sem;           /** counter for empty space in the stream */
   void *usr_data;           /** arbitrary user data */
   struct lpel_stream_t *next;	/* to organize stream in the free list */
+  lpel_stream_type type;
 };
 
 

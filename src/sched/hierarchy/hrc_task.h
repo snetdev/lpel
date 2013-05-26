@@ -70,10 +70,10 @@ struct lpel_task_t {
 };
 
 
-void LpelTaskDestroy( lpel_task_t *t);
-void LpelTaskBlockStream( lpel_task_t *ct);
-void LpelTaskUnblock( lpel_task_t *t);
-
+void LpelTaskDestroy(lpel_task_t *t);
+void LpelTaskBlockStream(lpel_task_t *ct);
+void LpelTaskUnblock(lpel_task_t *t);
+int LpelTaskIsWrapper(lpel_task_t *);
 
 /******* DYNAMIC PRIORITY BASED ON THE STREAM FILL LEVEL ***********/
 /**
@@ -84,8 +84,8 @@ void LpelTaskCheckYield(lpel_task_t *t);
 
 void LpelTaskSetPrior(lpel_task_t *t, double p);
 
-void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
-void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode);
+void LpelTaskAddStream(lpel_task_t *t, lpel_stream_desc_t *des, char mode);
+void LpelTaskRemoveStream(lpel_task_t *t, lpel_stream_desc_t *des, char mode);
 double LpelTaskCalPriority(lpel_task_t *t);
 
 

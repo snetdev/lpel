@@ -47,6 +47,8 @@ lpel_stream_t *LpelStreamCreate(int size)
   s->prod_sd = NULL;
   s->cons_sd = NULL;
   s->usr_data = NULL;
+  s->type = LPEL_STREAM_MIDDLE;
+  s->next = NULL;
   return s;
 }
 
@@ -128,6 +130,10 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
     case 'r': s->cons_sd = sd; break;
     case 'w': s->prod_sd = sd; break;
   }
+
+  /* set entry/exit stream */
+  if (LpelTaskIsWrapper(ct))
+  	s->type = (mode == 'r' ? LPEL_STREAM_EXIT : LPEL_STREAM_ENTRY);
 
   LpelTaskAddStream(ct, sd, mode);
 
@@ -275,23 +281,24 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
   /* pop off the top element */
   LpelBufferPop( &sd->stream->buffer);
 
-#ifdef _USE_BOUNDED_BUFFER_
-  /* quasi V(e_sem) */
-  if ( atomic_fetch_add( &sd->stream->e_sem, 1) < 0) {
-    /* e_sem was -1 */
-    lpel_task_t *prod = sd->stream->prod_sd->task;
-    /* wakeup producer: make ready */
-    LpelTaskUnblock(prod);
+  /* only entry stream is bounded */
+  if (sd->stream->type == LPEL_STREAM_ENTRY) {
+  	/* quasi V(e_sem) */
+  	if ( atomic_fetch_add( &sd->stream->e_sem, 1) < 0) {
+  		/* e_sem was -1 */
+  		lpel_task_t *prod = sd->stream->prod_sd->task;
+  		/* wakeup producer: make ready */
+  		LpelTaskUnblock(prod);
 
-    /* MONITORING CALLBACK */
+  		/* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
-    if (sd->mon && MON_CB(stream_wakeup)) {
-      MON_CB(stream_wakeup)(sd->mon);
-    }
+  		if (sd->mon && MON_CB(stream_wakeup)) {
+  			MON_CB(stream_wakeup)(sd->mon);
+  		}
 #endif	/** USE_TASK_EVENT_LOGGING */
 
+  	}
   }
-#endif  /** _USE_BOUNDED_BUFFER */
 
 
   /* MONITORING CALLBACK */
@@ -333,21 +340,22 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   }
 #endif
 
-#ifdef _USE_BOUNDED_BUFFER_
-  /* quasi P(e_sem) */
-  if ( atomic_fetch_add( &sd->stream->e_sem, 1)== 0) {
+  /* only entry stream is bounded */
+  if (sd->stream->type == LPEL_STREAM_ENTRY) {
+  	/* quasi P(e_sem) */
+  	if ( atomic_fetch_add( &sd->stream->e_sem, 1)== 0) {
 
-	/* MONITORING CALLBACK */
+  		/* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
-    if (sd->mon && MON_CB(stream_blockon)) {
-      MON_CB(stream_blockon)(sd->mon);
-    }
+  		if (sd->mon && MON_CB(stream_blockon)) {
+  			MON_CB(stream_blockon)(sd->mon);
+  		}
 #endif /** USE_TASK_EVENT_LOGGING */
 
-    /* wait on stream: */
-    LpelTaskBlockStream( self);
+  		/* wait on stream: */
+  		LpelTaskBlockStream( self);
+  	}
   }
-#endif /**  _USE_BOUNDED_BUFFER_ */
 
   /* writing to the buffer and checking if consumer polls must be atomic */
   PRODLOCK_LOCK( &sd->stream->prod_lock);

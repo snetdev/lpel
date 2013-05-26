@@ -382,12 +382,18 @@ void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 
 
 
-int countRec(stream_elem_t *list) {
+int countRec(stream_elem_t *list, char inout) {
 	if (list == NULL)
 		return -1;
 	int cnt = 0;
 	while (list != NULL) {
-		cnt += LpelStreamFillLevel(list->stream_desc->stream);
+		if (list->stream_desc->stream) {
+			if ((inout == 'i' && list->stream_desc->stream->type == LPEL_STREAM_ENTRY)
+					|| (inout == 'o' && list->stream_desc->stream->type == LPEL_STREAM_EXIT)) {
+				// if input stream is entry or output stream is exit --> not count
+			} else
+				cnt += LpelStreamFillLevel(list->stream_desc->stream);
+		}
 		list = list->next;
 	}
 	return cnt;
@@ -399,11 +405,11 @@ double LpelTaskCalPriority(lpel_task_t *t) {
 	if (t->sched_info.type == LPEL_ENTRY_TASK)
 		in = -1;
 	else
-		in = countRec(t->sched_info.in_streams);
+		in = countRec(t->sched_info.in_streams, 'i');
 	if (t->sched_info.type == LPEL_EXIT_TASK)
 		out = -1;
 	else
-		out = countRec(t->sched_info.out_streams);
+		out = countRec(t->sched_info.out_streams, 'o');
 	return prior_cal(in, out);
 //	return (in + 1.0)/((out + 1.0)*(in + out + 1.0));
 
@@ -456,3 +462,7 @@ void LpelTaskSetType(lpel_task_t *t, int type) {
 
 
 void LpelTaskCheckMigrate(void) {}
+
+int LpelTaskIsWrapper(lpel_task_t *t) {
+	return (t->worker_context->wid == -1);
+}
