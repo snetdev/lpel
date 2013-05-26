@@ -47,7 +47,6 @@ static pthread_key_t masterctx_key;
 
 
 static void cleanupMasterMb();
-static void CleanupTaskContext(workerctx_t *wc, lpel_task_t *t);
 
 /**
  * Initialise worker globally
@@ -341,6 +340,10 @@ static void MasterLoop( void)
 				}
 				break;
 
+			case TASK_ZOMBIE:
+				updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
+				LpelTaskDestroy(t);
+				break;
 			default:
 				assert(0);
 				break;
@@ -523,7 +526,6 @@ workerctx_t *LpelCreateWrapperContext(int wid) {
 	/* Wrapper is excluded from scheduling module */
 	wp->current_task = NULL;
 	wp->mon = NULL;
-	//wp->marked_del = NULL;
 
 	/* mailbox */
 	wp->mailbox = LpelMailboxCreate();
@@ -592,11 +594,12 @@ static void WorkerLoop( workerctx_t *wc)
   	  	mctx_switch(&wc->mctx, &t->mctx);
   	  	//task return here
   	  	assert(t->state != TASK_RUNNING);
-  	  	if (t->state != TASK_ZOMBIE) {
+//  	  	if (t->state != TASK_ZOMBIE) {
+  	  	wc->current_task = NULL;
   	  		t->worker_context = NULL;
   	  		returnTask(t);
-  	  	} else
-  	  		LpelTaskDestroy(t);		// if task finish, destroy it and not return to master
+//  	  	} else
+//  	  		LpelTaskDestroy(t);		// if task finish, destroy it and not return to master
   	  	break;
   	  case WORKER_MSG_TERMINATE:
   	  	wc->terminate = 1;
