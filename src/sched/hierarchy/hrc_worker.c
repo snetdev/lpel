@@ -210,6 +210,12 @@ static void cleanupMasterMb() {
 		switch(msg.type) {
 		case WORKER_MSG_REQUEST:
 			break;
+		case WORKER_MSG_RETURN:
+			t = msg.body.task;
+			PRT_DBG("master: get returned task %d\n", t->uid);
+	    assert(t->state == TASK_ZOMBIE);
+			LpelTaskDestroy(t);
+			break;
 		default:
 			assert(0);
 			break;

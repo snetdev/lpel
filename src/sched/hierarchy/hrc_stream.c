@@ -163,7 +163,7 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
   	s->prod_sd->stream = NULL;
   	s->prod_sd = NULL;
   	s->cons_sd = NULL;
-  	LpelWorkerPutStream(wc, sd->stream);
+  	LpelWorkerPutStream(wc, s);
   	sd->stream = NULL;
   }
   LpelTaskRemoveStream(sd->task, sd, sd->mode);
@@ -183,13 +183,16 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
 void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
 {
   assert( sd->mode == 'r');
-  /* free the old stream */
+
   workerctx_t *wc = sd->task->worker_context;
   lpel_stream_t *s = sd->stream;
+  snew->type = s->type;
+
+  /* free the old stream */
   s->prod_sd->stream = NULL;
   s->prod_sd = NULL;
   s->cons_sd = NULL;
-  LpelWorkerPutStream(wc, sd->stream);
+  LpelWorkerPutStream(wc, s);
 
   /* assign new stream */
   lpel_stream_desc_t *old_cons = snew->cons_sd;
@@ -411,6 +414,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   }
 #endif
 
+  LpelTaskCheckYield(self);
 }
 
 
