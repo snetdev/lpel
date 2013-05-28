@@ -29,7 +29,6 @@ void LpelBufferInit(buffer_t *buf, unsigned int size)
 {
   buf->head = createEntry(NULL);
   buf->tail = buf->head;
-  buf->count = 0;
 }
 
 /**
@@ -74,7 +73,6 @@ void LpelBufferPop( buffer_t *buf)
 	    return;
 	  entry *t = buf->head;
 	  buf->head = t->next;
-	  buf->count--;
 	  free(t);
 }
 
@@ -120,13 +118,9 @@ void LpelBufferPut( buffer_t *buf, void *item)
   WMB();
   buf->tail->next = createEntry(item);
   buf->tail = buf->tail->next;
-  buf->count++;
 }
 
 int LpelBufferIsEmpty(buffer_t *buf) {
 	return (buf->head->next == NULL);
 }
 
-int LpelBufferCount(buffer_t *buf){
-	return buf->count;
-}

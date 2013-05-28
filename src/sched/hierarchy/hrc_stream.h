@@ -34,6 +34,8 @@ struct lpel_stream_t {
   void *usr_data;           /** arbitrary user data */
   struct lpel_stream_t *next;	/* to organize stream in the free list */
   lpel_stream_type type;
+  int read_cnt;
+  int write_cnt;
 };
 
 

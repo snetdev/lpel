@@ -37,7 +37,7 @@ lpel_stream_t *LpelStreamCreate(int size)
   	LpelBufferInit( &s->buffer, size);
   }
 
-  assert(LpelBufferCount(&s->buffer) == 0);
+  assert(LpelBufferIsEmpty(&s->buffer));
 
   s->uid = atomic_fetch_add( &stream_seq, 1);
   PRODLOCK_INIT( &s->prod_lock );
@@ -49,6 +49,8 @@ lpel_stream_t *LpelStreamCreate(int size)
   s->usr_data = NULL;
   s->type = LPEL_STREAM_MIDDLE;
   s->next = NULL;
+  s->read_cnt = 0;
+  s->write_cnt = 0;
   return s;
 }
 
@@ -192,6 +194,7 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
   s->prod_sd->stream = NULL;
   s->prod_sd = NULL;
   s->cons_sd = NULL;
+  assert(LpelBufferIsEmpty(&s->buffer));
   LpelWorkerPutStream(wc, s);
 
   /* assign new stream */
@@ -252,10 +255,6 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
   lpel_task_t *self = sd->task;
   assert( sd->mode == 'r');
 
-  #ifdef _USE_UNBOUNDED_BUFFER_
-  LpelTaskCheckYield(self);
-	#endif
-
   /* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
   if (sd->mon && MON_CB(stream_readprepare)) {
@@ -310,7 +309,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
     MON_CB(stream_readfinish)(sd->mon, item);
   }
 #endif
-
+  sd->stream->read_cnt++;
   return item;
 }
 
@@ -413,7 +412,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     MON_CB(stream_writefinish)(sd->mon);
   }
 #endif
-
+  sd->stream->write_cnt++;
   LpelTaskCheckYield(self);
 }
 
@@ -557,14 +556,14 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
 
 
 int LpelStreamFillLevel(lpel_stream_t *s) {
-	int n;
-	PRODLOCK_LOCK( &s->prod_lock);
-	n = LpelBufferCount(&s->buffer);
-	PRODLOCK_UNLOCK( &s->prod_lock);
-	return n;
+	if (s == NULL)
+		return 0;
+	return (s->write_cnt - s->read_cnt);
 }
 
 lpel_task_t *LpelStreamConsumer(lpel_stream_t *s) {
+	if (s == NULL)
+		return NULL;
 	if (s->cons_sd != NULL)
 		return s->cons_sd->task;
 	else
@@ -572,14 +571,12 @@ lpel_task_t *LpelStreamConsumer(lpel_stream_t *s) {
 }
 
 lpel_task_t *LpelStreamProducer(lpel_stream_t *s) {
-	lpel_task_t *t;
-	PRODLOCK_LOCK( &s->prod_lock);
+	if (s == NULL)
+		return NULL;
 	if (s->prod_sd != NULL)
-		t = s->prod_sd->task;
+		return s->prod_sd->task;
 	else
-		t = NULL;
-	PRODLOCK_UNLOCK( &s->prod_lock);
-	return t;
+		return NULL;
 }
 
 int LpelStreamGetId ( lpel_stream_desc_t *sd){
