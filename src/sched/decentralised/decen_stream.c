@@ -12,6 +12,13 @@
 #include "decen_stream.h"
 #include "lpel/monitor.h"
 
+//#define _USE_STREAM_DBG__
+
+#ifdef _USE_STREAM_DBG__
+#define STREAM_DBG printf
+#else
+#define STREAM_DBG	//
+#endif
 
 static atomic_int stream_seq = ATOMIC_VAR_INIT(0);
 

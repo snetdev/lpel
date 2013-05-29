@@ -13,6 +13,15 @@
 #include "hrc_stream.h"
 #include "lpel/monitor.h"
 
+
+//#define _USE_STREAM_DBG__
+
+#ifdef _USE_STREAM_DBG__
+#define STREAM_DBG printf
+#else
+#define STREAM_DBG	//
+#endif
+
 static atomic_int stream_seq = ATOMIC_VAR_INIT(0);
 
 
@@ -137,6 +146,7 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   if (LpelTaskIsWrapper(ct))
   	s->type = (mode == 'r' ? LPEL_STREAM_EXIT : LPEL_STREAM_ENTRY);
 
+  STREAM_DBG("task %d open stream %d, mode %c\n", ct->uid, s->uid, mode);
   LpelTaskAddStream(ct, sd, mode);
 
   return sd;
@@ -157,8 +167,10 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
   }
 #endif
 
+  STREAM_DBG("task %d close one stream, mode %c\n", sd->task->uid, sd->mode);
   workerctx_t *wc = sd->task->worker_context;
   if (destroy_s) {
+  	STREAM_DBG("task %d destroy stream %d, mode %c\n", sd->task->uid, sd->stream->uid, sd->mode);
   	assert(sd->mode == 'r');
   	lpel_stream_t *s = sd->stream;
   	assert(LpelBufferIsEmpty(&s->buffer));
@@ -185,6 +197,7 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
 void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
 {
   assert( sd->mode == 'r');
+  STREAM_DBG("task %d replace stream %d by stream %d, mode %c\n", sd->task->uid, sd->stream->uid, snew->uid, sd->mode);
 
   workerctx_t *wc = sd->task->worker_context;
   lpel_stream_t *s = sd->stream;

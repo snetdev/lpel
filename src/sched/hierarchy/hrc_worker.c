@@ -25,6 +25,14 @@
 #define WORKER_PTR(i) (workers[(i)])
 #define MASTER_PTR	master
 
+//#define _USE_WORKER_DBG__
+
+#ifdef _USE_WORKER_DBG__
+#define WORKER_DBG printf
+#else
+#define WORKER_DBG	//
+#endif
+
 static void *WorkerThread( void *arg);
 static void *MasterThread( void *arg);
 static void *WrapperThread( void *arg);
@@ -212,7 +220,7 @@ static void cleanupMasterMb() {
 			break;
 		case WORKER_MSG_RETURN:
 			t = msg.body.task;
-			PRT_DBG("master: get returned task %d\n", t->uid);
+			WORKER_DBG("master: get returned task %d\n", t->uid);
 	    assert(t->state == TASK_ZOMBIE);
 			LpelTaskDestroy(t);
 			break;
@@ -232,7 +240,7 @@ static void returnTask( lpel_task_t *t) {
 
 
 static void requestTask( workerctx_t *wc) {
-	PRT_DBG("worker %d: request task\n", wc->wid);
+	WORKER_DBG("worker %d: request task\n", wc->wid);
 	workermsg_t msg;
 	msg.type = WORKER_MSG_REQUEST;
 	msg.body.from_worker = wc->wid;
@@ -270,7 +278,7 @@ static int servePendingReq( lpel_task_t *t) {
 	for (i = 0; i < num_workers; i++){
 		if (waitworkers[i] == 1) {
 			waitworkers[i] = 0;
-			PRT_DBG("master: send task %d to worker %d\n", t->uid, i);
+			WORKER_DBG("master: send task %d to worker %d\n", t->uid, i);
 			sendTask(i, t);
 			return i;
 		}
@@ -307,7 +315,7 @@ static void updatePriorityNeigh( taskqueue_t *tq, lpel_task_t *t) {
 
 static void MasterLoop( void)
 {
-	PRT_DBG("start master\n");
+	WORKER_DBG("start master\n");
 	do {
 		workermsg_t msg;
 
@@ -320,7 +328,7 @@ static void MasterLoop( void)
 			t = msg.body.task;
 			assert (t->state == TASK_CREATED);
 			t->state = TASK_READY;
-			PRT_DBG("master: get task %d\n", t->uid);
+			WORKER_DBG("master: get task %d\n", t->uid);
 			if (servePendingReq(t) < 0) {		// no pending request
 				t->sched_info.prior = LpelTaskCalPriority(t);	//update new prior before add to the queue
 				t->state = TASK_INQUEUE;
@@ -330,7 +338,7 @@ static void MasterLoop( void)
 
 		case WORKER_MSG_RETURN:
 			t = msg.body.task;
-			PRT_DBG("master: get returned task %d\n", t->uid);
+			WORKER_DBG("master: get returned task %d\n", t->uid);
 			switch(t->state) {
 			case TASK_BLOCKED:
 				t->state = TASK_RETURNED;
@@ -359,11 +367,11 @@ static void MasterLoop( void)
 		case WORKER_MSG_WAKEUP:
 			t = msg.body.task;
 			if (t->state != TASK_RETURNED) {		// task has not been returned yet
-				PRT_DBG("master: put message back\n");
+				WORKER_DBG("master: put message back\n");
 				LpelMailboxSend(MASTER_PTR->mailbox, &msg);		//task is not blocked yet (the other worker is a bit slow, put back to the mailbox for processing later
 				break;
 			}
-			PRT_DBG("master: unblock task %d\n", t->uid);
+			WORKER_DBG("master: unblock task %d\n", t->uid);
 			assert (t->state == TASK_RETURNED);
 			t->state = TASK_READY;
 			if (servePendingReq(t) < 0) {		// no pending request
@@ -375,7 +383,7 @@ static void MasterLoop( void)
 
 		case WORKER_MSG_REQUEST:
 			wid = msg.body.from_worker;
-			PRT_DBG("master: request task from worker %d\n", wid);
+			WORKER_DBG("master: request task from worker %d\n", wid);
 			t = LpelTaskqueuePeek(MASTER_PTR->ready_tasks);
 			if (t == NULL) {
 				waitworkers[wid] = 1;
@@ -454,7 +462,7 @@ static void WrapperLoop( workerctx_t *wp)
 			switch(msg.type) {
 			case WORKER_MSG_ASSIGN:
 				t = msg.body.task;
-				PRT_DBG("wrapper: get task %d\n", t->uid);
+				WORKER_DBG("wrapper: get task %d\n", t->uid);
 				assert(t->state == TASK_CREATED);
 				t->state = TASK_READY;
 				wp->current_task = t;
@@ -474,7 +482,7 @@ static void WrapperLoop( workerctx_t *wp)
 
 			case WORKER_MSG_WAKEUP:
 				t = msg.body.task;
-				PRT_DBG("wrapper: unblock task %d\n", t->uid);
+				WORKER_DBG("wrapper: unblock task %d\n", t->uid);
 				assert (t->state == TASK_BLOCKED);
 				t->state = TASK_READY;
 				wp->current_task = t;
@@ -572,7 +580,7 @@ void LpelWorkerBroadcast(workermsg_t *msg)
 
 static void WorkerLoop( workerctx_t *wc)
 {
-	PRT_DBG("start worker %d\n", wc->wid);
+	WORKER_DBG("start worker %d\n", wc->wid);
 
   lpel_task_t *t = NULL;
   requestTask( wc);		// ask for the first time
@@ -584,7 +592,7 @@ static void WorkerLoop( workerctx_t *wc)
   	  switch( msg.type) {
   	  case WORKER_MSG_ASSIGN:
   	  	t = msg.body.task;
-  	  	PRT_DBG("worker %d: get task %d\n", wc->wid, t->uid);
+  	  	WORKER_DBG("worker %d: get task %d\n", wc->wid, t->uid);
   	  	assert(t->state == TASK_READY);
   	  	t->worker_context = wc;
   	  	wc->current_task = t;
@@ -683,7 +691,7 @@ lpel_task_t *LpelWorkerCurrentTask(void)
 
 void LpelWorkerTaskExit(lpel_task_t *t) {
 	workerctx_t *wc = t->worker_context;
-	PRT_DBG("worker %d: task %d exit\n", wc->wid, t->uid);
+	WORKER_DBG("worker %d: task %d exit\n", wc->wid, t->uid);
 	if (wc->wid >= 0) {
 		requestTask(wc);	// FIXME: should have requested before
 		wc->current_task = NULL;
@@ -700,7 +708,7 @@ void LpelWorkerTaskBlock(lpel_task_t *t){
 	if (wc->wid < 0) {	//wrapper
 			wc->current_task = NULL;
 	} else {
-		PRT_DBG("worker %d: block task %d\n", wc->wid, t->uid);
+		WORKER_DBG("worker %d: block task %d\n", wc->wid, t->uid);
 		//sendUpdatePrior(t);		//update prior for neighbor
 		requestTask(wc);
 	}
@@ -711,12 +719,12 @@ void LpelWorkerTaskBlock(lpel_task_t *t){
 void LpelWorkerTaskYield(lpel_task_t *t){
 	workerctx_t *wc = t->worker_context;
 	if (wc->wid < 0) {	//wrapper
-			PRT_DBG("wrapper: task %d yields\n");
+			WORKER_DBG("wrapper: task %d yields\n");
 	}
 	else {
 		//sendUpdatePrior(t);		//update prior for neighbor
 		requestTask(wc);
-		PRT_DBG("worker %d: return task %d\n", wc->wid, t->uid);
+		WORKER_DBG("worker %d: return task %d\n", wc->wid, t->uid);
 		wc->current_task = NULL;
 	}
 	mctx_switch( &t->mctx, &wc->mctx);		// switch back to the worker/wrapper
@@ -724,7 +732,7 @@ void LpelWorkerTaskYield(lpel_task_t *t){
 
 void LpelWorkerTaskWakeup( lpel_task_t *t) {
 	workerctx_t *wc = t->worker_context;
-	PRT_DBG("worker %d: send wake up task %d\n", LpelWorkerSelf()->wid, t->uid);
+	WORKER_DBG("worker %d: send wake up task %d\n", LpelWorkerSelf()->wid, t->uid);
 	if (wc == NULL)
 		sendWakeup(MASTER_PTR->mailbox, t);
 	else {
