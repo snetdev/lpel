@@ -38,11 +38,10 @@ lpel_stream_t *LpelStreamCreate(int size)
   assert( size >= 0);
   if (0==size) size = STREAM_BUFFER_SIZE;
 
-  /* allocate memory for both the stream struct and the buffer area */
   lpel_stream_t *s;
-  s = LpelWorkerGetStream();
+  s = LpelWorkerGetStream();		// try to get from the free list first
   if (s == NULL) {
-  	s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );
+  	s = (lpel_stream_t *) malloc( sizeof(lpel_stream_t) );		// allocate if fail
   	LpelBufferInit( &s->buffer, size);
   }
 
@@ -116,7 +115,7 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   lpel_task_t *ct = LpelTaskSelf();
 
   assert( mode == 'r' || mode == 'w' );
-  sd = LpelWorkerGetSd(ct->worker_context);
+  sd = LpelWorkerGetSd(ct->worker_context);			// try to get from the free list
   if (sd == NULL)
    	sd = (lpel_stream_desc_t *) malloc( sizeof( lpel_stream_desc_t));
   sd->task = ct;
@@ -174,15 +173,17 @@ void LpelStreamClose( lpel_stream_desc_t *sd, int destroy_s)
   	assert(sd->mode == 'r');
   	lpel_stream_t *s = sd->stream;
   	assert(LpelBufferIsEmpty(&s->buffer));
-  	s->prod_sd->stream = NULL;
-  	s->prod_sd = NULL;
-  	s->cons_sd = NULL;
-  	LpelWorkerPutStream(wc, s);
+
+  	/* free the stream structure */
+  	s->prod_sd->stream = NULL;			// unset the stream pointer of producer
+  	s->prod_sd = NULL;							// unset producer
+  	s->cons_sd = NULL;							// unset consumer
+  	LpelWorkerPutStream(wc, s);				// put back to worker's free list
   	sd->stream = NULL;
   }
   LpelTaskRemoveStream(sd->task, sd, sd->mode);
-  sd->task = NULL;
-  LpelWorkerPutSd(wc, sd);
+  sd->task = NULL;								// unset only the pointer to task
+  LpelWorkerPutSd(wc, sd);				// put back to worker's free list
 }
 
 
@@ -212,7 +213,7 @@ void LpelStreamReplace( lpel_stream_desc_t *sd, lpel_stream_t *snew)
 
   /* assign new stream */
   lpel_stream_desc_t *old_cons = snew->cons_sd;
-  old_cons->stream = NULL;
+  old_cons->stream = NULL;			// unset the stream pointer of the old consumer
   snew->cons_sd = sd;
   sd->stream = snew;
 
@@ -358,7 +359,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   /* only entry stream is bounded */
   if (sd->stream->type == LPEL_STREAM_ENTRY) {
   	/* quasi P(e_sem) */
-  	if ( atomic_fetch_add( &sd->stream->e_sem, 1)== 0) {
+  	if ( atomic_fetch_sub( &sd->stream->e_sem, 1)== 0) {
 
   		/* MONITORING CALLBACK */
 #ifdef USE_TASK_EVENT_LOGGING
@@ -567,7 +568,11 @@ lpel_stream_desc_t *LpelStreamPoll( lpel_streamset_t *set)
   return self->wakeup_sd;
 }
 
-
+/*
+ * get stream level
+ * Assumption: MAX_INT as the maximum value of counter
+ * 						 in case of large number of message, use modulo MAX_INT to get the correct number
+ */
 int LpelStreamFillLevel(lpel_stream_t *s) {
 	if (s == NULL)
 		return 0;

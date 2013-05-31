@@ -35,13 +35,15 @@
 #endif
 
 /****************** WORKER/WRAPPER/MASTER THREAD **********************************/
-static void *WorkerThread( void *arg);
-static void *MasterThread( void *arg);
-static void *WrapperThread( void *arg);
+static void *WorkerThread(void *arg);
+static void *MasterThread(void *arg);
+static void *WrapperThread(void *arg);
 
 /******************* PRIVATE FUNCTIONS *****************************/
 static void cleanupMasterMb();
-static void cleanUpFreeWrappers();
+static void cleanupFreeWrappers();
+static void addFreeWrapper(workerctx_t *wp);
+static workerctx_t *getFreeWrapper();
 
 /******************************************************************************/
 static int num_workers = -1;
@@ -65,7 +67,7 @@ static pthread_key_t workerctx_key;
  *
  * @param size    size of the worker set, i.e., the total number of workers including master
  */
-void LpelWorkersInit( int size) {
+void LpelWorkersInit(int size) {
 
 	int i;
 	assert(0 <= size);
@@ -84,17 +86,17 @@ void LpelWorkersInit( int size) {
 #endif /* HAVE___THREAD */
 
 	/* allocate worker context table */
-	workers = (workerctx_t **) malloc( num_workers * sizeof(workerctx_t*) );
+	workers = (workerctx_t **) malloc(num_workers * sizeof(workerctx_t*) );
 	/* allocate waiting table */
 	waitworkers = (int *) malloc(num_workers * sizeof(int));
 	/* allocate worker contexts */
 	for (i=0; i<num_workers; i++) {
-		workers[i] = (workerctx_t *) malloc( sizeof(workerctx_t) );
+		workers[i] = (workerctx_t *) malloc(sizeof(workerctx_t) );
 		waitworkers[i] = 0;
 	}
 
 	/* prepare data structures */
-	for( i=0; i<num_workers; i++) {
+	for(i=0; i<num_workers; i++) {
 		workerctx_t *wc = WORKER_PTR(i);
 		wc->wid = i;
 
@@ -122,17 +124,17 @@ void LpelWorkersInit( int size) {
 /*
  * clean up for both worker and master
  */
-void LpelWorkersCleanup( void) {
+void LpelWorkersCleanup(void) {
 	int i;
 	workerctx_t *wc;
 
-	for( i=0; i<num_workers; i++) {
+	for(i=0; i<num_workers; i++) {
 		wc = WORKER_PTR(i);
 		/* wait for the worker to finish */
-		(void) pthread_join( wc->thread, NULL);
+		(void) pthread_join(wc->thread, NULL);
 	}
 	/* wait for the master to finish */
-	(void) pthread_join( master->thread, NULL);
+	(void) pthread_join(master->thread, NULL);
 
 	/* clean up master's mailbox */
 	cleanupMasterMb();
@@ -144,7 +146,7 @@ void LpelWorkersCleanup( void) {
 	free(master);
 
 	/* cleanup the data structures */
-	for( i=0; i<num_workers; i++) {
+	for(i=0; i<num_workers; i++) {
 		wc = WORKER_PTR(i);
 		LpelMailboxDestroy(wc->mailbox);
 		LpelWorkerDestroyStream(wc);
@@ -153,11 +155,11 @@ void LpelWorkersCleanup( void) {
 	}
 
 	/* free workers tables */
-		free( workers);
-		free( waitworkers);
+		free(workers);
+		free(waitworkers);
 
 		/* free wrappers */
-		cleanUpFreeWrappers();
+		cleanupFreeWrappers();
 		PRODLOCK_DESTROY(&lockwrappers);
 
 #ifndef HAVE___THREAD
@@ -169,15 +171,15 @@ void LpelWorkersCleanup( void) {
 /*
  * Spawn master and workers
  */
-void LpelWorkersSpawn( void) {
+void LpelWorkersSpawn(void) {
 	int i;
 	/* master */
-	(void) pthread_create( &master->thread, NULL, MasterThread, MASTER_PTR); 	/* spawn joinable thread */
+	(void) pthread_create(&master->thread, NULL, MasterThread, MASTER_PTR); 	/* spawn joinable thread */
 
 	/* workers */
-	for( i=0; i<num_workers; i++) {
+	for(i=0; i<num_workers; i++) {
 		workerctx_t *wc = WORKER_PTR(i);
-		(void) pthread_create( &wc->thread, NULL, WorkerThread, wc);
+		(void) pthread_create(&wc->thread, NULL, WorkerThread, wc);
 	}
 }
 
@@ -195,7 +197,7 @@ void LpelWorkersTerminate(void) {
 /**
  * Assign a task to the worker by sending an assign message to that worker
  */
-void LpelWorkerRunTask( lpel_task_t *t) {
+void LpelWorkerRunTask(lpel_task_t *t) {
 	 workermsg_t msg;
    msg.type = WORKER_MSG_ASSIGN;
 	 msg.body.task = t;
@@ -235,7 +237,7 @@ static void cleanupMasterMb() {
 	}
 }
 
-static void returnTask( lpel_task_t *t) {
+static void returnTask(lpel_task_t *t) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_RETURN;
 	msg.body.task = t;
@@ -243,7 +245,7 @@ static void returnTask( lpel_task_t *t) {
 }
 
 
-static void requestTask( workerctx_t *wc) {
+static void requestTask(workerctx_t *wc) {
 	WORKER_DBG("worker %d: request task\n", wc->wid);
 	workermsg_t msg;
 	msg.type = WORKER_MSG_REQUEST;
@@ -257,7 +259,7 @@ static void requestTask( workerctx_t *wc) {
 }
 
 
-static void sendTask( int wid, lpel_task_t *t) {
+static void sendTask(int wid, lpel_task_t *t) {
 	assert(t->state == TASK_READY);
 	workermsg_t msg;
 	msg.type = WORKER_MSG_ASSIGN;
@@ -265,7 +267,7 @@ static void sendTask( int wid, lpel_task_t *t) {
 	LpelMailboxSend(WORKER_PTR(wid)->mailbox, &msg);
 }
 
-static void sendWakeup( mailbox_t *mb, lpel_task_t *t)
+static void sendWakeup(mailbox_t *mb, lpel_task_t *t)
 {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_WAKEUP;
@@ -276,7 +278,7 @@ static void sendWakeup( mailbox_t *mb, lpel_task_t *t)
 /*******************************************************************************
  * MASTER FUNCTION
  ******************************************************************************/
-static int servePendingReq( lpel_task_t *t) {
+static int servePendingReq(lpel_task_t *t) {
 	int i;
 	t->sched_info.prior = LpelTaskCalPriority(t);
 	for (i = 0; i < num_workers; i++){
@@ -311,13 +313,13 @@ static void updatePriorityList(taskqueue_t *tq, stream_elem_t *list, char mode) 
 /* update prior for neighbors of t
  * @cond: called only by master to avoid concurrent access
  */
-static void updatePriorityNeigh( taskqueue_t *tq, lpel_task_t *t) {
+static void updatePriorityNeigh(taskqueue_t *tq, lpel_task_t *t) {
 	updatePriorityList(tq, t->sched_info.in_streams, 'r');
 	updatePriorityList(tq, t->sched_info.out_streams, 'w');
 }
 
 
-static void MasterLoop( void)
+static void MasterLoop(void)
 {
 	WORKER_DBG("start master\n");
 	do {
@@ -326,7 +328,7 @@ static void MasterLoop( void)
 		LpelMailboxRecv(MASTER_PTR->mailbox, &msg);
 		lpel_task_t *t;
 		int wid;
-		switch( msg.type) {
+		switch(msg.type) {
 		case WORKER_MSG_ASSIGN:
 			/* master receive a new task */
 			t = msg.body.task;
@@ -405,12 +407,12 @@ static void MasterLoop( void)
 		default:
 			assert(0);
 		}
-	} while ( !( MASTER_PTR->terminate) );
+	} while (!(MASTER_PTR->terminate) );
 }
 
 
 
-static void *MasterThread( void *arg)
+static void *MasterThread(void *arg)
 {
   masterctx_t *ms = (masterctx_t *)arg;
 
@@ -424,14 +426,14 @@ static void *MasterThread( void *arg)
 
 //FIXME
 #ifdef USE_MCTX_PCL
-  assert( 0 == co_thread_init());
+  assert(0 == co_thread_init());
   ms->mctx = co_current();
 #endif
 
 
   /* assign to cores */
   ms->terminate = 0;
-  LpelThreadAssign( LPEL_MAP_MASTER);
+  LpelThreadAssign(LPEL_MAP_MASTER);
 
   // master loop, no monitor for master
   MasterLoop();
@@ -450,7 +452,7 @@ static void *MasterThread( void *arg)
  ******************************************************************************/
 
 
-static void WrapperLoop( workerctx_t *wp)
+static void WrapperLoop(workerctx_t *wp)
 {
 	lpel_task_t *t = NULL;
 	workermsg_t msg;
@@ -501,7 +503,7 @@ static void WrapperLoop( workerctx_t *wp)
 				break;
 			}
 		}
-	} while ( !wp->terminate);
+	} while (!wp->terminate);
 	LpelTaskDestroy(wp->current_task);
 	/* cleanup task context marked for deletion */
 }
@@ -531,7 +533,7 @@ static workerctx_t *getFreeWrapper(){
 	return w;
 }
 
-static void cleanUpFreeWrappers() {
+static void cleanupFreeWrappers() {
 	workerctx_t *wp = freewrappers;
 	workerctx_t *next;
 	while (wp != NULL) {
@@ -539,13 +541,13 @@ static void cleanUpFreeWrappers() {
 		LpelMailboxDestroy(wp->mailbox);
 		LpelWorkerDestroyStream(wp);
 		LpelWorkerDestroySd(wp);
-		free( wp);
+		free(wp);
 		wp = next;
 	}
 }
 
 
-static void *WrapperThread( void *arg)
+static void *WrapperThread(void *arg)
 {
 
 	workerctx_t *wp = (workerctx_t *)arg;
@@ -558,17 +560,17 @@ static void *WrapperThread( void *arg)
 #endif /* HAVE___THREAD */
 
 #ifdef USE_MCTX_PCL
-	assert( 0 == co_thread_init());
+	assert(0 == co_thread_init());
 	wp->mctx = co_current();
 #endif
 
-	LpelThreadAssign( wp->wid);
-	WrapperLoop( wp);
+	LpelThreadAssign(wp->wid);
+	WrapperLoop(wp);
 
 //	LpelMailboxDestroy(wp->mailbox);
 //	LpelWorkerDestroyStream(wp);
 //	LpelWorkerDestroySd(wp);
-//	free( wp);
+//	free(wp);
 	addFreeWrapper(wp);
 
 #ifdef USE_MCTX_PCL
@@ -580,7 +582,7 @@ static void *WrapperThread( void *arg)
 workerctx_t *LpelCreateWrapperContext(int wid) {
 	workerctx_t *wp = getFreeWrapper();
 	if (wp == NULL) {
-		wp = (workerctx_t *) malloc( sizeof( workerctx_t));
+		wp = (workerctx_t *) malloc(sizeof(workerctx_t));
 		/* mailbox */
 			wp->mailbox = LpelMailboxCreate();
 			wp->free_sd = NULL;
@@ -594,8 +596,8 @@ workerctx_t *LpelCreateWrapperContext(int wid) {
 	wp->mon = NULL;
 
 	/* taskqueue of free tasks */
-	(void) pthread_create( &wp->thread, NULL, WrapperThread, wp);
-	(void) pthread_detach( wp->thread);
+	(void) pthread_create(&wp->thread, NULL, WrapperThread, wp);
+	(void) pthread_detach(wp->thread);
 	return wp;
 }
 
@@ -617,7 +619,7 @@ void LpelWorkerBroadcast(workermsg_t *msg)
 	int i;
 	workerctx_t *wc;
 
-	for( i=0; i<num_workers; i++) {
+	for(i=0; i<num_workers; i++) {
 		wc = WORKER_PTR(i);
 		/* send */
 		LpelMailboxSend(wc->mailbox, msg);
@@ -626,18 +628,18 @@ void LpelWorkerBroadcast(workermsg_t *msg)
 
 
 
-static void WorkerLoop( workerctx_t *wc)
+static void WorkerLoop(workerctx_t *wc)
 {
 	WORKER_DBG("start worker %d\n", wc->wid);
 
   lpel_task_t *t = NULL;
-  requestTask( wc);		// ask for the first time
+  requestTask(wc);		// ask for the first time
 
   workermsg_t msg;
   do {
   	  LpelMailboxRecv(wc->mailbox, &msg);
 
-  	  switch( msg.type) {
+  	  switch(msg.type) {
   	  case WORKER_MSG_ASSIGN:
   	  	t = msg.body.task;
   	  	WORKER_DBG("worker %d: get task %d\n", wc->wid, t->uid);
@@ -671,11 +673,11 @@ static void WorkerLoop( workerctx_t *wc)
   	  	break;
   	  }
   	  // reach here --> message request for task has been sent
-  } while ( !(wc->terminate) );
+  } while (!(wc->terminate) );
 }
 
 
-static void *WorkerThread( void *arg)
+static void *WorkerThread(void *arg)
 {
   workerctx_t *wc = (workerctx_t *)arg;
 
@@ -689,14 +691,14 @@ static void *WorkerThread( void *arg)
 
 //FIXME
 #ifdef USE_MCTX_PCL
-  assert( 0 == co_thread_init());
+  assert(0 == co_thread_init());
   wc->mctx = co_current();
 #endif
 
   wc->terminate = 0;
   wc->current_task = NULL;
-	LpelThreadAssign( wc->wid + 1);		// 0 is for the master
-	WorkerLoop( wc);
+	LpelThreadAssign(wc->wid + 1);		// 0 is for the master
+	WorkerLoop(wc);
 
 #ifdef USE_LOGGING
   /* cleanup monitoring */
@@ -747,7 +749,7 @@ void LpelWorkerTaskExit(lpel_task_t *t) {
 	else
 		wc->terminate = 1;		// wrapper: terminate
 
-	mctx_switch( &t->mctx, &wc->mctx);		// switch back to the worker
+	mctx_switch(&t->mctx, &wc->mctx);		// switch back to the worker
 }
 
 
@@ -761,7 +763,7 @@ void LpelWorkerTaskBlock(lpel_task_t *t){
 		requestTask(wc);
 	}
 	wc->current_task = NULL;
-	mctx_switch( &t->mctx, &wc->mctx);		// switch back to the worker/wrapper
+	mctx_switch(&t->mctx, &wc->mctx);		// switch back to the worker/wrapper
 }
 
 void LpelWorkerTaskYield(lpel_task_t *t){
@@ -775,10 +777,10 @@ void LpelWorkerTaskYield(lpel_task_t *t){
 		WORKER_DBG("worker %d: return task %d\n", wc->wid, t->uid);
 		wc->current_task = NULL;
 	}
-	mctx_switch( &t->mctx, &wc->mctx);		// switch back to the worker/wrapper
+	mctx_switch(&t->mctx, &wc->mctx);		// switch back to the worker/wrapper
 }
 
-void LpelWorkerTaskWakeup( lpel_task_t *t) {
+void LpelWorkerTaskWakeup(lpel_task_t *t) {
 	workerctx_t *wc = t->worker_context;
 	WORKER_DBG("worker %d: send wake up task %d\n", LpelWorkerSelf()->wid, t->uid);
 	if (wc == NULL)
@@ -807,19 +809,19 @@ void LpelWorkerPutStream(workerctx_t *wc, lpel_stream_t *s) {
 }
 
 lpel_stream_t *LpelWorkerGetStream() {
-	lpel_stream_t *t;
+	lpel_stream_t *tmp;
 	workerctx_t *wc = LpelWorkerSelf();
 	if (wc == NULL) {
 		return NULL;
 	}
 
-	t = wc->free_stream;
-	if (t) {
-		wc->free_stream = t->next;
-		t->next = NULL;
-		assert(t->cons_sd == NULL && t->prod_sd == NULL);
+	tmp = wc->free_stream;
+	if (tmp) {
+		wc->free_stream = tmp->next;
+		tmp->next = NULL;
+		assert(tmp->cons_sd == NULL && tmp->prod_sd == NULL);
 	}
-	return t;
+	return tmp;
 }
 
 void LpelWorkerPutSd(workerctx_t *wc, lpel_stream_desc_t *sd) {
@@ -833,23 +835,23 @@ void LpelWorkerPutSd(workerctx_t *wc, lpel_stream_desc_t *sd) {
 }
 
 lpel_stream_desc_t *LpelWorkerGetSd(workerctx_t *wc) {
-	lpel_stream_desc_t *t = wc->free_sd;
-	if (t != NULL) {
-		if (t->task == NULL && t->stream == NULL) {
-			wc->free_sd = t->next;
-			t->next = NULL;
-			return t;
+	lpel_stream_desc_t *tmp = wc->free_sd;
+	if (tmp != NULL) {
+		if (tmp->task == NULL && tmp->stream == NULL) {
+			wc->free_sd = tmp->next;
+			tmp->next = NULL;
+			return tmp;
 		} else {
-			lpel_stream_desc_t *prev = t;
-			t = t->next;
-			while (t != NULL) {
-				if (t->task == NULL && t->stream == NULL) {
-					prev->next = t->next;
-					t->next = NULL;
-					return t;
+			lpel_stream_desc_t *prev = tmp;
+			tmp = tmp->next;
+			while (tmp != NULL) {
+				if (tmp->task == NULL && tmp->stream == NULL) {
+					prev->next = tmp->next;
+					tmp->next = NULL;
+					return tmp;
 				}
-				prev = t;
-				t = t->next;
+				prev = tmp;
+				tmp = tmp->next;
 			}
 		}
 	}
@@ -858,20 +860,20 @@ lpel_stream_desc_t *LpelWorkerGetSd(workerctx_t *wc) {
 
 void LpelWorkerDestroyStream(workerctx_t *wc) {
 	lpel_stream_t *head = wc->free_stream;
-	lpel_stream_t *t;
+	lpel_stream_t *tmp;
 	while (head != NULL) {
-		t = head->next;
+		tmp = head->next;
 		LpelStreamDestroy(head);
-		head = t;
+		head = tmp;
 	}
 }
 
 void LpelWorkerDestroySd(workerctx_t *wc) {
 	lpel_stream_desc_t *head = wc->free_sd;
-	lpel_stream_desc_t *t;
+	lpel_stream_desc_t *tmp;
 	while (head != NULL) {
-		t = head->next;
+		tmp = head->next;
 		free(head);
-		head = t;
+		head = tmp;
 	}
 }
