@@ -29,6 +29,7 @@ typedef struct workerctx_t {
   char          padding[64];
   lpel_stream_t *free_stream;
   lpel_stream_desc_t *free_sd;
+  struct workerctx_t *next;		// to organise the list of free wrappers
 } workerctx_t;
 
 

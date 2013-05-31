@@ -8,6 +8,7 @@ struct lpel_stream_desc_t {
   lpel_task_t   *task;        /** the task which opened the stream */
   lpel_stream_t *stream;      /** pointer to the stream */
   char mode;                  /** either 'r' or 'w' */
+  int sid;
   struct lpel_stream_desc_t *next; /** for organizing in stream sets */
   struct mon_stream_t *mon;   /** monitoring object */
 };

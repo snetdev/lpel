@@ -1,4 +1,4 @@
-/**
+/*
  * The LPEL worker containing code for workers, master and wrappers
  */
 
@@ -21,6 +21,7 @@
 #include "hrc_stream.h"
 #include "mailbox.h"
 #include "lpel/monitor.h"
+#include "lpel_main.h"
 
 #define WORKER_PTR(i) (workers[(i)])
 #define MASTER_PTR	master
@@ -33,28 +34,30 @@
 #define WORKER_DBG	//
 #endif
 
+/****************** WORKER/WRAPPER/MASTER THREAD **********************************/
 static void *WorkerThread( void *arg);
 static void *MasterThread( void *arg);
 static void *WrapperThread( void *arg);
 
+/******************* PRIVATE FUNCTIONS *****************************/
+static void cleanupMasterMb();
+static void cleanUpFreeWrappers();
+
 /******************************************************************************/
-
-
 static int num_workers = -1;
 static workerctx_t **workers;
 static masterctx_t *master;
 static int *waitworkers;	// table of waiting worker
 
+static workerctx_t *freewrappers;
+static PRODLOCK_TYPE lockwrappers;
+
 #ifdef HAVE___THREAD
 static TLSSPEC workerctx_t *workerctx_cur;
-static TLSSPEC masterctx_t *masterctx;
 #else /* HAVE___THREAD */
 static pthread_key_t workerctx_key;
-static pthread_key_t masterctx_key;
 #endif /* HAVE___THREAD */
-
-
-static void cleanupMasterMb();
+/******************************************************************************/
 
 /**
  * Initialise worker globally
@@ -70,20 +73,14 @@ void LpelWorkersInit( int size) {
 
 
 	/** create master */
-#ifndef HAVE___THREAD
-	/* init key for thread specific data */
-	pthread_key_create(&masterctx_key, NULL);
-#endif /* HAVE___THREAD */
-
 	master = (masterctx_t *) malloc(sizeof(masterctx_t));
 	master->mailbox = LpelMailboxCreate();
 	master->ready_tasks = LpelTaskqueueInit ();
 
 
-	/** create workers */
 #ifndef HAVE___THREAD
 	/* init key for thread specific data */
-	pthread_key_create(&masterctx_key, NULL);
+	pthread_key_create(&workerctx_key, NULL);
 #endif /* HAVE___THREAD */
 
 	/* allocate worker context table */
@@ -116,6 +113,10 @@ void LpelWorkersInit( int size) {
 	wc->free_sd = NULL;
 	wc->free_stream = NULL;
 	}
+
+	/* free wrapper */
+	freewrappers = NULL;
+	PRODLOCK_INIT(&lockwrappers);
 }
 
 /*
@@ -155,8 +156,11 @@ void LpelWorkersCleanup( void) {
 		free( workers);
 		free( waitworkers);
 
+		/* free wrappers */
+		cleanUpFreeWrappers();
+		PRODLOCK_DESTROY(&lockwrappers);
+
 #ifndef HAVE___THREAD
-	pthread_key_delete(masterctx_key);
 	pthread_key_delete(workerctx_key);
 #endif /* HAVE___THREAD */
 }
@@ -410,12 +414,12 @@ static void *MasterThread( void *arg)
 {
   masterctx_t *ms = (masterctx_t *)arg;
 
-#ifdef HAVE___THREAD
-  masterctx = ms;
-#else /* HAVE___THREAD */
-  /* set pointer to worker context as TSD */
-  pthread_setspecific(masterctx_key, ms);
-#endif /* HAVE___THREAD */
+//#ifdef HAVE___THREAD
+//  workerctx_cur = ms;
+//#else /* HAVE___THREAD */
+//  /* set pointer to worker context as TSD */
+//  pthread_setspecific(workerctx_key, ms);
+//#endif /* HAVE___THREAD */
 
 
 //FIXME
@@ -502,6 +506,45 @@ static void WrapperLoop( workerctx_t *wp)
 	/* cleanup task context marked for deletion */
 }
 
+
+static void addFreeWrapper(workerctx_t *wp) {
+	assert (!LpelMailboxHasIncoming(wp->mailbox) && wp->terminate);
+	PRODLOCK_LOCK(&lockwrappers);
+	wp->next = freewrappers;
+	freewrappers = wp;
+	PRODLOCK_UNLOCK(&lockwrappers);
+}
+
+static workerctx_t *getFreeWrapper(){
+	if (freewrappers == NULL)
+		return NULL;
+	workerctx_t *w;
+	PRODLOCK_LOCK(&lockwrappers);
+	if (freewrappers == NULL)
+		w = NULL;
+	else {
+		w = freewrappers;
+		freewrappers = w->next;
+		w->next = NULL;
+	}
+	PRODLOCK_UNLOCK(&lockwrappers);
+	return w;
+}
+
+static void cleanUpFreeWrappers() {
+	workerctx_t *wp = freewrappers;
+	workerctx_t *next;
+	while (wp != NULL) {
+		next = wp->next;
+		LpelMailboxDestroy(wp->mailbox);
+		LpelWorkerDestroyStream(wp);
+		LpelWorkerDestroySd(wp);
+		free( wp);
+		wp = next;
+	}
+}
+
+
 static void *WrapperThread( void *arg)
 {
 
@@ -522,10 +565,11 @@ static void *WrapperThread( void *arg)
 	LpelThreadAssign( wp->wid);
 	WrapperLoop( wp);
 
-	LpelMailboxDestroy(wp->mailbox);
-	LpelWorkerDestroyStream(wp);
-	LpelWorkerDestroySd(wp);
-	free( wp);
+//	LpelMailboxDestroy(wp->mailbox);
+//	LpelWorkerDestroyStream(wp);
+//	LpelWorkerDestroySd(wp);
+//	free( wp);
+	addFreeWrapper(wp);
 
 #ifdef USE_MCTX_PCL
 	co_thread_cleanup();
@@ -534,17 +578,21 @@ static void *WrapperThread( void *arg)
 }
 
 workerctx_t *LpelCreateWrapperContext(int wid) {
-	workerctx_t *wp = (workerctx_t *) malloc( sizeof( workerctx_t));
+	workerctx_t *wp = getFreeWrapper();
+	if (wp == NULL) {
+		wp = (workerctx_t *) malloc( sizeof( workerctx_t));
+		/* mailbox */
+			wp->mailbox = LpelMailboxCreate();
+			wp->free_sd = NULL;
+			wp->free_stream = NULL;
+			wp->next = NULL;
+	}
 	wp->wid = wid;
 	wp->terminate = 0;
 	/* Wrapper is excluded from scheduling module */
 	wp->current_task = NULL;
 	wp->mon = NULL;
 
-	/* mailbox */
-	wp->mailbox = LpelMailboxCreate();
-	wp->free_sd = NULL;
-	wp->free_stream = NULL;
 	/* taskqueue of free tasks */
 	(void) pthread_create( &wp->thread, NULL, WrapperThread, wp);
 	(void) pthread_detach( wp->thread);
