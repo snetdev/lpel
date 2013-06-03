@@ -769,7 +769,7 @@ void LpelWorkerTaskBlock(lpel_task_t *t){
 void LpelWorkerTaskYield(lpel_task_t *t){
 	workerctx_t *wc = t->worker_context;
 	if (wc->wid < 0) {	//wrapper
-			WORKER_DBG("wrapper: task %d yields\n");
+			WORKER_DBG("wrapper: task %d yields\n", t->uid);
 	}
 	else {
 		//sendUpdatePrior(t);		//update prior for neighbor

@@ -23,7 +23,7 @@ liblpel_la_SOURCES = \
 	src/sched/decentralised/decen_taskqueue.c \
 	src/sched/decentralised/decen_taskqueue.h \
 	src/sched/decentralised/decen_stream.c \
-	src/sched/decentralised/decen_stream.h \ 
+	src/sched/decentralised/decen_stream.h \
 	src/sched/decentralised/decen_buffer.c \
 	src/sched/decentralised/decen_buffer.h 
 
