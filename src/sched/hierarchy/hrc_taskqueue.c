@@ -9,6 +9,7 @@
 
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <assert.h>
 
 #include "hrc_taskqueue.h"
@@ -151,7 +152,7 @@ void LpelTaskqueueUpdatePriority(taskqueue_t *tq, lpel_task_t *t, double np){
 	t->sched_info.prior = np;
 	if (np > p)
 		upHeap(tq, pos);
-	else
+	else if (np < p)
 		downHeap(tq, pos);
 }
 
