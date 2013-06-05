@@ -190,7 +190,6 @@ void LpelWorkersSpawn(void) {
 void LpelWorkersTerminate(void) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_TERMINATE;
-	LpelWorkerBroadcast(&msg);
 	LpelMailboxSend(MASTER_PTR->mailbox, &msg);
 }
 
@@ -378,7 +377,6 @@ static void MasterLoop(void)
 				break;
 			}
 			WORKER_DBG("master: unblock task %d\n", t->uid);
-			assert (t->state == TASK_RETURNED);
 			t->state = TASK_READY;
 			if (servePendingReq(t) < 0) {		// no pending request
 					t->sched_info.prior = LpelTaskCalPriority(t);	//update new prior before add to the queue
@@ -401,13 +399,12 @@ static void MasterLoop(void)
 			break;
 
 		case WORKER_MSG_TERMINATE:
-			assert((LpelTaskqueueSize(MASTER_PTR->ready_tasks) == 0));
 			MASTER_PTR->terminate = 1;
 			break;
 		default:
 			assert(0);
 		}
-	} while (!(MASTER_PTR->terminate) );
+	} while (!(MASTER_PTR->terminate && LpelTaskqueueSize(MASTER_PTR->ready_tasks) == 0));
 }
 
 
@@ -438,6 +435,10 @@ static void *MasterThread(void *arg)
   // master loop, no monitor for master
   MasterLoop();
 
+  // master terminated, now terminate worker
+  workermsg_t msg;
+  msg.type = WORKER_MSG_TERMINATE;
+  LpelWorkerBroadcast(&msg);
 
 #ifdef USE_MCTX_PCL
   co_thread_cleanup();

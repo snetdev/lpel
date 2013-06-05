@@ -118,14 +118,12 @@ lpel_task_t *LpelTaskqueuePeek( taskqueue_t *tq){
  * pop the task with highest priority
  */
 lpel_task_t *LpelTaskqueuePop( taskqueue_t *tq) {
-  {
-    if (tq->count == 1)
-      return NULL;
+	if (tq->count == 1)
+		return NULL;
 
-    lpel_task_t *t = tq->heap[1];
-    LpelTaskqueueRemoveHead(tq);
-    return t;
-  }
+	lpel_task_t *t = tq->heap[1];
+	LpelTaskqueueRemoveHead(tq);
+	return t;
 }
 
 /*
