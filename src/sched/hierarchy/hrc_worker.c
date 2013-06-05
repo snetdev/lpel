@@ -346,9 +346,15 @@ static void MasterLoop(void)
 			WORKER_DBG("master: get returned task %d\n", t->uid);
 			switch(t->state) {
 			case TASK_BLOCKED:
-				t->state = TASK_RETURNED;
-				updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
-				break;
+				if (t->wakedup == 1) {	/* task has been waked up */
+					t->wakedup = 0;
+					t->state = TASK_READY;
+					// no break, task will be treated as if it is returned as ready
+				} else {
+					t->state = TASK_RETURNED;
+					updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
+					break;
+				}
 
 			case TASK_READY:	// task yields
 				if (servePendingReq(t) < 0) {		// no pending request
@@ -372,8 +378,9 @@ static void MasterLoop(void)
 		case WORKER_MSG_WAKEUP:
 			t = msg.body.task;
 			if (t->state != TASK_RETURNED) {		// task has not been returned yet
-				WORKER_DBG("master: put message back\n");
-				LpelMailboxSend(MASTER_PTR->mailbox, &msg);		//task is not blocked yet (the other worker is a bit slow, put back to the mailbox for processing later
+//				WORKER_DBG("master: put message back\n");
+//				LpelMailboxSend(MASTER_PTR->mailbox, &msg);		//task is not blocked yet (the other worker is a bit slow, put back to the mailbox for processing later
+				t->wakedup = 1;		// set task as wakedup so that when returned it will be treated as ready
 				break;
 			}
 			WORKER_DBG("master: unblock task %d\n", t->uid);

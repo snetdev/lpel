@@ -45,6 +45,7 @@ struct lpel_task_t {
   struct lpel_task_t *prev, *next;
   unsigned int uid;    /** unique identifier */
   lpel_taskstate_t state;   /** state */
+  int wakedup;						/** to keep track that the task has been waked up before returned */
 
   struct workerctx_t *worker_context;  /** worker context for this task */
 

@@ -71,6 +71,7 @@ lpel_task_t *LpelTaskCreate( int map, lpel_taskfunc_t func,
 	atomic_init( &t->poll_token, 0);
 
 	t->state = TASK_CREATED;
+	t->wakedup = 0;
 
 	t->prev = t->next = NULL;
 
