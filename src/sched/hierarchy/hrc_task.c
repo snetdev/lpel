@@ -386,16 +386,20 @@ int countRec(stream_elem_t *list, char inout) {
 	if (list == NULL)
 		return -1;
 	int cnt = 0;
+	int flag = 0;
 	while (list != NULL) {
 		if (list->stream_desc->stream) {
 			if ((inout == 'i' && list->stream_desc->stream->type == LPEL_STREAM_ENTRY)
 					|| (inout == 'o' && list->stream_desc->stream->type == LPEL_STREAM_EXIT)) {
 				// if input stream is entry or output stream is exit --> not count
+				flag = 1;
 			} else
 				cnt += LpelStreamFillLevel(list->stream_desc->stream);
 		}
 		list = list->next;
 	}
+	if (flag == 1 && cnt == 0)
+		cnt = -1;
 	return cnt;
 }
 
