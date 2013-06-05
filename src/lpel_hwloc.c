@@ -148,7 +148,7 @@ int LpelHwLocCheckConfig(lpel_config_t *cfg)
 	  	/* check exclusive flag sanity */
 	  	if ( LPEL_ICFG( LPEL_FLAG_EXCLUSIVE) ) {
 	  		/* check if we can do a 1-1 mapping */
-	  		if ( (cfg->proc_others== 0) || (cfg->num_workers != cfg->proc_workers) ) {
+	  		if ( (cfg->proc_others== 0) || (cfg->num_workers > cfg->proc_workers) ) {
 	  			return LPEL_ERR_INVAL;
 	  		}
 	  	}
