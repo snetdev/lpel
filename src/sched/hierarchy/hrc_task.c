@@ -86,7 +86,8 @@ lpel_task_t *LpelTaskCreate( int map, lpel_taskfunc_t func,
 	// default scheduling info
 	t->sched_info.prior = 0;
 	t->sched_info.rec_cnt = 0;
-	t->sched_info.rec_limit = -1;
+	t->sched_info.rec_limit = 0;
+	t->sched_info.rec_limit_factor = -1;
 	t->sched_info.in_streams = NULL;
 	t->sched_info.out_streams = NULL;
 
@@ -320,7 +321,7 @@ void LpelTaskCheckYield(lpel_task_t *t) {
 }
 
 void LpelTaskSetRecLimit(lpel_task_t *t, int lim) {
-	t->sched_info.rec_limit = lim;
+	t->sched_info.rec_limit_factor = lim;
 }
 
 void LpelTaskSetPrior(lpel_task_t *t, double p) {
@@ -337,6 +338,7 @@ void LpelTaskAddStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 		break;
 	case 'w':
 		list = &t->sched_info.out_streams;
+		t->sched_info.rec_limit += t->sched_info.rec_limit_factor;
 		break;
 	}
 	head = *list;
@@ -359,6 +361,7 @@ void LpelTaskRemoveStream( lpel_task_t *t, lpel_stream_desc_t *des, char mode) {
 		break;
 	case 'w':
 		list = &t->sched_info.out_streams;
+		t->sched_info.rec_limit -= t->sched_info.rec_limit_factor;
 		break;
 	}
 	head = *list;

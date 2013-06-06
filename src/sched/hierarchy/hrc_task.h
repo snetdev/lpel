@@ -26,6 +26,7 @@ typedef struct stream_elem_t stream_elem_t;
 
 typedef struct {
 	int rec_cnt;
+	int rec_limit_factor;
 	int rec_limit;
 	double prior;
 	stream_elem_t *in_streams;
