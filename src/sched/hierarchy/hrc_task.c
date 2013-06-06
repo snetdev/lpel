@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include "arch/atomic.h"
+#include <float.h>
 
 #include "hrc_task.h"
 #include "hrc_stream.h"
@@ -412,6 +413,13 @@ double LpelTaskCalPriority(lpel_task_t *t) {
 	int in, out;
 	in = countRec(t->sched_info.in_streams, 'i');
 	out = countRec(t->sched_info.out_streams, 'o');
+
+#ifdef _USE_NEG_DEMAND_LIMIT_
+	/* if t is entry task and already produced too many ouput, set it to DBL_MIN and it will not be scheduled */
+	if (in == -1 && out > NEG_DEMAND_LIMIT)
+		return DBL_MIN;
+#endif
+
 	return prior_cal(in, out);
 }
 

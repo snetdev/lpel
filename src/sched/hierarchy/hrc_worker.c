@@ -358,6 +358,14 @@ static void MasterLoop(void)
 				}
 
 			case TASK_READY:	// task yields
+#ifdef _USE_NEG_DEMAND_LIMIT_
+				t->sched_info.prior = LpelTaskCalPriority(t);
+				if (t->sched_info.prior == DBL_MIN) {		// if not schedule task if it has too low priority
+					t->state = TASK_INQUEUE;
+					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+					break;
+				}
+#endif
 				if (servePendingReq(t) < 0) {		// no pending request
 					updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
 					t->sched_info.prior = LpelTaskCalPriority(t);	//update new prior before add to the queue
@@ -384,12 +392,25 @@ static void MasterLoop(void)
 			}
 			WORKER_DBG("master: unblock task %d\n", t->uid);
 			t->state = TASK_READY;
+
+#ifdef _USE_NEG_DEMAND_LIMIT_
+				t->sched_info.prior = LpelTaskCalPriority(t);
+				if (t->sched_info.prior == DBL_MIN) {		// if not schedule task if it has too low priority
+					t->state = TASK_INQUEUE;
+					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+					break;
+				}
+#endif
+
 			if (servePendingReq(t) < 0) {		// no pending request
+#ifndef _USE_NEG_DEMAND_LIMIT_
 					t->sched_info.prior = LpelTaskCalPriority(t);	//update new prior before add to the queue
+#endif
 					t->state = TASK_INQUEUE;
 					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
 			}
 			break;
+
 
 		case WORKER_MSG_REQUEST:
 			wid = msg.body.from_worker;
@@ -398,10 +419,17 @@ static void MasterLoop(void)
 			if (t == NULL) {
 				waitworkers[wid] = 1;
 			} else {
+
+#ifdef _USE_NEG_DEMAND_LIMIT_
+				if (t->sched_info.prior == DBL_MIN) {		// if not schedule task if it has too low priority
+					waitworkers[wid] = 1;
+					break;
+				}
+#endif
 				t->state = TASK_READY;
 				sendTask(wid, t);
+				t = LpelTaskqueuePop(MASTER_PTR->ready_tasks);
 			}
-			t = LpelTaskqueuePop(MASTER_PTR->ready_tasks);
 			break;
 
 		case WORKER_MSG_TERMINATE:
