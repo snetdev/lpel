@@ -360,7 +360,7 @@ static void MasterLoop(void)
 			case TASK_READY:	// task yields
 #ifdef _USE_NEG_DEMAND_LIMIT_
 				t->sched_info.prior = LpelTaskCalPriority(t);
-				if (t->sched_info.prior == DBL_MIN) {		// if not schedule task if it has too low priority
+				if (t->sched_info.prior == LPEL_DBL_MIN) {		// if not schedule task if it has too low priority
 					t->state = TASK_INQUEUE;
 					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
 					break;
@@ -395,7 +395,7 @@ static void MasterLoop(void)
 
 #ifdef _USE_NEG_DEMAND_LIMIT_
 				t->sched_info.prior = LpelTaskCalPriority(t);
-				if (t->sched_info.prior == DBL_MIN) {		// if not schedule task if it has too low priority
+				if (t->sched_info.prior == LPEL_DBL_MIN) {		// if not schedule task if it has too low priority
 					t->state = TASK_INQUEUE;
 					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
 					break;
@@ -421,7 +421,7 @@ static void MasterLoop(void)
 			} else {
 
 #ifdef _USE_NEG_DEMAND_LIMIT_
-				if (t->sched_info.prior == DBL_MIN) {		// if not schedule task if it has too low priority
+				if (t->sched_info.prior == LPEL_DBL_MIN) {		// if not schedule task if it has too low priority
 					waitworkers[wid] = 1;
 					break;
 				}

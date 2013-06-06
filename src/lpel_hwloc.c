@@ -165,7 +165,7 @@ int LpelHwLocCheckConfig(lpel_config_t *cfg)
 	    }
 	    /* check permissions to set exclusive (if we can check) */
 	    if ( 0==LpelCanSetExclusive(&can_rt) && !can_rt ) {
-	          return LPEL_ERR_EXCL;
+//	          return LPEL_ERR_EXCL;
 	    }
 	  }
 

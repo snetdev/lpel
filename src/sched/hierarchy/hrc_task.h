@@ -8,6 +8,8 @@
 
 #include "arch/atomic.h"
 
+#define LPEL_DBL_MIN (0.0 - DBL_MAX)
+
 #define _USE_NEG_DEMAND_LIMIT_
 
 /**

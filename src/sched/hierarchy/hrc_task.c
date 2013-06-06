@@ -21,7 +21,6 @@ static void TaskStartup( void *arg);
 static void TaskStart( lpel_task_t *t);
 static void TaskStop( lpel_task_t *t);
 
-
 #define TASK_STACK_ALIGN  256
 #define TASK_MINSIZE  4096
 
@@ -416,9 +415,9 @@ double LpelTaskCalPriority(lpel_task_t *t) {
 	out = countRec(t->sched_info.out_streams, 'o');
 
 #ifdef _USE_NEG_DEMAND_LIMIT_
-	/* if t is entry task and already produced too many ouput, set it to DBL_MIN and it will not be scheduled */
+	/* if t is entry task and already produced too many ouput, set it to LPEL_DBL_MIN and it will not be scheduled */
 	if (in == -1 && out > neg_demand_lim && neg_demand_lim > 0)
-		return DBL_MIN;
+		return LPEL_DBL_MIN;
 #endif
 
 	return prior_cal(in, out);
