@@ -92,6 +92,11 @@ typedef struct lpel_monitoring_cb_t {
   void (*stream_writefinish)(mon_stream_t*);
   void (*stream_blockon)(mon_stream_t*);
   void (*stream_wakeup)(mon_stream_t*);
+
+  /* record callbacks
+   * currently used for hrc only */
+  int (*rectype_data)(void *);
+
 } lpel_monitoring_cb_t;
 
 
