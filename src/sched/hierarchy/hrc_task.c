@@ -407,17 +407,9 @@ int countRec(stream_elem_t *list, char inout) {
 
 double LpelTaskCalPriority(lpel_task_t *t) {
 	int in, out;
-	if (t->sched_info.type == LPEL_ENTRY_TASK)
-		in = -1;
-	else
-		in = countRec(t->sched_info.in_streams, 'i');
-	if (t->sched_info.type == LPEL_EXIT_TASK)
-		out = -1;
-	else
-		out = countRec(t->sched_info.out_streams, 'o');
+	in = countRec(t->sched_info.in_streams, 'i');
+	out = countRec(t->sched_info.out_streams, 'o');
 	return prior_cal(in, out);
-//	return (in + 1.0)/((out + 1.0)*(in + out + 1.0));
-
 }
 
 void LpelTaskSetPriorityFunc(int func){
@@ -459,10 +451,6 @@ int LpelTaskGetWorkerId(lpel_task_t *t) {
 		return t->worker_context->wid;
 	else
 		return -1;
-}
-
-void LpelTaskSetType(lpel_task_t *t, int type) {
-	t->sched_info.type = type;
 }
 
 

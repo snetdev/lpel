@@ -8,9 +8,6 @@
 
 #include "arch/atomic.h"
 
-#define LPEL_ENTRY_TASK 1
-#define LPEL_EXIT_TASK 2
-
 /**
  * If a task size <= 0 is specified,
  * use the default size
@@ -33,7 +30,6 @@ typedef struct {
 	double prior;
 	stream_elem_t *in_streams;
 	stream_elem_t *out_streams;
-	int type;
 } sched_task_t;
 
 

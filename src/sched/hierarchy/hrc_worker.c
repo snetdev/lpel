@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <errno.h>
+#include <float.h>
 
 #include <pthread.h>
 #include "arch/mctx.h"
@@ -334,8 +335,8 @@ static void MasterLoop(void)
 			assert (t->state == TASK_CREATED);
 			t->state = TASK_READY;
 			WORKER_DBG("master: get task %d\n", t->uid);
-			if (servePendingReq(t) < 0) {		// no pending request
-				t->sched_info.prior = LpelTaskCalPriority(t);	//update new prior before add to the queue
+			if (servePendingReq(t) < 0) {		 // no pending request
+				t->sched_info.prior = DBL_MAX; //created task does not set up input/output stream yet, set as highest priority
 				t->state = TASK_INQUEUE;
 				LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
 			}
@@ -378,8 +379,6 @@ static void MasterLoop(void)
 		case WORKER_MSG_WAKEUP:
 			t = msg.body.task;
 			if (t->state != TASK_RETURNED) {		// task has not been returned yet
-//				WORKER_DBG("master: put message back\n");
-//				LpelMailboxSend(MASTER_PTR->mailbox, &msg);		//task is not blocked yet (the other worker is a bit slow, put back to the mailbox for processing later
 				t->wakedup = 1;		// set task as wakedup so that when returned it will be treated as ready
 				break;
 			}
