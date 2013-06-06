@@ -10,9 +10,6 @@
 
 #define _USE_NEG_DEMAND_LIMIT_
 
-#define NEG_DEMAND_LIMIT 16
-
-
 /**
  * If a task size <= 0 is specified,
  * use the default size

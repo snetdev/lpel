@@ -12,6 +12,7 @@
 #include "taskpriority.h"
 
 static atomic_int taskseq = ATOMIC_VAR_INIT(0);
+static int neg_demand_lim = 0;
 
 static double (*prior_cal) (int in, int out) = priorfunc14;
 
@@ -416,7 +417,7 @@ double LpelTaskCalPriority(lpel_task_t *t) {
 
 #ifdef _USE_NEG_DEMAND_LIMIT_
 	/* if t is entry task and already produced too many ouput, set it to DBL_MIN and it will not be scheduled */
-	if (in == -1 && out > NEG_DEMAND_LIMIT)
+	if (in == -1 && out > neg_demand_lim && neg_demand_lim > 0)
 		return DBL_MIN;
 #endif
 
@@ -469,4 +470,8 @@ void LpelTaskCheckMigrate(void) {}
 
 int LpelTaskIsWrapper(lpel_task_t *t) {
 	return (t->worker_context->wid == -1);
+}
+
+void LpelTaskSetNegLim(int lim) {
+	neg_demand_lim = lim;
 }
