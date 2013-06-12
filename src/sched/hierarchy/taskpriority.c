@@ -169,5 +169,7 @@ double priorfunc13(int in, int out) {
 }
 
 double priorfunc14(int in, int out) {
+	in = (in == -1 ? 0 : in);
+	out = (out == -1 ? 0 : out);
 	return (in - out);
 }

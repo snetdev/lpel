@@ -41,18 +41,21 @@ static int proc_workers;
 //static int offset_workers = 0;
 #endif /* HAVE_PTHREAD_SETAFFINITY_NP */
 
-static int LpelCanSetExclusive(void)
+static int LpelCanSetExclusive(int *result)
 {
 #ifdef HAVE_PROC_CAPABILITIES
   cap_t caps;
   cap_flag_value_t cap;
   /* obtain caps of process */
   caps = cap_get_proc();
-  if (caps == NULL) return 0;
+  if (caps == NULL) {
+    return LPEL_ERR_FAIL;
+  }
   cap_get_flag(caps, CAP_SYS_NICE, CAP_EFFECTIVE, &cap);
-  return cap == CAP_SET;
-#else
+  *result = (cap == CAP_SET);
   return 0;
+#else
+  return LPEL_ERR_EXCL;
 #endif
 }
 
@@ -155,13 +158,14 @@ int LpelHwLocCheckConfig(lpel_config_t *cfg)
 	  }
 	  /* additional flags for exclusive flag */
 	  if ( LPEL_ICFG( LPEL_FLAG_EXCLUSIVE) ) {
+	  	int can_rt;
 	    /* pinned flag must also be set */
 	    if ( !LPEL_ICFG( LPEL_FLAG_PINNED) ) {
 	      return LPEL_ERR_INVAL;
 	    }
 	    /* check permissions to set exclusive (if we can check) */
-	    if (!LpelCanSetExclusive()) {
-	      return LPEL_ERR_EXCL;
+	    if ( 0==LpelCanSetExclusive(&can_rt) && !can_rt ) {
+	          return LPEL_ERR_EXCL;
 	    }
 	  }
 
