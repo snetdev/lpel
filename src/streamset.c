@@ -8,7 +8,7 @@
 
 #include <lpel_common.h>
 
-#include "stream.h"
+#include "lpel_main.h"
 
 
 /*

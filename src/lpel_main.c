@@ -18,7 +18,7 @@
 #include "arch/mctx.h"
 #include "lpel_hwloc.h"
 #include "lpelcfg.h"
-#include "worker.h"
+#include "lpel_main.h"
 
 
 /**

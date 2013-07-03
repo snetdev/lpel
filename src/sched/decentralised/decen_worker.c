@@ -17,7 +17,7 @@
 #include "decen_worker.h"
 #include "spmdext.h"
 
-#include "task.h"
+#include "lpel_main.h"
 #include "lpel_hwloc.h"
 #include "lpelcfg.h"
 

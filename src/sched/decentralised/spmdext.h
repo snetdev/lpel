@@ -2,7 +2,7 @@
 #define _SPMDEXT_H_
 
 #include <lpel.h>
-#include "task.h"
+#include "decen_task.h"
 
 
 

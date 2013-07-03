@@ -1,7 +1,7 @@
 #ifndef _WORKERMSG_H_
 #define _WORKERMSG_H_
 
-#include "task.h"
+#include <lpel_common.h>
 
 /*
  * worker msg body

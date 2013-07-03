@@ -19,6 +19,9 @@
 /* choose function to calculate task priority */
 void LpelTaskSetPriorityFunc(int func);
 
+/* set negative demand limit */
+void LpelTaskSetNegLim(int lim);
+
 /* set the limit of output records for a task */
 void LpelTaskSetRecLimit(lpel_task_t *t, int lim);
 

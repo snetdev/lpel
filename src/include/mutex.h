@@ -2,7 +2,7 @@
 #define _MUTEX_H_
 
 
-#include "task.h"
+#include "lpel_common.h"
 
 typedef struct {
   volatile int counter;

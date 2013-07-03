@@ -2,12 +2,11 @@
 #define _TASK_H_
 
 
-#include <lpel_common.h>
-
+#include <lpel.h>
 #include "arch/mctx.h"
-
-
 #include "arch/atomic.h"
+#include "decen_scheduler.h"
+
 
 /**
  * If a task size <= 0 is specified,
@@ -21,7 +20,6 @@
 
 struct workerctx_t;
 struct mon_task_t;
-typedef struct sched_task_t sched_task_t;
 
 /**
  * TASK CONTROL BLOCK
@@ -34,7 +32,7 @@ struct lpel_task_t {
 
   struct workerctx_t *worker_context;  /** worker context for this task */
 
-  sched_task_t *sched_info;
+  sched_task_t sched_info;
 
   /**
    * indicates the SD which points to the stream which has new data
@@ -66,12 +64,8 @@ void LpelTaskDestroy( lpel_task_t *t);
 void LpelTaskBlockStream( lpel_task_t *ct);
 void LpelTaskUnblock( lpel_task_t *ct, lpel_task_t *blocked);
 
-/* local functions
- * defined here to share the implementations for both HRC and DECEN
- */
-void TaskStartup( void *data);
+
+
 void TaskStart( lpel_task_t *t);
 void TaskStop( lpel_task_t *t);
-
-
 #endif /* _TASK_H_ */

@@ -6,7 +6,7 @@
 
 
 #include "decen_taskqueue.h"
-#include "task.h"
+#include "decen_task.h"
 #include "task_migration.h"
 
 
@@ -41,7 +41,7 @@ void LpelSchedDestroy( schedctx_t *sc)
 
 void LpelSchedMakeReady( schedctx_t* sc, lpel_task_t *t)
 {
-  int prio = t->sched_info->prio;
+  int prio = t->sched_info.prio;
 
   if (prio < 0) prio = 0;
   if (prio >= SCHED_NUM_PRIO) prio = SCHED_NUM_PRIO-1;
