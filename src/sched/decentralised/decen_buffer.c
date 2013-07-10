@@ -16,24 +16,7 @@
 #include <assert.h>
 
 
-#include "buffer.h"
-
-
-/* 64bytes is the common size of a cache line */
-#define longxCacheLine  (64/sizeof(long))
-
-/* Padding is required to avoid false-sharing
-   between core's private cache */
-struct buffer_t {
-  unsigned long pread;
-//  volatile unsigned long pread;
-  long padding1[longxCacheLine-1];
-  unsigned long pwrite;
-//  volatile unsigned long pwrite;
-  long padding2[longxCacheLine-1];
-  unsigned long size;
-  void **data;
-};
+#include "decen_buffer.h"
 
 
 /**
@@ -42,16 +25,14 @@ struct buffer_t {
  * @param buf   pointer to buffer struct
  * @param size  number of void* elements in the buffer
  */
-buffer_t *LpelBufferInit(unsigned int size)
+void LpelBufferInit(buffer_t *buf, unsigned int size)
 {
-	buffer_t *buf = (buffer_t *) malloc(sizeof(buffer_t));
   buf->pread = 0;
   buf->pwrite = 0;
   buf->size = size;
   buf->data = malloc( size*sizeof(void*) );
   /* clear all the buffer space */
   memset(buf->data, 0, size*sizeof(void *));
-  return buf;
 }
 
 /**
@@ -63,7 +44,6 @@ buffer_t *LpelBufferInit(unsigned int size)
 void  LpelBufferCleanup(buffer_t *buf)
 {
   free(buf->data);
-  free(buf);
 }
 
 

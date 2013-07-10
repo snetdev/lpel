@@ -1,20 +1,16 @@
-#ifndef _HRC_STREAM_H
-#define _HRC_STREAM_H
+#ifndef _STREAM_H_
+#define _STREAM_H_
 
-#include <hrc_lpel.h>
+#include <pthread.h>
+#include <lpel.h>
+#include "decen_buffer.h"
+#include "decen_task.h"
 #include "lpel_main.h"
-#include "hrc_buffer.h"
 
 /* default size */
 #ifndef  STREAM_BUFFER_SIZE
 #define  STREAM_BUFFER_SIZE 16
 #endif
-
-typedef enum {
-	LPEL_STREAM_ENTRY,
-	LPEL_STREAM_EXIT,
-	LPEL_STREAM_MIDDLE
-} lpel_stream_type;
 
 
 /**
@@ -32,15 +28,7 @@ struct lpel_stream_t {
   atomic_int n_sem;           /** counter for elements in the stream */
   atomic_int e_sem;           /** counter for empty space in the stream */
   void *usr_data;           /** arbitrary user data */
-  struct lpel_stream_t *next;	/* to organize stream in the free list */
-  lpel_stream_type type;			/* stream type (entry/exit/middle */
-  int read_cnt;								/* read counter, to calculate fill level */
-  int write_cnt;							/* write counter, to calculate fill level */
 };
 
-
-int LpelStreamFillLevel(lpel_stream_t *s);
-lpel_task_t *LpelStreamConsumer(lpel_stream_t *s);
-lpel_task_t *LpelStreamProducer(lpel_stream_t *s);
 
 #endif /* _STREAM_H_ */

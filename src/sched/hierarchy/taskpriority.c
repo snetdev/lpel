@@ -28,7 +28,8 @@
  *   10									|  (I + 1) / (O + 1)^2 	|				0						|			I + 1
  *   11									|  (I + 1) / (O + 1)^2 	|	   1/(O + 1)^2		|			infinity
  *   12									|  (I + 1) / (O + 1)^2 	|	   1/(O + 1)^2		|			I + 1
- *
+ *	 13									RANDOM
+ *	 14										I - O											- O										I
  ****************************************************************************************/
 
 double priorfunc1(int in, int out) {
@@ -165,4 +166,10 @@ double priorfunc12(int in, int out) {
  */
 double priorfunc13(int in, int out) {
 	return rand();
+}
+
+double priorfunc14(int in, int out) {
+	in = (in == -1 ? 0 : in);
+	out = (out == -1 ? 0 : out);
+	return (in - out);
 }

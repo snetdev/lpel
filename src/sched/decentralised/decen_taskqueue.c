@@ -4,7 +4,7 @@
 
 
 #include "decen_taskqueue.h"
-#include "task.h"
+#include "decen_task.h"
 
 /**
  * A simple doubly linked list for task queues
