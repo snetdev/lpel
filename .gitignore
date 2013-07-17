@@ -1,0 +1,38 @@
+syntax: glob
+
+# vim temporaries
+.*.swp
+
+# gedit temporaries
+*~
+
+# object files
+*.o
+*.lo
+*.la
+
+# dependencies
+.*.d
+
+# Make files
+Makefile
+Makefile.in
+
+# deps and libs
+.deps/
+.libs/
+*.cache/
+.dirstamp
+
+#config files
+config.*
+configure
+
+#tools
+libtool
+*.m4
+depcomp
+install-sh
+ltmain.sh
+missing
+

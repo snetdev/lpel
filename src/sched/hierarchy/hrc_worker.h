@@ -41,6 +41,9 @@ typedef struct masterctx_t {
   mailbox_t    *mailbox;
   taskqueue_t  *ready_tasks;
   char          padding[64];
+  int *waitworkers;
+  int num_workers;
+  workerctx_t **workers;
 } masterctx_t;
 
 
@@ -72,5 +75,18 @@ void LpelWorkerDestroyStream(workerctx_t *wc);
 void LpelWorkerDestroySd(workerctx_t *wc);
 
 
+
+/****************** WORKER/WRAPPER/MASTER THREAD **********************************/
+void *WorkerThread(void *arg);
+void *MasterThread(void *arg);
+void *WrapperThread(void *arg);
+
+/******************* PRIVATE FUNCTIONS BUT HERE AS NEEDS TO BE SHARED BETWEEN INIT AND OP *****************************/
+void cleanupMasterMb();
+void initFreeWrappers();
+void cleanupFreeWrappers();
+
+void initWorkerCtxKey();
+void cleanupWorkerCtxKey();
 
 #endif /* _HRC_WORKER_H_ */
