@@ -81,12 +81,9 @@ void *WorkerThread(void *arg);
 void *MasterThread(void *arg);
 void *WrapperThread(void *arg);
 
-/******************* PRIVATE FUNCTIONS BUT HERE AS NEEDS TO BE SHARED BETWEEN INIT AND OP *****************************/
-void cleanupMasterMb();
-void initFreeWrappers();
-void cleanupFreeWrappers();
-
-void initWorkerCtxKey();
-void cleanupWorkerCtxKey();
+/******************* INI local vars *****************************/
+void initLocalVar(int size);
+void cleanupLocalVar();
+setupMailbox(mailbox_t **mastermb, mailbox_t **workermbs);
 
 #endif /* _HRC_WORKER_H_ */

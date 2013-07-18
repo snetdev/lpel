@@ -179,3 +179,8 @@ int LpelMailboxHasIncoming( mailbox_t *mbox)
 {
   return ( mbox->list_inbox != NULL);
 }
+
+mailbox_t getLpelMailbox ( masterctx_t master, int worker_id)
+{
+  return master->workers[i]->mailbox;
+}

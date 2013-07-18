@@ -31,8 +31,6 @@
 #include "lpel/monitor.h"
 #include "lpel_main.h"
 
-#define WORKER_PTR(i) (master->workers[(i)])
-#define MASTER_PTR	master
 
 //#define _USE_WORKER_DBG__
 
@@ -42,10 +40,11 @@
 #define WORKER_DBG	//
 #endif
 
+static void cleanupMasterMb();
 
 static int num_workers = -1;
 static masterctx_t *master;
-
+static workerctx_t *workers;
 /**
  * Initialise worker globally
  *
@@ -65,41 +64,43 @@ void LpelWorkersInit(int size) {
 	master->ready_tasks = LpelTaskqueueInit ();
 	master->num_workers = num_workers;
 
-	initWorkerCtxKey();
-
 	/* allocate worker context table */
-	master->workers = (workerctx_t **) malloc(num_workers * sizeof(workerctx_t*) );
+	workers = (workerctx_t **) malloc(num_workers * sizeof(workerctx_t*) );
 	/* allocate waiting table */
 	master->waitworkers = (int *) malloc(num_workers * sizeof(int));
 	/* allocate worker contexts */
 	for (i=0; i<num_workers; i++) {
-		master->workers[i] = (workerctx_t *) malloc(sizeof(workerctx_t) );
+		workers[i] = (workerctx_t *) malloc(sizeof(workerctx_t) );
 		master->waitworkers[i] = 0;
-	}
-
-	/* prepare data structures */
-	for(i=0; i<num_workers; i++) {
-		workerctx_t *wc = WORKER_PTR(i);
-		wc->wid = i;
+    
+		workers[i]->wid = i;
 
 #ifdef USE_LOGGING
 		if (MON_CB(worker_create)) {
-			wc->mon = MON_CB(worker_create)(wc->wid);
+			workers[i]->mon = MON_CB(worker_create)(workers[i]->wid);
 		} else {
-			wc->mon = NULL;
+			workers[i]->mon = NULL;
 		}
 #else
-	wc->mon = NULL;
+	workers[i]->mon = NULL;
 #endif
 
 	/* mailbox */
-	wc->mailbox = LpelMailboxCreate();
-	wc->free_sd = NULL;
-	wc->free_stream = NULL;
+	workers[i]->mailbox = LpelMailboxCreate();
+	workers[i]->free_sd = NULL;
+	workers[i]->free_stream = NULL;
 	}
 
-	/* free wrapper */
-	initFreeWrappers();
+	/* local variables used in worker operations */
+	initLocalVar(num_worker);
+}
+
+
+void setupMailbox(mailbox_t **mastermb, mailbox_t **workermbs) {
+  *mastermb = master->mailbox;
+  int i;
+  for (i = 0; i < num_workers; i++)
+    workermbs[i] = workers[i]->mailbox;
 }
 
 /*
@@ -110,7 +111,7 @@ void LpelWorkersCleanup(void) {
 	workerctx_t *wc;
 
 	for(i=0; i<num_workers; i++) {
-		wc = WORKER_PTR(i);
+		wc = workers[i];
 		/* wait for the worker to finish */
 		(void) pthread_join(wc->thread, NULL);
 	}
@@ -124,11 +125,9 @@ void LpelWorkersCleanup(void) {
 	LpelTaskqueueDestroy(master->ready_tasks);
 
 
-	free(master);
-
 	/* cleanup the data structures */
 	for(i=0; i<num_workers; i++) {
-		wc = WORKER_PTR(i);
+		wc = workers[i];
 		LpelMailboxDestroy(wc->mailbox);
 		LpelWorkerDestroyStream(wc);
 		LpelWorkerDestroySd(wc);
@@ -136,12 +135,13 @@ void LpelWorkersCleanup(void) {
 	}
 
 	/* free workers tables */
-		free(master->workers);
+		free(workers);
 		free(master->waitworkers);
 
-		/* free wrappers */
-		cleanupFreeWrappers();
-		cleanupWorkerCtxKey();
+		/* clean up local vars used in worker operations */
+		cleanupLocalVar();
+		    
+    free(master);
 }
 
 
@@ -151,11 +151,11 @@ void LpelWorkersCleanup(void) {
 void LpelWorkersSpawn(void) {
 	int i;
 	/* master */
-	(void) pthread_create(&master->thread, NULL, MasterThread, MASTER_PTR); 	/* spawn joinable thread */
+	(void) pthread_create(&master->thread, NULL, MasterThread, master); 	/* spawn joinable thread */
 
 	/* workers */
 	for(i=0; i<num_workers; i++) {
-		workerctx_t *wc = WORKER_PTR(i);
+		workerctx_t *wc = workers[i];
 		(void) pthread_create(&wc->thread, NULL, WorkerThread, wc);
 	}
 }
@@ -167,5 +167,31 @@ void LpelWorkersSpawn(void) {
 void LpelWorkersTerminate(void) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_TERMINATE;
-	LpelMailboxSend(MASTER_PTR->mailbox, &msg);
+	LpelMailboxSend(master->mailbox, &msg);
+}
+
+/************************ Private functions ***********************************/
+/*
+ * clean up master's mailbox before terminating master
+ * last messages including: task request from worker, and return zombie task
+ */
+static void cleanupMasterMb() {
+	workermsg_t msg;
+	lpel_task_t *t;
+	while (LpelMailboxHasIncoming(mastermb)) {
+		LpelMailboxRecv(mastermb, &msg);
+		switch(msg.type) {
+		case WORKER_MSG_REQUEST:
+			break;
+		case WORKER_MSG_RETURN:
+			t = msg.body.task;
+			WORKER_DBG("master: get returned task %d\n", t->uid);
+	    assert(t->state == TASK_ZOMBIE);
+			LpelTaskDestroy(t);
+			break;
+		default:
+			assert(0);
+			break;
+		}
+	}
 }

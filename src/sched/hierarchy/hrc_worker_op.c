@@ -31,7 +31,6 @@
 #include "lpel/monitor.h"
 #include "lpel_main.h"
 
-#define WORKER_PTR(i) (master->workers[(i)])
 #define MASTER_PTR	master
 
 //#define _USE_WORKER_DBG__
@@ -50,7 +49,8 @@ static workerctx_t *getFreeWrapper();
 
 /******************************************************************************/
 static int num_workers = -1;
-static masterctx_t *master;
+static mailbox_t *mastermb;
+static mailbox_t **workermbs;
 
 static workerctx_t *freewrappers;
 static PRODLOCK_TYPE lockwrappers;
@@ -62,19 +62,42 @@ static pthread_key_t workerctx_key;
 #endif /* HAVE___THREAD */
 /******************************************************************************/
 
-void initWorkerCtxKey(){
+void initLocalVar(int size){
 #ifndef HAVE___THREAD
 	/* init key for thread specific data */
 	pthread_key_create(&workerctx_key, NULL);
 #endif /* HAVE___THREAD */
+
+  /* free wrappers */
+  freewrappers = NULL;
+	PRODLOCK_INIT(&lockwrappers);
+  num_workers = size;
+  /* mailboxes */
+  workermbs = (mailbox_t *) malloc(sizeof(mailbox_t *) * num_workers);
+  setupMailbox(&mastermb, workermbs);
 }
 
-void cleanupWorkerCtxKey(){
+void cleanupLocalVar(){
 #ifndef HAVE___THREAD
 	pthread_key_delete(workerctx_key);
 #endif /* HAVE___THREAD */
-}
 
+  /* free wrappers */
+	workerctx_t *wp = freewrappers;
+	workerctx_t *next;
+	while (wp != NULL) {
+		next = wp->next;
+		LpelMailboxDestroy(wp->mailbox);
+		LpelWorkerDestroyStream(wp);
+		LpelWorkerDestroySd(wp);
+		free(wp);
+		wp = next;
+	}
+	PRODLOCK_DESTROY(&lockwrappers);
+  
+  /* mailboxes */
+  free(workermbs);
+}
 
 
 /**
@@ -87,44 +110,17 @@ void LpelWorkerRunTask(lpel_task_t *t) {
 
 	if (t->worker_context != NULL) {	// wrapper
 		LpelMailboxSend(t->worker_context->mailbox, &msg);
-	}
-	else {
-		LpelMailboxSend(MASTER_PTR->mailbox, &msg);
+	}	else {
+		LpelMailboxSend(mastermb, &msg);
 	}
 }
 
-
-/************************ Private functions ***********************************/
-/*
- * clean up master's mailbox before terminating master
- * last messages including: task request from worker, and return zombie task
- */
-void cleanupMasterMb() {
-	workermsg_t msg;
-	lpel_task_t *t;
-	while (LpelMailboxHasIncoming(MASTER_PTR->mailbox)) {
-		LpelMailboxRecv(MASTER_PTR->mailbox, &msg);
-		switch(msg.type) {
-		case WORKER_MSG_REQUEST:
-			break;
-		case WORKER_MSG_RETURN:
-			t = msg.body.task;
-			WORKER_DBG("master: get returned task %d\n", t->uid);
-	    assert(t->state == TASK_ZOMBIE);
-			LpelTaskDestroy(t);
-			break;
-		default:
-			assert(0);
-			break;
-		}
-	}
-}
 
 static void returnTask(lpel_task_t *t) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_RETURN;
 	msg.body.task = t;
-	LpelMailboxSend(MASTER_PTR->mailbox, &msg);
+	LpelMailboxSend(mastermb, &msg);
 }
 
 
@@ -133,7 +129,7 @@ static void requestTask(workerctx_t *wc) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_REQUEST;
 	msg.body.from_worker = wc->wid;
-	LpelMailboxSend(MASTER_PTR->mailbox, &msg);
+	LpelMailboxSend(mastermb, &msg);
 #ifdef USE_LOGGING
 	if (wc->mon && MON_CB(worker_waitstart)) {
 		MON_CB(worker_waitstart)(wc->mon);
@@ -147,8 +143,8 @@ static void sendTask(int wid, lpel_task_t *t) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_ASSIGN;
 	msg.body.task = t;
-	LpelMailboxSend(WORKER_PTR(wid)->mailbox, &msg);
-}
+	LpelMailboxSend(workermbs[wid], &msg);
+ }
 
 static void sendWakeup(mailbox_t *mb, lpel_task_t *t)
 {
@@ -208,7 +204,7 @@ static void MasterLoop(void)
 	do {
 		workermsg_t msg;
 
-		LpelMailboxRecv(MASTER_PTR->mailbox, &msg);
+		LpelMailboxRecv(mastermb, &msg);
 		lpel_task_t *t;
 		int wid;
 		switch(msg.type) {
@@ -451,24 +447,7 @@ static workerctx_t *getFreeWrapper(){
 	return w;
 }
 
-void initFreeWrappers() {
-	freewrappers = NULL;
-	PRODLOCK_INIT(&lockwrappers);
-}
 
-void cleanupFreeWrappers() {
-	workerctx_t *wp = freewrappers;
-	workerctx_t *next;
-	while (wp != NULL) {
-		next = wp->next;
-		LpelMailboxDestroy(wp->mailbox);
-		LpelWorkerDestroyStream(wp);
-		LpelWorkerDestroySd(wp);
-		free(wp);
-		wp = next;
-	}
-	PRODLOCK_DESTROY(&lockwrappers);
-}
 
 
 void *WrapperThread(void *arg)
@@ -537,12 +516,12 @@ int LpelWorkerCount(void)
 void LpelWorkerBroadcast(workermsg_t *msg)
 {
 	int i;
-	workerctx_t *wc;
+	mailbox_t *wmb;
 
 	for(i=0; i<num_workers; i++) {
-		wc = WORKER_PTR(i);
+		wmb = workermbs[i];
 		/* send */
-		LpelMailboxSend(wc->mailbox, msg);
+		LpelMailboxSend(wmb, msg);    
 	}
 }
 
@@ -704,12 +683,12 @@ void LpelWorkerTaskWakeup(lpel_task_t *t) {
 	workerctx_t *wc = t->worker_context;
 	WORKER_DBG("worker %d: send wake up task %d\n", LpelWorkerSelf()->wid, t->uid);
 	if (wc == NULL)
-		sendWakeup(MASTER_PTR->mailbox, t);
+		sendWakeup(mastermb, t);
 	else {
 		if (wc->wid < 0)
 			sendWakeup(wc->mailbox, t);
 		else
-			sendWakeup(MASTER_PTR->mailbox, t);
+			sendWakeup(mastermb, t);
 	}
 }
 
