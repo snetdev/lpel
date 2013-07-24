@@ -3,7 +3,7 @@
 #include "taskpriority.h"
 
 /****************************************************************
- * 12 different function to calculate task priority based on
+ * 14 different function to calculate task priority based on
  * 			in: the number of records in input streams
  * 					-1 indicates entry task
  * 			out: the number of records in ouput streams
