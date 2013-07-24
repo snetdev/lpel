@@ -33,7 +33,7 @@ struct lpel_stream_t {
   atomic_int e_sem;           /** counter for empty space in the stream */
   void *usr_data;           /** arbitrary user data */
   struct lpel_stream_t *next;	/* to organize stream in the free list */
-  lpel_stream_type type;			/* stream type (entry/exit/middle */
+  lpel_stream_type type;			/* stream type (entry/exit/middle) */
   int read_cnt;								/* read counter, to calculate fill level */
   int write_cnt;							/* write counter, to calculate fill level */
 };
