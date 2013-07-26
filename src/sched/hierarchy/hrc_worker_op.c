@@ -31,8 +31,6 @@
 #include "lpel/monitor.h"
 #include "lpel_main.h"
 
-#define MASTER_PTR	master
-
 //#define _USE_WORKER_DBG__
 
 #ifdef _USE_WORKER_DBG__
@@ -157,7 +155,7 @@ static void sendWakeup(mailbox_t *mb, lpel_task_t *t)
 /*******************************************************************************
  * MASTER FUNCTION
  ******************************************************************************/
-static int servePendingReq(lpel_task_t *t) {
+static int servePendingReq(masterctx_t *master, lpel_task_t *t) {
 	int i;
 	t->sched_info.prior = LpelTaskCalPriority(t);
 	for (i = 0; i < num_workers; i++){
@@ -198,7 +196,7 @@ static void updatePriorityNeigh(taskqueue_t *tq, lpel_task_t *t) {
 }
 
 
-static void MasterLoop(void)
+static void MasterLoop(masterctx_t *master)
 {
 	WORKER_DBG("start master\n");
 	do {
@@ -214,10 +212,10 @@ static void MasterLoop(void)
 			assert (t->state == TASK_CREATED);
 			t->state = TASK_READY;
 			WORKER_DBG("master: get task %d\n", t->uid);
-			if (servePendingReq(t) < 0) {		 // no pending request
+			if (servePendingReq(master, t) < 0) {		 // no pending request
 				t->sched_info.prior = DBL_MAX; //created task does not set up input/output stream yet, set as highest priority
 				t->state = TASK_INQUEUE;
-				LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+				LpelTaskqueuePush(master->ready_tasks, t);
 			}
 			break;
 
@@ -232,7 +230,7 @@ static void MasterLoop(void)
 					// no break, task will be treated as if it is returned as ready
 				} else {
 					t->state = TASK_RETURNED;
-					updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
+					updatePriorityNeigh(master->ready_tasks, t);
 					break;
 				}
 
@@ -241,20 +239,20 @@ static void MasterLoop(void)
 				t->sched_info.prior = LpelTaskCalPriority(t);
 				if (t->sched_info.prior == LPEL_DBL_MIN) {		// if not schedule task if it has too low priority
 					t->state = TASK_INQUEUE;
-					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+					LpelTaskqueuePush(master->ready_tasks, t);
 					break;
 				}
 #endif
-				if (servePendingReq(t) < 0) {		// no pending request
-					updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
+				if (servePendingReq(master, t) < 0) {		// no pending request
+					updatePriorityNeigh(master->ready_tasks, t);
 					t->sched_info.prior = LpelTaskCalPriority(t);	//update new prior before add to the queue
 					t->state = TASK_INQUEUE;
-					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+					LpelTaskqueuePush(master->ready_tasks, t);
 				}
 				break;
 
 			case TASK_ZOMBIE:
-				updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
+				updatePriorityNeigh(master->ready_tasks, t);
 				LpelTaskDestroy(t);
 				break;
 			default:
@@ -276,17 +274,17 @@ static void MasterLoop(void)
 				t->sched_info.prior = LpelTaskCalPriority(t);
 				if (t->sched_info.prior == LPEL_DBL_MIN) {		// if not schedule task if it has too low priority
 					t->state = TASK_INQUEUE;
-					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+					LpelTaskqueuePush(master->ready_tasks, t);
 					break;
 				}
 #endif
 
-			if (servePendingReq(t) < 0) {		// no pending request
+			if (servePendingReq(master, t) < 0) {		// no pending request
 #ifndef _USE_NEG_DEMAND_LIMIT_
 					t->sched_info.prior = LpelTaskCalPriority(t);	//update new prior before add to the queue
 #endif
 					t->state = TASK_INQUEUE;
-					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+					LpelTaskqueuePush(master->ready_tasks, t);
 			}
 			break;
 
@@ -294,7 +292,7 @@ static void MasterLoop(void)
 		case WORKER_MSG_REQUEST:
 			wid = msg.body.from_worker;
 			WORKER_DBG("master: request task from worker %d\n", wid);
-			t = LpelTaskqueuePeek(MASTER_PTR->ready_tasks);
+			t = LpelTaskqueuePeek(master->ready_tasks);
 			if (t == NULL) {
 				master->waitworkers[wid] = 1;
 			} else {
@@ -307,24 +305,24 @@ static void MasterLoop(void)
 #endif
 				t->state = TASK_READY;
 				sendTask(wid, t);
-				t = LpelTaskqueuePop(MASTER_PTR->ready_tasks);
+				t = LpelTaskqueuePop(master->ready_tasks);
 			}
 			break;
 
 		case WORKER_MSG_TERMINATE:
-			MASTER_PTR->terminate = 1;
+			master->terminate = 1;
 			break;
 		default:
 			assert(0);
 		}
-	} while (!(MASTER_PTR->terminate && LpelTaskqueueSize(MASTER_PTR->ready_tasks) == 0));
+	} while (!(master->terminate && LpelTaskqueueSize(master->ready_tasks) == 0));
 }
 
 
 
 void *MasterThread(void *arg)
 {
-  master = (masterctx_t *)arg;
+  masterctx_t *master = (masterctx_t *)arg;
   num_workers = master->num_workers;
 //#ifdef HAVE___THREAD
 //  workerctx_cur = ms;
@@ -346,7 +344,7 @@ void *MasterThread(void *arg)
   LpelThreadAssign(LPEL_MAP_MASTER);
 
   // master loop, no monitor for master
-  MasterLoop();
+  MasterLoop(master);
 
   // master terminated, now terminate worker
   workermsg_t msg;

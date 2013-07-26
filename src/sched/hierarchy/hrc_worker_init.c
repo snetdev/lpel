@@ -44,7 +44,7 @@ static void cleanupMasterMb();
 
 static int num_workers = -1;
 static masterctx_t *master;
-static workerctx_t *workers;
+static workerctx_t **workers;
 /**
  * Initialise worker globally
  *
@@ -92,7 +92,7 @@ void LpelWorkersInit(int size) {
 	}
 
 	/* local variables used in worker operations */
-	initLocalVar(num_worker);
+	initLocalVar(num_workers);
 }
 
 
@@ -178,8 +178,8 @@ void LpelWorkersTerminate(void) {
 static void cleanupMasterMb() {
 	workermsg_t msg;
 	lpel_task_t *t;
-	while (LpelMailboxHasIncoming(mastermb)) {
-		LpelMailboxRecv(mastermb, &msg);
+	while (LpelMailboxHasIncoming(master->mailbox)) {
+		LpelMailboxRecv(master->mailbox, &msg);
 		switch(msg.type) {
 		case WORKER_MSG_REQUEST:
 			break;

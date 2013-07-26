@@ -23,6 +23,7 @@ Makefile.in
 .libs/
 *.cache/
 .dirstamp
+.log
 
 #config files
 config.*

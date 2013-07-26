@@ -84,6 +84,6 @@ void *WrapperThread(void *arg);
 /******************* INI local vars *****************************/
 void initLocalVar(int size);
 void cleanupLocalVar();
-setupMailbox(mailbox_t **mastermb, mailbox_t **workermbs);
+void setupMailbox(mailbox_t **mastermb, mailbox_t **workermbs);
 
 #endif /* _HRC_WORKER_H_ */
