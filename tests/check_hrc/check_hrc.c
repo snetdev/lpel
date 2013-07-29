@@ -30,8 +30,6 @@ void *Relay(void *inarg)
 
   printf("Relay START, read from %d, write to %d\n", LpelStreamGetId(in), LpelStreamGetId(out));
 
-
-
   while (!term) {
     item = LpelStreamRead( in);
     assert( item != NULL );

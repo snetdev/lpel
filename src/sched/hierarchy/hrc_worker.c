@@ -347,8 +347,8 @@ static void MasterLoop(void)
 			WORKER_DBG("master: get returned task %d\n", t->uid);
 			switch(t->state) {
 			case TASK_BLOCKED:
-				if (t->wakedup == 1) {	/* task has been waked up */
-					t->wakedup = 0;
+				if (t->wakenup == 1) {	/* task has been waked up */
+					t->wakenup = 0;
 					t->state = TASK_READY;
 					// no break, task will be treated as if it is returned as ready
 				} else {
@@ -387,7 +387,7 @@ static void MasterLoop(void)
 		case WORKER_MSG_WAKEUP:
 			t = msg.body.task;
 			if (t->state != TASK_RETURNED) {		// task has not been returned yet
-				t->wakedup = 1;		// set task as wakedup so that when returned it will be treated as ready
+				t->wakenup = 1;		// set task as wakenup so that when returned it will be treated as ready
 				break;
 			}
 			WORKER_DBG("master: unblock task %d\n", t->uid);
@@ -693,12 +693,9 @@ static void WorkerLoop(workerctx_t *wc)
   	  	mctx_switch(&wc->mctx, &t->mctx);
   	  	//task return here
   	  	assert(t->state != TASK_RUNNING);
-//  	  	if (t->state != TASK_ZOMBIE) {
   	  	wc->current_task = NULL;
   	  		t->worker_context = NULL;
   	  		returnTask(t);
-//  	  	} else
-//  	  		LpelTaskDestroy(t);		// if task finish, destroy it and not return to master
   	  	break;
   	  case WORKER_MSG_TERMINATE:
   	  	wc->terminate = 1;

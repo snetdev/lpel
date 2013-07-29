@@ -71,7 +71,7 @@ void initLocalVar(int size){
 	PRODLOCK_INIT(&lockwrappers);
   num_workers = size;
   /* mailboxes */
-  workermbs = (mailbox_t *) malloc(sizeof(mailbox_t *) * num_workers);
+  workermbs = (mailbox_t **) malloc(sizeof(mailbox_t *) * num_workers);
   setupMailbox(&mastermb, workermbs);
 }
 
@@ -224,8 +224,8 @@ static void MasterLoop(masterctx_t *master)
 			WORKER_DBG("master: get returned task %d\n", t->uid);
 			switch(t->state) {
 			case TASK_BLOCKED:
-				if (t->wakedup == 1) {	/* task has been waked up */
-					t->wakedup = 0;
+				if (t->wakenup == 1) {	/* task has been waked up */
+					t->wakenup = 0;
 					t->state = TASK_READY;
 					// no break, task will be treated as if it is returned as ready
 				} else {
@@ -264,7 +264,7 @@ static void MasterLoop(masterctx_t *master)
 		case WORKER_MSG_WAKEUP:
 			t = msg.body.task;
 			if (t->state != TASK_RETURNED) {		// task has not been returned yet
-				t->wakedup = 1;		// set task as wakedup so that when returned it will be treated as ready
+				t->wakenup = 1;		// set task as wakenup so that when returned it will be treated as ready
 				break;
 			}
 			WORKER_DBG("master: unblock task %d\n", t->uid);
