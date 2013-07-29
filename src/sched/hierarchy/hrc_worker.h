@@ -41,6 +41,9 @@ typedef struct masterctx_t {
   mailbox_t    *mailbox;
   taskqueue_t  *ready_tasks;
   char          padding[64];
+  int *waitworkers;
+  int num_workers;
+  workerctx_t **workers;
 } masterctx_t;
 
 
@@ -72,5 +75,15 @@ void LpelWorkerDestroyStream(workerctx_t *wc);
 void LpelWorkerDestroySd(workerctx_t *wc);
 
 
+
+/****************** WORKER/WRAPPER/MASTER THREAD **********************************/
+void *WorkerThread(void *arg);
+void *MasterThread(void *arg);
+void *WrapperThread(void *arg);
+
+/******************* INI local vars *****************************/
+void initLocalVar(int size);
+void cleanupLocalVar();
+void setupMailbox(mailbox_t **mastermb, mailbox_t **workermbs);
 
 #endif /* _HRC_WORKER_H_ */
