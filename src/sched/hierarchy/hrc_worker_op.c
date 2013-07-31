@@ -1,4 +1,11 @@
 /*
+ * hrc_worker_op.c
+ *
+ *  Created on: 17 Jul 2013
+ *      Author: administrator
+ */
+
+/*
  * The LPEL worker containing code for workers, master and wrappers
  */
 
@@ -24,9 +31,6 @@
 #include "lpel/monitor.h"
 #include "lpel_main.h"
 
-#define WORKER_PTR(i) (workers[(i)])
-#define MASTER_PTR	master
-
 //#define _USE_WORKER_DBG__
 
 #ifdef _USE_WORKER_DBG__
@@ -35,22 +39,16 @@
 #define WORKER_DBG	//
 #endif
 
-/****************** WORKER/WRAPPER/MASTER THREAD **********************************/
-static void *WorkerThread(void *arg);
-static void *MasterThread(void *arg);
-static void *WrapperThread(void *arg);
+
 
 /******************* PRIVATE FUNCTIONS *****************************/
-static void cleanupMasterMb();
-static void cleanupFreeWrappers();
 static void addFreeWrapper(workerctx_t *wp);
 static workerctx_t *getFreeWrapper();
 
 /******************************************************************************/
 static int num_workers = -1;
-static workerctx_t **workers;
-static masterctx_t *master;
-static int *waitworkers;	// table of waiting worker
+static mailbox_t *mastermb;
+static mailbox_t **workermbs;
 
 static workerctx_t *freewrappers;
 static PRODLOCK_TYPE lockwrappers;
@@ -62,137 +60,43 @@ static pthread_key_t workerctx_key;
 #endif /* HAVE___THREAD */
 /******************************************************************************/
 
-/**
- * Initialise worker globally
- *
- *
- * @param size    size of the worker set, i.e., the total number of workers including master
- */
-void LpelWorkersInit(int size) {
-
-	int i;
-	assert(0 <= size);
-	num_workers = size - 1;
-
-
-	/** create master */
-	master = (masterctx_t *) malloc(sizeof(masterctx_t));
-	master->mailbox = LpelMailboxCreate();
-	master->ready_tasks = LpelTaskqueueInit ();
-
-
+void initLocalVar(int size){
 #ifndef HAVE___THREAD
 	/* init key for thread specific data */
 	pthread_key_create(&workerctx_key, NULL);
 #endif /* HAVE___THREAD */
 
-	/* allocate worker context table */
-	workers = (workerctx_t **) malloc(num_workers * sizeof(workerctx_t*) );
-	/* allocate waiting table */
-	waitworkers = (int *) malloc(num_workers * sizeof(int));
-	/* allocate worker contexts */
-	for (i=0; i<num_workers; i++) {
-		workers[i] = (workerctx_t *) malloc(sizeof(workerctx_t) );
-		waitworkers[i] = 0;
-	}
-
-	/* prepare data structures */
-	for(i=0; i<num_workers; i++) {
-		workerctx_t *wc = WORKER_PTR(i);
-		wc->wid = i;
-
-#ifdef USE_LOGGING
-		if (MON_CB(worker_create)) {
-			wc->mon = MON_CB(worker_create)(wc->wid);
-		} else {
-			wc->mon = NULL;
-		}
-#else
-	wc->mon = NULL;
-#endif
-
-	/* mailbox */
-	wc->mailbox = LpelMailboxCreate();
-	wc->free_sd = NULL;
-	wc->free_stream = NULL;
-	}
-
-	/* free wrapper */
-	freewrappers = NULL;
+  /* free wrappers */
+  freewrappers = NULL;
 	PRODLOCK_INIT(&lockwrappers);
+  num_workers = size;
+  /* mailboxes */
+  workermbs = (mailbox_t **) malloc(sizeof(mailbox_t *) * num_workers);
+  setupMailbox(&mastermb, workermbs);
 }
 
-/*
- * clean up for both worker and master
- */
-void LpelWorkersCleanup(void) {
-	int i;
-	workerctx_t *wc;
-
-	for(i=0; i<num_workers; i++) {
-		wc = WORKER_PTR(i);
-		/* wait for the worker to finish */
-		(void) pthread_join(wc->thread, NULL);
-	}
-	/* wait for the master to finish */
-	(void) pthread_join(master->thread, NULL);
-
-	/* clean up master's mailbox */
-	cleanupMasterMb();
-
-	LpelMailboxDestroy(master->mailbox);
-	LpelTaskqueueDestroy(master->ready_tasks);
-
-
-	free(master);
-
-	/* cleanup the data structures */
-	for(i=0; i<num_workers; i++) {
-		wc = WORKER_PTR(i);
-		LpelMailboxDestroy(wc->mailbox);
-		LpelWorkerDestroyStream(wc);
-		LpelWorkerDestroySd(wc);
-		free(wc);
-	}
-
-	/* free workers tables */
-		free(workers);
-		free(waitworkers);
-
-		/* free wrappers */
-		cleanupFreeWrappers();
-		PRODLOCK_DESTROY(&lockwrappers);
-
+void cleanupLocalVar(){
 #ifndef HAVE___THREAD
 	pthread_key_delete(workerctx_key);
 #endif /* HAVE___THREAD */
-}
 
-
-/*
- * Spawn master and workers
- */
-void LpelWorkersSpawn(void) {
-	int i;
-	/* master */
-	(void) pthread_create(&master->thread, NULL, MasterThread, MASTER_PTR); 	/* spawn joinable thread */
-
-	/* workers */
-	for(i=0; i<num_workers; i++) {
-		workerctx_t *wc = WORKER_PTR(i);
-		(void) pthread_create(&wc->thread, NULL, WorkerThread, wc);
+  /* free wrappers */
+	workerctx_t *wp = freewrappers;
+	workerctx_t *next;
+	while (wp != NULL) {
+		next = wp->next;
+		LpelMailboxDestroy(wp->mailbox);
+		LpelWorkerDestroyStream(wp);
+		LpelWorkerDestroySd(wp);
+		free(wp);
+		wp = next;
 	}
+	PRODLOCK_DESTROY(&lockwrappers);
+  
+  /* mailboxes */
+  free(workermbs);
 }
 
-
-/*
- * Terminate master and workers
- */
-void LpelWorkersTerminate(void) {
-	workermsg_t msg;
-	msg.type = WORKER_MSG_TERMINATE;
-	LpelMailboxSend(MASTER_PTR->mailbox, &msg);
-}
 
 /**
  * Assign a task to the worker by sending an assign message to that worker
@@ -204,44 +108,17 @@ void LpelWorkerRunTask(lpel_task_t *t) {
 
 	if (t->worker_context != NULL) {	// wrapper
 		LpelMailboxSend(t->worker_context->mailbox, &msg);
-	}
-	else {
-		LpelMailboxSend(MASTER_PTR->mailbox, &msg);
+	}	else {
+		LpelMailboxSend(mastermb, &msg);
 	}
 }
 
-
-/************************ Private functions ***********************************/
-/*
- * clean up master's mailbox before terminating master
- * last messages including: task request from worker, and return zombie task
- */
-static void cleanupMasterMb() {
-	workermsg_t msg;
-	lpel_task_t *t;
-	while (LpelMailboxHasIncoming(MASTER_PTR->mailbox)) {
-		LpelMailboxRecv(MASTER_PTR->mailbox, &msg);
-		switch(msg.type) {
-		case WORKER_MSG_REQUEST:
-			break;
-		case WORKER_MSG_RETURN:
-			t = msg.body.task;
-			WORKER_DBG("master: get returned task %d\n", t->uid);
-	    assert(t->state == TASK_ZOMBIE);
-			LpelTaskDestroy(t);
-			break;
-		default:
-			assert(0);
-			break;
-		}
-	}
-}
 
 static void returnTask(lpel_task_t *t) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_RETURN;
 	msg.body.task = t;
-	LpelMailboxSend(MASTER_PTR->mailbox, &msg);
+	LpelMailboxSend(mastermb, &msg);
 }
 
 
@@ -250,7 +127,7 @@ static void requestTask(workerctx_t *wc) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_REQUEST;
 	msg.body.from_worker = wc->wid;
-	LpelMailboxSend(MASTER_PTR->mailbox, &msg);
+	LpelMailboxSend(mastermb, &msg);
 #ifdef USE_LOGGING
 	if (wc->mon && MON_CB(worker_waitstart)) {
 		MON_CB(worker_waitstart)(wc->mon);
@@ -264,8 +141,8 @@ static void sendTask(int wid, lpel_task_t *t) {
 	workermsg_t msg;
 	msg.type = WORKER_MSG_ASSIGN;
 	msg.body.task = t;
-	LpelMailboxSend(WORKER_PTR(wid)->mailbox, &msg);
-}
+	LpelMailboxSend(workermbs[wid], &msg);
+ }
 
 static void sendWakeup(mailbox_t *mb, lpel_task_t *t)
 {
@@ -278,12 +155,12 @@ static void sendWakeup(mailbox_t *mb, lpel_task_t *t)
 /*******************************************************************************
  * MASTER FUNCTION
  ******************************************************************************/
-static int servePendingReq(lpel_task_t *t) {
+static int servePendingReq(masterctx_t *master, lpel_task_t *t) {
 	int i;
 	t->sched_info.prior = LpelTaskCalPriority(t);
 	for (i = 0; i < num_workers; i++){
-		if (waitworkers[i] == 1) {
-			waitworkers[i] = 0;
+		if (master->waitworkers[i] == 1) {
+			master->waitworkers[i] = 0;
 			WORKER_DBG("master: send task %d to worker %d\n", t->uid, i);
 			sendTask(i, t);
 			return i;
@@ -319,13 +196,13 @@ static void updatePriorityNeigh(taskqueue_t *tq, lpel_task_t *t) {
 }
 
 
-static void MasterLoop(void)
+static void MasterLoop(masterctx_t *master)
 {
 	WORKER_DBG("start master\n");
 	do {
 		workermsg_t msg;
 
-		LpelMailboxRecv(MASTER_PTR->mailbox, &msg);
+		LpelMailboxRecv(mastermb, &msg);
 		lpel_task_t *t;
 		int wid;
 		switch(msg.type) {
@@ -335,10 +212,10 @@ static void MasterLoop(void)
 			assert (t->state == TASK_CREATED);
 			t->state = TASK_READY;
 			WORKER_DBG("master: get task %d\n", t->uid);
-			if (servePendingReq(t) < 0) {		 // no pending request
+			if (servePendingReq(master, t) < 0) {		 // no pending request
 				t->sched_info.prior = DBL_MAX; //created task does not set up input/output stream yet, set as highest priority
 				t->state = TASK_INQUEUE;
-				LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+				LpelTaskqueuePush(master->ready_tasks, t);
 			}
 			break;
 
@@ -353,7 +230,7 @@ static void MasterLoop(void)
 					// no break, task will be treated as if it is returned as ready
 				} else {
 					t->state = TASK_RETURNED;
-					updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
+					updatePriorityNeigh(master->ready_tasks, t);
 					break;
 				}
 
@@ -362,20 +239,20 @@ static void MasterLoop(void)
 				t->sched_info.prior = LpelTaskCalPriority(t);
 				if (t->sched_info.prior == LPEL_DBL_MIN) {		// if not schedule task if it has too low priority
 					t->state = TASK_INQUEUE;
-					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+					LpelTaskqueuePush(master->ready_tasks, t);
 					break;
 				}
 #endif
-				if (servePendingReq(t) < 0) {		// no pending request
-					updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
+				if (servePendingReq(master, t) < 0) {		// no pending request
+					updatePriorityNeigh(master->ready_tasks, t);
 					t->sched_info.prior = LpelTaskCalPriority(t);	//update new prior before add to the queue
 					t->state = TASK_INQUEUE;
-					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+					LpelTaskqueuePush(master->ready_tasks, t);
 				}
 				break;
 
 			case TASK_ZOMBIE:
-				updatePriorityNeigh(MASTER_PTR->ready_tasks, t);
+				updatePriorityNeigh(master->ready_tasks, t);
 				LpelTaskDestroy(t);
 				break;
 			default:
@@ -387,7 +264,7 @@ static void MasterLoop(void)
 		case WORKER_MSG_WAKEUP:
 			t = msg.body.task;
 			if (t->state != TASK_RETURNED) {		// task has not been returned yet
-				t->wakenup = 1;		// set task as wakedup so that when returned it will be treated as ready
+				t->wakenup = 1;		// set task as wakenup so that when returned it will be treated as ready
 				break;
 			}
 			WORKER_DBG("master: unblock task %d\n", t->uid);
@@ -397,17 +274,17 @@ static void MasterLoop(void)
 				t->sched_info.prior = LpelTaskCalPriority(t);
 				if (t->sched_info.prior == LPEL_DBL_MIN) {		// if not schedule task if it has too low priority
 					t->state = TASK_INQUEUE;
-					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+					LpelTaskqueuePush(master->ready_tasks, t);
 					break;
 				}
 #endif
 
-			if (servePendingReq(t) < 0) {		// no pending request
+			if (servePendingReq(master, t) < 0) {		// no pending request
 #ifndef _USE_NEG_DEMAND_LIMIT_
 					t->sched_info.prior = LpelTaskCalPriority(t);	//update new prior before add to the queue
 #endif
 					t->state = TASK_INQUEUE;
-					LpelTaskqueuePush(MASTER_PTR->ready_tasks, t);
+					LpelTaskqueuePush(master->ready_tasks, t);
 			}
 			break;
 
@@ -415,38 +292,38 @@ static void MasterLoop(void)
 		case WORKER_MSG_REQUEST:
 			wid = msg.body.from_worker;
 			WORKER_DBG("master: request task from worker %d\n", wid);
-			t = LpelTaskqueuePeek(MASTER_PTR->ready_tasks);
+			t = LpelTaskqueuePeek(master->ready_tasks);
 			if (t == NULL) {
-				waitworkers[wid] = 1;
+				master->waitworkers[wid] = 1;
 			} else {
 
 #ifdef _USE_NEG_DEMAND_LIMIT_
 				if (t->sched_info.prior == LPEL_DBL_MIN) {		// if not schedule task if it has too low priority
-					waitworkers[wid] = 1;
+					master->waitworkers[wid] = 1;
 					break;
 				}
 #endif
 				t->state = TASK_READY;
 				sendTask(wid, t);
-				t = LpelTaskqueuePop(MASTER_PTR->ready_tasks);
+				t = LpelTaskqueuePop(master->ready_tasks);
 			}
 			break;
 
 		case WORKER_MSG_TERMINATE:
-			MASTER_PTR->terminate = 1;
+			master->terminate = 1;
 			break;
 		default:
 			assert(0);
 		}
-	} while (!(MASTER_PTR->terminate && LpelTaskqueueSize(MASTER_PTR->ready_tasks) == 0));
+	} while (!(master->terminate && LpelTaskqueueSize(master->ready_tasks) == 0));
 }
 
 
 
-static void *MasterThread(void *arg)
+void *MasterThread(void *arg)
 {
-  masterctx_t *ms = (masterctx_t *)arg;
-
+  masterctx_t *master = (masterctx_t *)arg;
+  num_workers = master->num_workers;
 //#ifdef HAVE___THREAD
 //  workerctx_cur = ms;
 //#else /* HAVE___THREAD */
@@ -458,16 +335,16 @@ static void *MasterThread(void *arg)
 //FIXME
 #ifdef USE_MCTX_PCL
   assert(0 == co_thread_init());
-  ms->mctx = co_current();
+  master->mctx = co_current();
 #endif
 
 
   /* assign to cores */
-  ms->terminate = 0;
+  master->terminate = 0;
   LpelThreadAssign(LPEL_MAP_MASTER);
 
   // master loop, no monitor for master
-  MasterLoop();
+  MasterLoop(master);
 
   // master terminated, now terminate worker
   workermsg_t msg;
@@ -568,21 +445,10 @@ static workerctx_t *getFreeWrapper(){
 	return w;
 }
 
-static void cleanupFreeWrappers() {
-	workerctx_t *wp = freewrappers;
-	workerctx_t *next;
-	while (wp != NULL) {
-		next = wp->next;
-		LpelMailboxDestroy(wp->mailbox);
-		LpelWorkerDestroyStream(wp);
-		LpelWorkerDestroySd(wp);
-		free(wp);
-		wp = next;
-	}
-}
 
 
-static void *WrapperThread(void *arg)
+
+void *WrapperThread(void *arg)
 {
 
 	workerctx_t *wp = (workerctx_t *)arg;
@@ -602,10 +468,6 @@ static void *WrapperThread(void *arg)
 	LpelThreadAssign(wp->wid);
 	WrapperLoop(wp);
 
-//	LpelMailboxDestroy(wp->mailbox);
-//	LpelWorkerDestroyStream(wp);
-//	LpelWorkerDestroySd(wp);
-//	free(wp);
 	addFreeWrapper(wp);
 
 #ifdef USE_MCTX_PCL
@@ -652,12 +514,12 @@ int LpelWorkerCount(void)
 void LpelWorkerBroadcast(workermsg_t *msg)
 {
 	int i;
-	workerctx_t *wc;
+	mailbox_t *wmb;
 
 	for(i=0; i<num_workers; i++) {
-		wc = WORKER_PTR(i);
+		wmb = workermbs[i];
 		/* send */
-		LpelMailboxSend(wc->mailbox, msg);
+		LpelMailboxSend(wmb, msg);    
 	}
 }
 
@@ -693,9 +555,12 @@ static void WorkerLoop(workerctx_t *wc)
   	  	mctx_switch(&wc->mctx, &t->mctx);
   	  	//task return here
   	  	assert(t->state != TASK_RUNNING);
+//  	  	if (t->state != TASK_ZOMBIE) {
   	  	wc->current_task = NULL;
   	  		t->worker_context = NULL;
   	  		returnTask(t);
+//  	  	} else
+//  	  		LpelTaskDestroy(t);		// if task finish, destroy it and not return to master
   	  	break;
   	  case WORKER_MSG_TERMINATE:
   	  	wc->terminate = 1;
@@ -709,7 +574,7 @@ static void WorkerLoop(workerctx_t *wc)
 }
 
 
-static void *WorkerThread(void *arg)
+void *WorkerThread(void *arg)
 {
   workerctx_t *wc = (workerctx_t *)arg;
 
@@ -816,12 +681,12 @@ void LpelWorkerTaskWakeup(lpel_task_t *t) {
 	workerctx_t *wc = t->worker_context;
 	WORKER_DBG("worker %d: send wake up task %d\n", LpelWorkerSelf()->wid, t->uid);
 	if (wc == NULL)
-		sendWakeup(MASTER_PTR->mailbox, t);
+		sendWakeup(mastermb, t);
 	else {
 		if (wc->wid < 0)
 			sendWakeup(wc->mailbox, t);
 		else
-			sendWakeup(MASTER_PTR->mailbox, t);
+			sendWakeup(mastermb, t);
 	}
 }
 

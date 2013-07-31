@@ -1,5 +1,7 @@
 SUBDIRS = include . tests
-
+if USE_SCC
+include Makefile_scc.am
+else
 lib_LTLIBRARIES = liblpel.la liblpel_mon.la liblpel_hrc.la 
 
 liblpel_la_SOURCES = \
@@ -38,7 +40,8 @@ liblpel_hrc_la_SOURCES = \
 	src/lpel_hwloc.c \
 	src/sched/hierarchy/hrc_task.c \
 	src/sched/hierarchy/hrc_task.h \
-	src/sched/hierarchy/hrc_worker.c \
+	src/sched/hierarchy/hrc_worker_init.c \
+	src/sched/hierarchy/hrc_worker_op.c \
 	src/sched/hierarchy/hrc_worker.h \
 	src/sched/hierarchy/hrc_taskqueue.c \
 	src/sched/hierarchy/hrc_taskqueue.h \
@@ -79,3 +82,4 @@ liblpel_hrc_la_SOURCES += src/ctx/ctx_amd64-mem.S
 endif
 
 ACLOCAL_AMFLAGS = -I m4
+endif #USE_SCC

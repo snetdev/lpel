@@ -28,8 +28,7 @@ void *Relay(void *inarg)
   in = LpelStreamOpen(ch->in, 'r');
   out = LpelStreamOpen(ch->out, 'w');
 
- printf("Relay START\n");
-
+  printf("Relay START, read from %d, write to %d\n", LpelStreamGetId(in), LpelStreamGetId(out));
 
   while (!term) {
     item = LpelStreamRead( in);

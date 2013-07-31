@@ -88,6 +88,13 @@ AM_CONDITIONAL([USE_MCTX_X86], [test $with_mctx = i386-linux])
 AM_CONDITIONAL([USE_MCTX_X86_64], [test $with_mctx = x86_64-linux])
 AM_CONDITIONAL([USE_MCTX_X86_64_MEM], [test $with_mctx = x86_64-linux-mem])
 
+AC_ARG_ENABLE([scc], [AS_HELP_STRING([--enable-scc],
+    [Enable the custom distribution layer for the SCC only works with hrc (default is disabled)])],
+    [], [enable_scc=no])
+if test x$enable_scc = xyes; then
+  AC_DEFINE([USE_SCC], [1], [Set to 1 to enable the SCC distribution layer])
+fi
+AM_CONDITIONAL([USE_SCC], [test x$enable_scc = xyes])
 
 AC_LANG_PUSH([C])
 
