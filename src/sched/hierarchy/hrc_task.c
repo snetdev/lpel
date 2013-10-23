@@ -424,6 +424,7 @@ double LpelTaskCalPriority(lpel_task_t *t) {
 }
 
 void LpelTaskSetPriorityFunc(int func){
+	int prior_type = LPEL_PRIOR_FILL;
 	switch (func){
 	case 1: prior_cal = priorfunc1;
 					break;
@@ -450,11 +451,14 @@ void LpelTaskSetPriorityFunc(int func){
 	case 12: prior_cal = priorfunc12;
 					break;
 	case 13: prior_cal = priorfunc13;
+					prior_type = LPEL_PRIOR_RANDOM;
 					break;
 	case 14: prior_cal = priorfunc14;
 					break;
 	default: prior_cal = priorfunc14;
 	}
+
+	LpelWorkerTaskPrior(prior_type);
 }
 
 int LpelTaskGetWorkerId(lpel_task_t *t) {

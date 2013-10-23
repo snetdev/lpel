@@ -52,6 +52,8 @@ workerctx_t *LpelCreateWrapperContext(int wid);		// can be wrapper or source/sin
 workerctx_t *LpelWorkerSelf(void);
 lpel_task_t *LpelWorkerCurrentTask(void);
 
+void LpelWorkerTaskPrior(int prior_func);
+
 void LpelWorkerTaskWakeup( lpel_task_t *whom);
 void LpelWorkerTaskExit(lpel_task_t *t);
 void LpelWorkerTaskYield(lpel_task_t *t);

@@ -53,6 +53,9 @@ static mailbox_t **workermbs;
 static workerctx_t *freewrappers;
 static PRODLOCK_TYPE lockwrappers;
 
+/* this is used to control if need to update the neighbor's priority */
+static int task_prior_func = LPEL_PRIOR_FILL;		// default
+
 #ifdef HAVE___THREAD
 static TLSSPEC workerctx_t *workerctx_cur;
 #else /* HAVE___THREAD */
@@ -230,7 +233,8 @@ static void MasterLoop(masterctx_t *master)
 					// no break, task will be treated as if it is returned as ready
 				} else {
 					t->state = TASK_RETURNED;
-					updatePriorityNeigh(master->ready_tasks, t);
+					if (task_prior_func == LPEL_PRIOR_FILL)
+						updatePriorityNeigh(master->ready_tasks, t);
 					break;
 				}
 
@@ -244,7 +248,8 @@ static void MasterLoop(masterctx_t *master)
 				}
 #endif
 				if (servePendingReq(master, t) < 0) {		// no pending request
-					updatePriorityNeigh(master->ready_tasks, t);
+					if (task_prior_func == LPEL_PRIOR_FILL)
+						updatePriorityNeigh(master->ready_tasks, t);
 					t->sched_info.prior = LpelTaskCalPriority(t);	//update new prior before add to the queue
 					t->state = TASK_INQUEUE;
 					LpelTaskqueuePush(master->ready_tasks, t);
@@ -252,7 +257,8 @@ static void MasterLoop(masterctx_t *master)
 				break;
 
 			case TASK_ZOMBIE:
-				updatePriorityNeigh(master->ready_tasks, t);
+				if (task_prior_func == LPEL_PRIOR_FILL)
+					updatePriorityNeigh(master->ready_tasks, t);
 				LpelTaskDestroy(t);
 				break;
 			default:
@@ -690,7 +696,9 @@ void LpelWorkerTaskWakeup(lpel_task_t *t) {
 	}
 }
 
-
+void LpelWorkerTaskPrior(int prior_func) {
+	task_prior_func = prior_func;
+}
 
 /******************************************
  * STREAM RELATED FUNCTIONS

@@ -12,6 +12,10 @@
 
 #define _USE_NEG_DEMAND_LIMIT_
 
+#define LPEL_PRIOR_RANDOM	13
+#define LPEL_PRIOR_LOVEC	15
+#define LPEL_PRIOR_FILL		14
+
 /**
  * If a task size <= 0 is specified,
  * use the default size
