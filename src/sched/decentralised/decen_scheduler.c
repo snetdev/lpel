@@ -20,7 +20,7 @@ schedctx_t *LpelSchedCreate( int wid)
   int i;
   schedctx_t *sc = (schedctx_t *) malloc( sizeof(schedctx_t));
   for (i=0; i<SCHED_NUM_PRIO; i++) {
-    sc->queue[i] = LpelTaskqueueInit();
+    sc->queue[i] = LpelTaskqueueInit(NULL);
   }
   return sc;
 }

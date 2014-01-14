@@ -429,7 +429,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
   sd->stream->write_cnt++;
 
 #ifdef USE_LOGGING
-  if (sd->mon && MON_CB(rectype_data))
+  if (MON_CB(rectype_data))		/* apply limit check on data only if possible */
   	if(MON_CB(rectype_data)(item))
 #endif
   	LpelTaskCheckYield(self);

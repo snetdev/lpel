@@ -108,10 +108,11 @@ static inline workerctx_t *GetCurrentWorker(void)
  *
  * @param size    size of the worker set, i.e., the total number of workers
  */
-void LpelWorkersInit(int size)
+void LpelWorkersInit(lpel_config_t *cfg)
 {
   int i, res;
 
+  int size = cfg->num_workers;
   assert(0 <= size);
   num_workers = size;
 

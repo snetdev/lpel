@@ -3,24 +3,22 @@
 
 #include "lpel_common.h"
 
+//#define USE_STATIC_QUEUE
+#define USE_HEAP_QUEUE
 
 typedef struct taskqueue_t taskqueue_t;
 
-taskqueue_t *LpelTaskqueueInit();
+taskqueue_t* LpelTaskqueueInit();
 
-void LpelTaskqueuePush(  taskqueue_t *tq, lpel_task_t *t);
+void LpelTaskqueuePush(taskqueue_t *tq, lpel_task_t *t);
 
-lpel_task_t *LpelTaskqueuePop( taskqueue_t *tq);
-
-
-int LpelTaskqueueIterateRemove( taskqueue_t *tq,
-    int  (*cond)( lpel_task_t*,void*),
-    void (*action)(lpel_task_t*,void*),
-    void *arg );
+lpel_task_t *LpelTaskqueuePop(taskqueue_t *tq);
 
 void LpelTaskqueueDestroy(taskqueue_t *tq);
 
-lpel_task_t *LpelTaskqueuePeek( taskqueue_t *tq);
+lpel_task_t *LpelTaskqueuePeek(taskqueue_t *tq);
+void LpelTaskqueueOccupyTask(taskqueue_t *tq, lpel_task_t *t);
+
 int LpelTaskqueueSize(taskqueue_t *tq);
 
 void LpelTaskqueueUpdatePriority(taskqueue_t *tq, lpel_task_t *t, double np);

@@ -36,7 +36,7 @@ struct lpel_stream_desc_t {
 
 
 
-void LpelWorkersInit( int size);
+void LpelWorkersInit( lpel_config_t *);
 void LpelWorkersCleanup( void);
 void LpelWorkersSpawn(void);
 void LpelWorkersTerminate(void);

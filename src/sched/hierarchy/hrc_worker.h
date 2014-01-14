@@ -10,7 +10,6 @@
 #include "hrc_taskqueue.h"
 #include "hrc_stream.h"
 
-
 #define  WORKER_MSG_TERMINATE 	1
 #define  WORKER_MSG_WAKEUP			2		// send to both master and wrapper
 #define  WORKER_MSG_ASSIGN			3
@@ -51,8 +50,6 @@ typedef struct masterctx_t {
 workerctx_t *LpelCreateWrapperContext(int wid);		// can be wrapper or source/sink
 workerctx_t *LpelWorkerSelf(void);
 lpel_task_t *LpelWorkerCurrentTask(void);
-
-void LpelWorkerTaskPrior(int prior_func);
 
 void LpelWorkerTaskWakeup( lpel_task_t *whom);
 void LpelWorkerTaskExit(lpel_task_t *t);

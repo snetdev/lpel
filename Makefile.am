@@ -43,6 +43,7 @@ liblpel_hrc_la_SOURCES = \
 	src/sched/hierarchy/hrc_worker_init.c \
 	src/sched/hierarchy/hrc_worker_op.c \
 	src/sched/hierarchy/hrc_worker.h \
+	src/sched/hierarchy/static_taskqueue.c \
 	src/sched/hierarchy/hrc_taskqueue.c \
 	src/sched/hierarchy/hrc_taskqueue.h \
 	src/sched/hierarchy/taskpriority.h \

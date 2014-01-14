@@ -105,6 +105,28 @@ typedef enum {
 	HRC_LPEL
 } lpel_backend_type;
 
+
+typedef enum {
+	LPEL_STC_PRIO,
+	LPEL_DYN_PRIO
+} lpel_prio_type;
+
+/*
+ * define task priority configuration
+ */
+typedef struct {
+	int (*rts_prio_cmp)(void *, void *);	// compare 2 rts priority (loc vec, used for location-based priority)
+	void* (*rts_cpy_prio)(void *);		// copy rts priority
+	void (*rts_del_prio) (void *);	// delete rts priorty
+
+	int prio_index;
+	double (*prio_func)(int in, int out);
+	lpel_prio_type prio_type;
+	int update_neigh_prio;
+	int neg_demand_lim;
+} lpel_task_prio_conf;
+
+
 /**
  * Specification for configuration:
  *
@@ -125,6 +147,9 @@ typedef struct {
   int flags;
   lpel_monitoring_cb_t mon;
   lpel_backend_type type;
+
+  /* priority configuration */
+  lpel_task_prio_conf prio_config;
 } lpel_config_t;
 
 
@@ -179,8 +204,6 @@ int LpelWorkerCount(void);
 /*  TASK FUNCTIONS                                                            */
 /******************************************************************************/
 
-lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
-    void *inarg, int stacksize );
 
 /** monitor a task */
 void LpelTaskMonitor(lpel_task_t *t, mon_task_t *mt);
@@ -223,9 +246,6 @@ lpel_usrdata_destructor_t LpelGetUserDataDestructor(lpel_task_t *t);
 
 /** return the current worker index of the given task */
 int LpelTaskGetWorkerId(lpel_task_t *t);
-
-/** return the total number of workers */
-int LpelWorkerCount(void);
 
 
 /******************************************************************************/

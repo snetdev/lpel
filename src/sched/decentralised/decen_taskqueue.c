@@ -20,7 +20,7 @@
 /**
  * Initialise a taskqueue
  */
-taskqueue_t *LpelTaskqueueInit()
+taskqueue_t* LpelTaskqueueInit(int (*cmp_func)(void *, void *))
 {
 	taskqueue_t *tq = (taskqueue_t *)malloc(sizeof(taskqueue_t));
   tq->head = NULL;

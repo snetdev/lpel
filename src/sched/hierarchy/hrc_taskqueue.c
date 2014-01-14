@@ -11,9 +11,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
-
+#include "lpelcfg.h"
+#include "hrc_lpel.h"
 #include "hrc_taskqueue.h"
 #include "hrc_task.h"
+
+#ifdef USE_HEAP_QUEUE
 
 #define BLOCKSIZE 50
 
@@ -23,13 +26,28 @@ struct taskqueue_t{
   unsigned int alloc;
 };
 
+
+int comparePrior(lpel_task_t *t1, lpel_task_t *t2) {
+	int valid = t1->sched_info.valid - t2->sched_info.valid;
+	if (valid != 0)	/* one of the two task is invalid */
+		return valid;
+	else if (t1->sched_info.valid == 0)	/* both of the task are invalid, consider they equal */
+		return 0;
+
+	if (PRIO_CFG(rts_prio_cmp) == NULL)
+		return (t1->sched_info.prio - t2->sched_info.prio);
+
+	assert(t1->sched_info.rts_prio && t2->sched_info.rts_prio);
+	return (double)PRIO_CFG(rts_prio_cmp)(t1->sched_info.rts_prio, t2->sched_info.rts_prio);
+}
+
 /******************** private functions ********************/
 void upHeap(taskqueue_t *tq, int pos) {
 	int parent;
 	lpel_task_t *t = tq->heap[pos];
-	double p = t->sched_info.prior;
 	  /* append at end, then up heap */
-	  while ((parent = pos / 2) &&  p > tq->heap[parent]->sched_info.prior) {
+	  while ((parent = pos / 2) &&  comparePrior(t, tq->heap[parent]) > 0) {
+	  	//p > tq->heap[parent]->sched_info.prio)
 	    tq->heap[pos] = tq->heap[parent];
 	    pos = parent;
 	  }
@@ -39,12 +57,13 @@ void upHeap(taskqueue_t *tq, int pos) {
 void downHeap(taskqueue_t *tq, int pos) {
 	  int child;
 		lpel_task_t *t = tq->heap[pos];
-		double p = t->sched_info.prior;
 		while( (child = pos * 2) < tq->count) {
-			if (child + 1 < tq->count && tq->heap[child]->sched_info.prior < tq->heap[child+1]->sched_info.prior)
+			if (child + 1 < tq->count && comparePrior(tq->heap[child], tq->heap[child + 1]) < 0)
+					//tq->heap[child]->sched_info.prio < tq->heap[child+1]->sched_info.prio)
 				child++;
 
-			if (p >= tq->heap[child]->sched_info.prior)
+			if (comparePrior(t, tq->heap[child]) >= 0)
+			//if (p >= tq->heap[child]->sched_info.prio)
 				break;
 
 			tq->heap[pos] = tq->heap[child];
@@ -62,6 +81,17 @@ int searchItem(taskqueue_t *tq, lpel_task_t *t) {
 			return i;
 	}
 	return -1;
+}
+
+
+/*
+ * remove the head (highest priority) of the queue
+ */
+void removeHead(taskqueue_t *tq){
+  /* pull last item to top, then down heap. */
+  tq->count--;
+  tq->heap[1] = tq->heap[tq->count];
+  downHeap(tq, 1);
 }
 
 /**************************************************************/
@@ -89,20 +119,11 @@ void LpelTaskqueuePush( taskqueue_t *tq, lpel_task_t *t){
   }
 
   tq->heap[tq->count] = t;
-  upHeap(tq, tq->count);
+  if (t->sched_info.valid == 1)		//otherwise, it should be in the last position
+  	upHeap(tq, tq->count);
   tq->count++;
 }
 
-
-/*
- * remove the head (highest priority) of the queue
- */
-void LpelTaskqueueRemoveHead(taskqueue_t *tq){
-  /* pull last item to top, then down heap. */
-  tq->count--;
-  tq->heap[1] = tq->heap[tq->count];
-  downHeap(tq, 1);
-}
 
 /*
  * retrieve head (highest priority) of the queue
@@ -123,7 +144,7 @@ lpel_task_t *LpelTaskqueuePop( taskqueue_t *tq) {
 		return NULL;
 
 	lpel_task_t *t = tq->heap[1];
-	LpelTaskqueueRemoveHead(tq);
+	removeHead(tq);
 	return t;
 }
 
@@ -148,11 +169,25 @@ void LpelTaskqueueDestroy(taskqueue_t *tq){
 void LpelTaskqueueUpdatePriority(taskqueue_t *tq, lpel_task_t *t, double np){
 	int pos = searchItem(tq, t);
 	assert(pos > 0);
-	double p = t->sched_info.prior;
-	t->sched_info.prior = np;
-	if (np > p)
-		upHeap(tq, pos);
-	else if (np < p)
+	double p = t->sched_info.prio;
+	t->sched_info.prio = np;
+	if (np < p || t->sched_info.valid == 0)
 		downHeap(tq, pos);
+	else if (np > p)
+		upHeap(tq, pos);
 }
 
+/*
+ * task is occupied, remove it from the queue
+ *
+ */
+void LpelTaskqueueOccupyTask (taskqueue_t *tq, lpel_task_t *t) {
+	int pos = searchItem(tq, t);
+	assert(pos > 0);
+	tq->count--;
+	tq->heap[pos] = tq->heap[tq->count];
+	downHeap(tq, 1);
+}
+
+
+#endif  /* USE_HEAP_QUEUE */

@@ -25,6 +25,7 @@ typedef struct {
   lpel_tm_mechanism mechanism;
 } lpel_tm_config_t;
 
+lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func, void *inarg, int stacksize );
 
 /* set priority for task
  * prio: integer as it is used as index of the task queue

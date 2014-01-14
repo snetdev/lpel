@@ -11,16 +11,19 @@
 
 #include <lpel_common.h>
 
+/* define use of negative demand limit */
+#define _USE_NEG_DEMAND_LIMIT_
+
 
 /* extra task state in HRC */
 #define  TASK_INQUEUE							'Q'
 #define  TASK_RETURNED						'T'
 
-/* choose function to calculate task priority */
-void LpelTaskSetPriorityFunc(int func);
+lpel_task_t *LpelTaskCreate( int worker, lpel_taskfunc_t func,
+    void *inarg, int stacksize, void *rts_prio );
 
-/* set negative demand limit */
-void LpelTaskSetNegLim(int lim);
+/* initialise priority configuration */
+void LpelTaskPrioInit(lpel_task_prio_conf *conf) ;
 
 /* set the limit of output records for a task */
 void LpelTaskSetRecLimit(lpel_task_t *t, int lim);

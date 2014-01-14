@@ -13,6 +13,6 @@ double priorfunc9(int in, int out);
 double priorfunc10(int in, int out);
 double priorfunc11(int in, int out);
 double priorfunc12(int in, int out);
-double priorfunc13(int in, int out);
+double priorrandom(int in, int out);
 double priorfunc14(int in, int out);
 #endif /* _TASKPRIORITY_H */

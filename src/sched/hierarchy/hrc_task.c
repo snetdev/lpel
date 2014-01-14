@@ -12,9 +12,6 @@
 #include "taskpriority.h"
 
 static atomic_int taskseq = ATOMIC_VAR_INIT(0);
-static int neg_demand_lim = 0;
-
-static double (*prior_cal) (int in, int out) = priorfunc14;
 
 static void TaskStartup( void *arg);
 
@@ -39,7 +36,7 @@ static void TaskStop( lpel_task_t *t);
  *
  */
 lpel_task_t *LpelTaskCreate( int map, lpel_taskfunc_t func,
-		void *inarg, int size)
+		void *inarg, int size, void *rts_prio)
 {
 	lpel_task_t *t;
 	char *stackaddr;
@@ -84,13 +81,20 @@ lpel_task_t *LpelTaskCreate( int map, lpel_taskfunc_t func,
 	assert(t->mctx != NULL);
 #endif
 
+	// set rts sched info
+	if (rts_prio != NULL && PRIO_CFG(rts_cpy_prio))
+		t->sched_info.rts_prio = PRIO_CFG(rts_cpy_prio)(rts_prio);
+	else
+		t->sched_info.rts_prio = NULL;
+
 	// default scheduling info
-	t->sched_info.prior = 0;
+	t->sched_info.prio = LpelTaskInitPriority();
 	t->sched_info.rec_cnt = 0;
 	t->sched_info.rec_limit = 0;
 	t->sched_info.rec_limit_factor = -1;
 	t->sched_info.in_streams = NULL;
 	t->sched_info.out_streams = NULL;
+	t->sched_info.valid = 1;
 
 	return t;
 }
@@ -123,6 +127,10 @@ void LpelTaskDestroy( lpel_task_t *t)
 	assert(t->sched_info.in_streams == NULL);
 	assert(t->sched_info.out_streams == NULL);
 	/* free the TCB itself*/
+	assert(t->prev == NULL && t->next == NULL);
+	if(t->sched_info.rts_prio && PRIO_CFG(rts_del_prio))
+		PRIO_CFG(rts_del_prio)(t->sched_info.rts_prio);
+
 	free(t);
 }
 
@@ -326,7 +334,7 @@ void LpelTaskSetRecLimit(lpel_task_t *t, int lim) {
 }
 
 void LpelTaskSetPrior(lpel_task_t *t, double p) {
-	t->sched_info.prior = p;
+	t->sched_info.prio = p;
 }
 
 
@@ -408,57 +416,40 @@ int countRec(stream_elem_t *list, char inout) {
 	return cnt;
 }
 
+double LpelTaskInitPriority() {
+	if (PRIO_CFG(prio_type) == LPEL_STC_PRIO)
+		if (PRIO_CFG(prio_func) != NULL)
+			return PRIO_CFG(prio_func)(0, 0);
+		else
+			return 1;
 
-double LpelTaskCalPriority(lpel_task_t *t) {
+	// else
+	return DBL_MAX;
+}
+
+int LpelTaskUpdateValid(lpel_task_t *t) {
 	int in, out;
 	in = countRec(t->sched_info.in_streams, 'i');
 	out = countRec(t->sched_info.out_streams, 'o');
-
-#ifdef _USE_NEG_DEMAND_LIMIT_
-	/* if t is entry task and already produced too many ouput, set it to LPEL_DBL_MIN and it will not be scheduled */
-	if (in == -1 && out > neg_demand_lim && neg_demand_lim > 0)
-		return LPEL_DBL_MIN;
-#endif
-
-	return prior_cal(in, out);
-}
-
-void LpelTaskSetPriorityFunc(int func){
-	int prior_type = LPEL_PRIOR_FILL;
-	switch (func){
-	case 1: prior_cal = priorfunc1;
-					break;
-	case 2: prior_cal = priorfunc2;
-					break;
-	case 3: prior_cal = priorfunc3;
-					break;
-	case 4: prior_cal = priorfunc4;
-					break;
-	case 5: prior_cal = priorfunc5;
-					break;
-	case 6: prior_cal = priorfunc6;
-					break;
-	case 7: prior_cal = priorfunc7;
-					break;
-	case 8: prior_cal = priorfunc8;
-					break;
-	case 9: prior_cal = priorfunc9;
-					break;
-	case 10: prior_cal = priorfunc10;
-					break;
-	case 11: prior_cal = priorfunc11;
-					break;
-	case 12: prior_cal = priorfunc12;
-					break;
-	case 13: prior_cal = priorfunc13;
-					prior_type = LPEL_PRIOR_RANDOM;
-					break;
-	case 14: prior_cal = priorfunc14;
-					break;
-	default: prior_cal = priorfunc14;
+	/* if t is entry task and already produced too many ouput, set it to invalid and it will not be scheduled */
+	if (in == -1 && PRIO_CFG(neg_demand_lim) > 0) {
+		if (out > PRIO_CFG(neg_demand_lim))
+			t->sched_info.valid = 0;
+		else
+			t->sched_info.valid = 1;
 	}
 
-	LpelWorkerTaskPrior(prior_type);
+	return t->sched_info.valid;
+}
+
+double LpelTaskCalPriority(lpel_task_t *t) {
+	if (PRIO_CFG(prio_type) == LPEL_STC_PRIO)
+		return t->sched_info.prio;
+
+	int in, out;
+	in = countRec(t->sched_info.in_streams, 'i');
+	out = countRec(t->sched_info.out_streams, 'o');
+	return PRIO_CFG(prio_func)(in, out);
 }
 
 int LpelTaskGetWorkerId(lpel_task_t *t) {
@@ -475,6 +466,3 @@ int LpelTaskIsWrapper(lpel_task_t *t) {
 	return (t->worker_context->wid == -1);
 }
 
-void LpelTaskSetNegLim(int lim) {
-	neg_demand_lim = lim;
-}
