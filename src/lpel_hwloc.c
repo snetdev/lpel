@@ -227,7 +227,8 @@ int LpelThreadAssign(int core)
   if ( LPEL_ICFG(LPEL_FLAG_PINNED)) {
   	CPU_ZERO(&cpuset);
   	switch(core) {
-  	case LPEL_MAP_OTHERS:	/* round robin pinned to cores in the set */
+  	case LPEL_MAP_WRAPPER:	/* round robin pinned to cores in the set */
+  	case LPEL_MAP_SOSI:
   		CPU_SET(rot_others + offset_others, &cpuset);
   		rot_others = (rot_others + 1) % proc_others;
   		break;
@@ -240,7 +241,8 @@ int LpelThreadAssign(int core)
   }
   else {
   	switch (core) {
-  	case LPEL_MAP_OTHERS:
+  	case LPEL_MAP_WRAPPER:
+  	case LPEL_MAP_SOSI:
   		cpuset = cpuset_others;
   		break;
   	default: // workers
@@ -252,7 +254,7 @@ int LpelThreadAssign(int core)
   if( res != 0) return LPEL_ERR_ASSIGN;
 
   /* make non-preemptible for workers only */
-  if ( LPEL_ICFG(LPEL_FLAG_EXCLUSIVE) && core != LPEL_MAP_OTHERS) {
+  if ( LPEL_ICFG(LPEL_FLAG_EXCLUSIVE) && core >= 0) {
   	struct sched_param param;
   	int sp = SCHED_FIFO;
   	/* highest real-time */

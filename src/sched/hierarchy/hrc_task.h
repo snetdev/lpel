@@ -79,7 +79,7 @@ struct lpel_task_t {
 void LpelTaskDestroy(lpel_task_t *t);
 void LpelTaskBlockStream(lpel_task_t *ct);
 void LpelTaskUnblock(lpel_task_t *t);
-int LpelTaskIsWrapper(lpel_task_t *);
+int LpelTaskIsSoSi(lpel_task_t *);
 
 /******* DYNAMIC PRIORITY BASED ON THE STREAM FILL LEVEL ***********/
 /**

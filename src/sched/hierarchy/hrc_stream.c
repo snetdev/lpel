@@ -142,7 +142,7 @@ lpel_stream_desc_t *LpelStreamOpen( lpel_stream_t *s, char mode)
   }
 
   /* set entry/exit stream */
-  if (LpelTaskIsWrapper(ct))
+  if (LpelTaskIsSoSi(ct))
   	s->type = (mode == 'r' ? LPEL_STREAM_EXIT : LPEL_STREAM_ENTRY);
 
   STREAM_DBG("task %d open stream %d, mode %c\n", ct->uid, s->uid, mode);
@@ -296,7 +296,7 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
   assert( item != NULL);
   /* pop off the top element */
   LpelBufferPop( &sd->stream->buffer);
-
+  sd->stream->read_cnt++;
   /* only entry stream is bounded */
   if (sd->stream->type == LPEL_STREAM_ENTRY) {
   	/* quasi V(e_sem) */
@@ -323,7 +323,6 @@ void *LpelStreamRead( lpel_stream_desc_t *sd)
     MON_CB(stream_readfinish)(sd->mon, item);
   }
 #endif
-  sd->stream->read_cnt++;
   return item;
 }
 
@@ -380,7 +379,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     assert( LpelBufferIsSpace( &sd->stream->buffer) );
     /* put item into buffer */
     LpelBufferPut( &sd->stream->buffer, item);
-
+    sd->stream->write_cnt++;
     if ( sd->stream->is_poll) {
       /* get consumer's poll token */
       poll_wakeup = atomic_exchange( &sd->stream->cons_sd->task->poll_token, 0);
@@ -426,7 +425,7 @@ void LpelStreamWrite( lpel_stream_desc_t *sd, void *item)
     MON_CB(stream_writefinish)(sd->mon);
   }
 #endif
-  sd->stream->write_cnt++;
+
 
 #ifdef USE_LOGGING
   if (MON_CB(rectype_data))		/* apply limit check on data only if possible */

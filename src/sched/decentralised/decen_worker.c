@@ -249,7 +249,7 @@ void LpelWorkerDispatcher( lpel_task_t *t)
   workerctx_t *wc = t->worker_context;
 
   /* dependent of worker or wrapper */
-  if (wc->wid != LPEL_MAP_OTHERS) {
+  if (wc->wid >= 0) {
     lpel_task_t *next;
 
     /* before picking the next task, process messages to consider
@@ -393,9 +393,9 @@ workerctx_t *LpelWorkerGetContext(int id) {
   }
 
   /* create a new worker context for a wrapper */
-  if (id == LPEL_MAP_OTHERS) {
+  if (id < 0) {
     wc = (workerctx_t *) malloc( sizeof( workerctx_t));
-    wc->wid = LPEL_MAP_OTHERS;
+    wc->wid = id;
     wc->terminate = 0;
     /* Wrapper is excluded from scheduling module */
     wc->sched = NULL;

@@ -12,8 +12,9 @@
 /******************************************************************************/
 /* LPEL MAPPING LOCATION 													  */
 /******************************************************************************/
-#define LPEL_MAP_OTHERS		-1
-#define LPEL_MAP_MASTER		0
+#define LPEL_MAP_MASTER			0
+#define LPEL_MAP_WRAPPER		-1
+#define LPEL_MAP_SOSI				-2
 
 /******************************************************************************/
 /*  RETURN VALUES OF LPEL FUNCTIONS                                           */

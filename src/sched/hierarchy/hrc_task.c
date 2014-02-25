@@ -462,7 +462,7 @@ int LpelTaskGetWorkerId(lpel_task_t *t) {
 
 void LpelTaskCheckMigrate(void) {}
 
-int LpelTaskIsWrapper(lpel_task_t *t) {
-	return (t->worker_context->wid == -1);
+int LpelTaskIsSoSi(lpel_task_t *t) {
+	return (t->worker_context->wid == LPEL_MAP_SOSI);
 }
 

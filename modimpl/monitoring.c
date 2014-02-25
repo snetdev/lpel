@@ -745,7 +745,9 @@ static void MonCbStreamWakeup(mon_stream_t *ms)
 	//MarkDirty(ms);
 }
 
-
+static int MonCbRecTypeData(void *item) {
+	return 1;
+}
 
 
 /*****************************************************************************
@@ -785,7 +787,7 @@ void LpelMonInit(lpel_monitoring_cb_t *cb, unsigned long flags)
   cb->stream_writefinish  = MonCbStreamWriteFinish;
   cb->stream_blockon      = MonCbStreamBlockon;
   cb->stream_wakeup       = MonCbStreamWakeup;
-
+  cb->rectype_data				= MonCbRecTypeData;
 
 
   /* initialize timing */
