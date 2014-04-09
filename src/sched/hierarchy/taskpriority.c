@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <float.h>
+#include <time.h>
 #include "taskpriority.h"
 #include "hrc_lpel.h"
 
@@ -179,6 +180,7 @@ double priorfunc14(int in, int out) {
 
 
 void LpelTaskPrioInit(lpel_task_prio_conf *conf) {
+		srand(time(NULL));
 		conf->prio_type = LPEL_DYN_PRIO;
 		conf->update_neigh_prio = 1;
 		switch (conf->prio_index){
