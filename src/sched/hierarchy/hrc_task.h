@@ -10,8 +10,6 @@
 
 #define LPEL_DBL_MIN (0.0 - DBL_MAX)
 
-#define _USE_NEG_DEMAND_LIMIT_
-
 /**
  * If a task size <= 0 is specified,
  * use the default size
@@ -32,7 +30,13 @@ typedef struct {
 	int rec_cnt;
 	int rec_limit_factor;
 	int rec_limit;
-	double prior;
+
+	/* rts priority info */
+	void *rts_prio;
+
+	/* lpel priority info */
+	double prio;
+	int valid;		// not valid for schedule at the moment (e.g. when #out rec of entry task < neg_demand_lim)
 	stream_elem_t *in_streams;
 	stream_elem_t *out_streams;
 } sched_task_t;
@@ -75,7 +79,7 @@ struct lpel_task_t {
 void LpelTaskDestroy(lpel_task_t *t);
 void LpelTaskBlockStream(lpel_task_t *ct);
 void LpelTaskUnblock(lpel_task_t *t);
-int LpelTaskIsWrapper(lpel_task_t *);
+int LpelTaskIsSoSi(lpel_task_t *);
 
 /******* DYNAMIC PRIORITY BASED ON THE STREAM FILL LEVEL ***********/
 /**
@@ -89,6 +93,7 @@ void LpelTaskSetPrior(lpel_task_t *t, double p);
 void LpelTaskAddStream(lpel_task_t *t, lpel_stream_desc_t *des, char mode);
 void LpelTaskRemoveStream(lpel_task_t *t, lpel_stream_desc_t *des, char mode);
 double LpelTaskCalPriority(lpel_task_t *t);
-
+double LpelTaskInitPriority();
+int LpelTaskUpdateValid(lpel_task_t *t) ;
 
 #endif

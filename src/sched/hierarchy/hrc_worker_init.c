@@ -51,17 +51,20 @@ static workerctx_t **workers;
  *
  * @param size    size of the worker set, i.e., the total number of workers including master
  */
-void LpelWorkersInit(int size) {
+void LpelWorkersInit(lpel_config_t *conf) {
 
 	int i;
+	int size = conf->num_workers;
 	assert(0 <= size);
 	num_workers = size - 1;
 
+	/* set up for task priority */
+	LpelTaskPrioInit(&conf->prio_config);
 
 	/** create master */
 	master = (masterctx_t *) malloc(sizeof(masterctx_t));
 	master->mailbox = LpelMailboxCreate();
-	master->ready_tasks = LpelTaskqueueInit ();
+	master->ready_tasks = LpelTaskqueueInit();
 	master->num_workers = num_workers;
 
 	/* allocate worker context table */
@@ -93,6 +96,8 @@ void LpelWorkersInit(int size) {
 
 	/* local variables used in worker operations */
 	initLocalVar(num_workers);
+
+
 }
 
 

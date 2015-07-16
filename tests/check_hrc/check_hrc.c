@@ -66,7 +66,7 @@ lpel_stream_t *PipeElement(lpel_stream_t *in, int depth)
 
   out = LpelStreamCreate(0);
   ch = ChannelsCreate( in, out, depth);
-  t = LpelTaskCreate( 0, Relay, ch, 8192);
+  t = LpelTaskCreate( 0, Relay, ch, 8192, NULL);
   mt = LpelMonTaskCreate(LpelTaskGetId(t), NULL);
   LpelTaskMonitor(t, mt);
   LpelTaskStart(t);
@@ -146,12 +146,12 @@ static void testBasic(void)
 
   in = LpelStreamCreate(0);
   out = PipeElement(in, 2);
-  outtask = LpelTaskCreate( -1, Outputter, out, 8192);
+  outtask = LpelTaskCreate( -1, Outputter, out, 8192, NULL);
   mt = LpelMonTaskCreate( LpelTaskGetId(outtask), "outtask");
   LpelTaskMonitor(outtask, mt);
   LpelTaskStart(outtask);
 
-  intask = LpelTaskCreate( -1, Inputter, in, 8192);
+  intask = LpelTaskCreate( -1, Inputter, in, 8192, NULL);
   mt = LpelMonTaskCreate( LpelTaskGetId(intask), "intask");
   LpelTaskMonitor(intask, mt);
   LpelTaskStart(intask);

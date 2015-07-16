@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <float.h>
+#include <time.h>
 #include "taskpriority.h"
+#include "hrc_lpel.h"
 
 /****************************************************************
  * 14 different function to calculate task priority based on
@@ -28,8 +30,10 @@
  *   10									|  (I + 1) / (O + 1)^2 	|				0						|			I + 1
  *   11									|  (I + 1) / (O + 1)^2 	|	   1/(O + 1)^2		|			infinity
  *   12									|  (I + 1) / (O + 1)^2 	|	   1/(O + 1)^2		|			I + 1
- *	 13									RANDOM
+ *	 13									DYNAMIC RANDOM
  *	 14										I - O											- O										I
+ *	 15									LOCATION-BASED
+ *	 16									STATIC RANDOM (use the 13 one but not update every time task stop)
  ****************************************************************************************/
 
 double priorfunc1(int in, int out) {
@@ -164,12 +168,63 @@ double priorfunc12(int in, int out) {
 /*
  * random priority
  */
-double priorfunc13(int in, int out) {
-	return rand();
+double priorrandom(int in, int out) {
+	return (double)rand();
 }
 
 double priorfunc14(int in, int out) {
 	in = (in == -1 ? 0 : in);
 	out = (out == -1 ? 0 : out);
 	return (in - out);
+}
+
+
+void LpelTaskPrioInit(lpel_task_prio_conf *conf) {
+		srand(time(NULL));
+		conf->prio_type = LPEL_DYN_PRIO;
+		conf->update_neigh_prio = 1;
+		switch (conf->prio_index){
+		case 1: conf->prio_func = priorfunc1;
+						break;
+		case 2: conf->prio_func = priorfunc2;
+						break;
+		case 3: conf->prio_func = priorfunc3;
+						break;
+		case 4: conf->prio_func = priorfunc4;
+						break;
+		case 5: conf->prio_func = priorfunc5;
+						break;
+		case 6: conf->prio_func = priorfunc6;
+						break;
+		case 7: conf->prio_func = priorfunc7;
+						break;
+		case 8: conf->prio_func = priorfunc8;
+						break;
+		case 9: conf->prio_func = priorfunc9;
+						break;
+		case 10: conf->prio_func = priorfunc10;
+						break;
+		case 11: conf->prio_func = priorfunc11;
+						break;
+		case 12: conf->prio_func = priorfunc12;
+						break;
+		case 13: conf->prio_func = priorrandom;	// dynamic random
+						break;
+		case 14: conf->prio_func = priorfunc14;
+						break;
+		case 15: conf->prio_func = NULL;	// location-based
+						conf->prio_type = LPEL_STC_PRIO;
+						conf->update_neigh_prio = 0;
+						break;
+		case 16: conf->prio_func = priorrandom;			// static random
+						conf->prio_type = LPEL_STC_PRIO;
+						conf->update_neigh_prio = 0;
+						break;
+		default: conf->prio_func = priorfunc14;
+						break;
+		}
+
+		/* set call back to rts */
+		if (conf->prio_index != 15)
+			conf->rts_prio_cmp = NULL;
 }
